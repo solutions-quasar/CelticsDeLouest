@@ -274,3 +274,28 @@ a {
     color: var(--text-dark);
     font-weight: 600;
 }
+
+/* Documents / Doc Box */
+.doc-box {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: var(--shadow-card);
+}
+
+.doc-box h3 {
+    color: var(--celtics-green);
+    margin-bottom: 15px;
+}
+
+.doc-box p {
+    margin-bottom: 25px;
+    /* Increased margin for spacing above button */
+    color: #555;
+    line-height: 1.6;
+}
+
+.doc-box .btn-primary {
+    display: inline-block;
+    /* Ensure margin applies */
+}

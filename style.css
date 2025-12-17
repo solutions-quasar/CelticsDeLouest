@@ -180,3 +180,97 @@ a {
         width: 100%;
     }
 }
+
+/* Inscription CTA */
+.cta-section {
+    background: linear-gradient(rgba(0, 128, 64, 0.9), rgba(0, 77, 38, 0.9)), url('https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=2670&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: var(--white);
+    text-align: center;
+    padding: 100px 0;
+}
+
+.cta-section h2 {
+    color: var(--white);
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+
+.cta-section p {
+    font-size: 1.5rem;
+    max-width: 700px;
+    margin: 0 auto 30px;
+    opacity: 0.9;
+    color: var(--white);
+}
+
+.cta-section .btn-primary {
+    background-color: var(--accent-gold);
+    color: var(--text-dark);
+    border-color: var(--accent-gold);
+    font-size: 1.1rem;
+    padding: 15px 40px;
+}
+
+.cta-section .btn-primary:hover {
+    background-color: transparent;
+    color: var(--white);
+    border-color: var(--white);
+}
+
+/* Values Section */
+.values-content {
+    max-width: 800px;
+    margin: 0 auto 60px;
+    text-align: center;
+}
+
+.values-content h3 {
+    font-size: 2rem;
+    color: var(--celtics-green);
+    margin-bottom: 20px;
+}
+
+.values-content p {
+    font-size: 1.1rem;
+    color: #555;
+    margin-bottom: 20px;
+}
+
+/* Spectator Code Grid */
+.spectator-code-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+}
+
+.code-card {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: var(--shadow-card);
+    border-left: 5px solid var(--celtics-green);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.3s;
+}
+
+.code-card:hover {
+    transform: translateY(-5px);
+}
+
+.code-card i {
+    font-size: 2.5rem;
+    color: var(--celtics-green);
+    margin-bottom: 15px;
+}
+
+.code-card p {
+    font-size: 1rem;
+    color: var(--text-dark);
+    font-weight: 600;
+}

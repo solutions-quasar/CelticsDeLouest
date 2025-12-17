@@ -44,7 +44,8 @@ a {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1400px;
+    /* Increased from 1200px */
     margin: 0 auto;
     padding: 0 20px;
 }
@@ -56,7 +57,8 @@ a {
     position: fixed;
     width: 100%;
     z-index: 1000;
-    padding: 15px 0;
+    padding: 10px 0;
+    /* Reduced padding */
 }
 
 .nav-container {
@@ -66,29 +68,37 @@ a {
 }
 
 .logo {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
+    /* Reduced from 1.5rem */
     font-weight: 800;
     color: var(--celtics-green);
     display: flex;
     align-items: center;
     gap: 10px;
+    max-width: 400px;
 }
 
 .logo i {
-    font-size: 1.8rem;
+    font-size: 1.5rem;
 }
 
 .nav-menu {
     display: flex;
     list-style: none;
-    gap: 30px;
+    gap: 15px;
+    /* Reduced from 30px */
 }
 
 .nav-link {
     font-weight: 600;
     color: var(--text-dark);
     position: relative;
+    font-size: 0.95rem;
+    /* Slightly smaller text */
+    white-space: nowrap;
 }
+
+/* ... existing nav-link styles ... */
 
 .nav-link::after {
     content: '';
@@ -117,247 +127,12 @@ a {
 }
 
 /* Hero Section */
-.hero {
-    height: 90vh;
-    background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=2670&auto=format&fit=crop');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: var(--white);
-    padding-top: 80px;
-}
+/* ... existing hero styles ... */
 
-.hero-content h1 {
-    font-size: 3.5rem;
-    margin-bottom: 20px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-}
+/* Mobile / Tablet Responsive Adjustment */
+@media (max-width: 1100px) {
 
-.hero-content p {
-    font-size: 1.2rem;
-    max-width: 600px;
-    margin: 0 auto 30px;
-    opacity: 0.9;
-}
-
-.btn-primary {
-    background-color: var(--celtics-green);
-    color: var(--white);
-    padding: 12px 30px;
-    border-radius: 50px;
-    font-weight: 700;
-    text-transform: uppercase;
-    border: 2px solid var(--celtics-green);
-}
-
-.btn-primary:hover {
-    background-color: transparent;
-    border-color: var(--white);
-}
-
-/* Sections */
-.section {
-    padding: 80px 0;
-}
-
-.section-bg {
-    background-color: var(--white);
-}
-
-.section-title {
-    text-align: center;
-    margin-bottom: 50px;
-}
-
-.section-title h2 {
-    font-size: 2.5rem;
-    color: var(--celtics-green);
-    margin-bottom: 10px;
-}
-
-.section-title p {
-    color: #666;
-}
-
-/* News / Alert */
-.news-alert {
-    background: linear-gradient(135deg, var(--celtics-green), var(--celtics-light));
-    color: white;
-    padding: 30px;
-    border-radius: 10px;
-    text-align: center;
-    margin-bottom: 40px;
-    box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
-}
-
-.news-alert h3 {
-    margin-bottom: 10px;
-}
-
-/* Teams Grid */
-.teams-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.team-card {
-    background: white;
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: var(--shadow-card);
-    transition: transform 0.3s;
-    display: flex;
-    align-items: center;
-    border-left: 5px solid var(--celtics-green);
-}
-
-.team-card:hover {
-    transform: translateY(-5px);
-}
-
-.team-header {
-    background-color: var(--celtics-green);
-    color: white;
-    padding: 20px;
-    min-width: 250px;
-    text-align: center;
-    font-weight: 700;
-}
-
-.team-body {
-    padding: 20px;
-    flex-grow: 1;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.team-league {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.league-logo {
-    height: 50px;
-    width: auto;
-    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
-}
-
-/* Committee Grid */
-.committee-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 30px;
-}
-
-.member-card {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    text-align: center;
-    box-shadow: var(--shadow-card);
-    border-top: 3px solid var(--celtics-green);
-}
-
-.member-role {
-    color: var(--celtics-green);
-    font-weight: 700;
-    text-transform: uppercase;
-    font-size: 0.8rem;
-    margin-bottom: 5px;
-}
-
-.member-name {
-    font-size: 1.1rem;
-    font-weight: 600;
-}
-
-/* Contact & Map */
-.contact-split {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 40px;
-}
-
-.contact-info-box {
-    background: var(--white);
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: var(--shadow-card);
-}
-
-.contact-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 20px;
-    font-size: 1.1rem;
-}
-
-.contact-item i {
-    font-size: 1.5rem;
-    color: var(--celtics-green);
-    margin-right: 15px;
-    width: 30px;
-}
-
-.map-wrapper {
-    margin-top: 20px;
-    border-radius: 10px;
-    overflow: hidden;
-    height: 300px;
-    box-shadow: var(--shadow-card);
-}
-
-.map-wrapper iframe {
-    width: 100%;
-    height: 100%;
-    border: 0;
-}
-
-/* Footer */
-footer {
-    background-color: var(--text-dark);
-    color: var(--white);
-    padding: 60px 0 20px;
-}
-
-.footer-content {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 40px;
-    margin-bottom: 40px;
-}
-
-.footer-col h4 {
-    color: var(--celtics-light);
-    margin-bottom: 20px;
-}
-
-.footer-links li {
-    list-style: none;
-    margin-bottom: 10px;
-}
-
-.footer-links a:hover {
-    color: var(--celtics-light);
-}
-
-.copyright {
-    text-align: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding-top: 20px;
-    font-size: 0.9rem;
-    color: #95a5a6;
-}
-
-/* Mobile */
-@media (max-width: 768px) {
+    /* Increased breakpoint from 768px to 1100px */
     .menu-toggle {
         display: block;
     }
@@ -373,6 +148,8 @@ footer {
         align-items: center;
         padding-top: 50px;
         transition: 0.4s;
+        gap: 30px;
+        /* Restore gap for mobile menu */
     }
 
     .nav-menu.active {

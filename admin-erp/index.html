@@ -98,7 +98,10 @@
 
             <main class="main-content">
                 <header class="top-bar">
-                    <h2 id="page-title">Tableau de bord</h2>
+                    <div class="left-top-bar">
+                        <button id="mobile-menu-btn"><i class="fas fa-bars"></i></button>
+                        <h2 id="page-title">Tableau de bord</h2>
+                    </div>
                     <div class="user-info">
                         <span id="user-email">admin@celtics.com</span>
                         <div class="avatar"><i class="fas fa-user"></i></div>
@@ -140,8 +143,14 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Générateur d'Équipes</h3>
-                                <button class="btn-action" id="open-player-modal"><i class="fas fa-plus"></i> Ajouter
-                                    Joueur</button>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="grid"
+                                        data-target="players-table-container"><i class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list"
+                                        data-target="players-table-container"><i class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-player-modal"><i
+                                            class="fas fa-plus"></i></button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="toolbar">
@@ -179,8 +188,14 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Gestion Boutique</h3>
-                                <button class="btn-action" id="open-product-modal"><i class="fas fa-plus"></i> Nouveau
-                                    Produit</button>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="grid"
+                                        data-target="products-list"><i class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list" data-target="products-list"><i
+                                            class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-product-modal"><i
+                                            class="fas fa-plus"></i></button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="product-grid" id="products-list">
@@ -195,8 +210,14 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Inventaire Matériel</h3>
-                                <button class="btn-action" id="open-inventory-modal"><i class="fas fa-plus"></i> Ajouter
-                                    Item</button>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="grid"
+                                        data-target="inventory-container-div"><i class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list"
+                                        data-target="inventory-container-div"><i class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-inventory-modal"><i
+                                            class="fas fa-plus"></i></button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="table-container">
@@ -224,8 +245,14 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Conseil d'Administration</h3>
-                                <button class="btn-action" id="open-board-modal"><i class="fas fa-plus"></i> Nouveau
-                                    Membre</button>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="grid" data-target="board-list"><i
+                                            class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list" data-target="board-list"><i
+                                            class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-board-modal"><i
+                                            class="fas fa-plus"></i></button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="product-grid" id="board-list">
@@ -240,8 +267,14 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Gestion des Arbitres</h3>
-                                <button class="btn-action" id="open-referee-modal"><i class="fas fa-plus"></i> Nouvel
-                                    Arbitre</button>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="grid"
+                                        data-target="referees-list"><i class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list" data-target="referees-list"><i
+                                            class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-referee-modal"><i
+                                            class="fas fa-plus"></i></button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="product-grid" id="referees-list">

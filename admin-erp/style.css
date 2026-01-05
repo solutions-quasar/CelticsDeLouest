@@ -130,12 +130,15 @@ body {
     /* Sidebar + Main */
 }
 
+/* Sidebar toggled state for mobile logic handled via media queries mostly, but we add a class if needed */
 .sidebar {
     width: var(--sidebar-width);
     background-color: var(--white);
     border-right: 1px solid #e5e7eb;
     display: flex;
     flex-direction: column;
+    transition: transform 0.3s ease;
+    height: 100vh;
 }
 
 .sidebar-header {
@@ -160,6 +163,7 @@ body {
 .sidebar-nav {
     padding: 20px;
     flex: 1;
+    overflow-y: auto;
 }
 
 .nav-btn {
@@ -216,6 +220,8 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
+    /* For mobile overlay z-index if needed */
 }
 
 .top-bar {
@@ -226,6 +232,21 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 0 30px;
+}
+
+.left-top-bar {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#mobile-menu-btn {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-dark);
 }
 
 .user-info {
@@ -276,6 +297,30 @@ body {
     margin-bottom: 20px;
     padding-bottom: 15px;
     border-bottom: 1px solid #eee;
+    flex-wrap: wrap;
+    /* responsive wrap */
+    gap: 10px;
+}
+
+.header-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.view-toggle-btn {
+    background: #eee;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #666;
+    transition: 0.2s;
+}
+
+.view-toggle-btn.active {
+    background: var(--primary);
+    color: white;
 }
 
 .btn-action,
@@ -472,21 +517,22 @@ th {
     border-radius: 6px;
 }
 
-/* Product Grid */
-.product-grid {
+/* --- GRID VIEW MODE --- */
+.view-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 20px;
 }
 
-.product-card-admin {
+.view-grid .product-card-admin {
     border: 1px solid #eee;
     border-radius: 8px;
     padding: 15px;
     text-align: center;
+    background: white;
 }
 
-.product-card-admin img {
+.view-grid .product-card-admin img {
     width: 100%;
     height: 150px;
     object-fit: cover;
@@ -494,11 +540,52 @@ th {
     margin-bottom: 10px;
 }
 
-.product-actions {
+.view-grid .product-actions {
     margin-top: 10px;
     display: flex;
     justify-content: center;
     gap: 10px;
+}
+
+/* --- LIST VIEW MODE --- */
+.view-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.view-list .product-card-admin {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    gap: 20px;
+    background: white;
+}
+
+.view-list .product-card-admin img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0;
+}
+
+.view-list .product-card-admin h4 {
+    flex: 1;
+    margin: 0;
+    text-align: left;
+}
+
+.view-list .product-card-admin p {
+    margin: 0;
+    margin-right: 20px;
+    color: #666;
+}
+
+.view-list .product-actions {
+    margin: 0;
 }
 
 .toolbar {
@@ -533,4 +620,60 @@ th {
 .team-list li {
     padding: 5px 0;
     border-bottom: 1px dashed #eee;
+}
+
+/* Responsive Media Queries */
+@media screen and (max-width: 768px) {
+    .sidebar {
+        /* Mobile: Hidden by default, slides in */
+        position: fixed;
+        left: -250px;
+        z-index: 1000;
+        height: 100vh;
+        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar.mobile-visible {
+        left: 0;
+    }
+
+    .top-bar {
+        padding: 0 15px;
+    }
+
+    #mobile-menu-btn {
+        display: block;
+        /* Show hamburger */
+    }
+
+    #page-title {
+        font-size: 1.2rem;
+    }
+
+    #content-area {
+        padding: 15px;
+    }
+
+    /* Adjust Grid for Mobile */
+    .view-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .view-list .product-card-admin {
+        flex-direction: column;
+        /* Stack items in list view on very small screens? or keep row? row is better for list usually */
+        align-items: flex-start;
+    }
+
+    .view-list .product-card-admin img {
+        width: 40px;
+        height: 40px;
+    }
+
+    .view-list .product-card-admin .product-actions {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 10px;
+    }
 }

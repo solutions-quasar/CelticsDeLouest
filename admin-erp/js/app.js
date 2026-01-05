@@ -2,7 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where } from "firebase/firestore";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 const firebaseConfig = {
@@ -29,22 +29,62 @@ const dashboardScreen = document.getElementById('dashboard-screen');
 const logoutBtn = document.getElementById('logout-btn');
 const loginError = document.getElementById('login-error'); // Added error element in HTML
 
+
+// Pre-fill email if remembered
+const savedEmail = localStorage.getItem('celtics_admin_email');
+if (savedEmail && document.getElementById('remember-email')) {
+    document.getElementById('email').value = savedEmail;
+    document.getElementById('remember-email').checked = true;
+}
+
 if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
+        const rememberEmail = document.getElementById('remember-email').checked;
+        const rememberMe = document.getElementById('remember-me').checked;
 
-        signInWithEmailAndPassword(auth, email, password)
-            .then((userCredential) => {
-                // Signed in 
-                console.log("Logged in:", userCredential.user);
-            })
-            .catch((error) => {
-                console.error("Login Error:", error);
-                if (loginError) loginError.textContent = "Erreur de connexion : " + error.message;
-            });
+        // Handle Email Memory
+        if (rememberEmail) {
+            localStorage.setItem('celtics_admin_email', email);
+        } else {
+            localStorage.removeItem('celtics_admin_email');
+        }
+
+        try {
+            // Handle Persistence (Stay Connected)
+            const mode = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+            await setPersistence(auth, mode);
+
+            // Sign in
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            console.log("Logged in:", userCredential.user);
+        } catch (error) {
+            console.error("Login Error:", error);
+            if (loginError) loginError.textContent = "Erreur de connexion : " + error.message;
+        }
     });
+
+    // Forgot Password Logic
+    const forgotBtn = document.getElementById('forgot-password');
+    if (forgotBtn) {
+        forgotBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            if (!email) {
+                alert("Veuillez entrer votre courriel dans le champ ci-dessus pour réinitialiser le mot de passe.");
+                return;
+            }
+            try {
+                await sendPasswordResetEmail(auth, email);
+                alert("Un email de réinitialisation a été envoyé à " + email);
+            } catch (error) {
+                console.error(error);
+                alert("Erreur: " + error.message);
+            }
+        });
+    }
 }
 
 if (logoutBtn) {
@@ -114,40 +154,56 @@ closeProdModalBtn.addEventListener('click', () => productModal.classList.remove(
 // Create/Update Product
 productForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const id = document.getElementById('product-id').value;
-    const name = document.getElementById('prod-name').value;
-    const price = parseFloat(document.getElementById('prod-price').value);
-    const desc = document.getElementById('prod-desc').value;
-    const file = document.getElementById('prod-image').files[0];
 
-    // Upload Image if present
-    let imageUrl = '';
-    if (file) {
-        const storageRef = ref(storage, 'products/' + file.name + Date.now());
-        await uploadBytes(storageRef, file);
-        imageUrl = await getDownloadURL(storageRef);
+    // UI Feedback
+    const submitBtn = productForm.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
+    submitBtn.disabled = true;
+
+    try {
+        const id = document.getElementById('product-id').value;
+        const name = document.getElementById('prod-name').value;
+        const price = parseFloat(document.getElementById('prod-price').value);
+        const desc = document.getElementById('prod-desc').value;
+        const file = document.getElementById('prod-image').files[0];
+
+        // Upload Image if present
+        let imageUrl = '';
+        if (file) {
+            const storageRef = ref(storage, 'products/' + file.name + Date.now());
+            await uploadBytes(storageRef, file);
+            imageUrl = await getDownloadURL(storageRef);
+        }
+
+        // Determine Update or Create
+        if (id) {
+            // Update
+            const docRef = doc(db, "products", id);
+            const updateData = { name, price, desc };
+            if (imageUrl) updateData.imageUrl = imageUrl;
+            await updateDoc(docRef, updateData);
+        } else {
+            // Create
+            await addDoc(collection(db, "products"), {
+                name,
+                price,
+                desc,
+                imageUrl: imageUrl || 'https://via.placeholder.com/150'
+            });
+        }
+
+        productModal.classList.remove('active');
+        loadProducts();
+        updateStats();
+
+    } catch (error) {
+        console.error("Error saving product: ", error);
+        alert("Erreur lors de l'enregistrement: " + error.message);
+    } finally {
+        submitBtn.innerHTML = originalBtnText;
+        submitBtn.disabled = false;
     }
-
-    // Determine Update or Create
-    if (id) {
-        // Update
-        const docRef = doc(db, "products", id);
-        const updateData = { name, price, desc };
-        if (imageUrl) updateData.imageUrl = imageUrl; // Only update image if new one uploaded
-        await updateDoc(docRef, updateData);
-    } else {
-        // Create
-        await addDoc(collection(db, "products"), {
-            name,
-            price,
-            desc,
-            imageUrl: imageUrl || 'https://via.placeholder.com/150'
-        });
-    }
-
-    productModal.classList.remove('active');
-    loadProducts();
-    updateStats();
 });
 
 // Load Products

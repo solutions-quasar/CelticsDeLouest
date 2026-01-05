@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Celtics ERP | Administration</title>
+    <link rel="icon" type="image/png" href="../images/favicon.png">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -50,7 +51,21 @@
                         <i class="fas fa-lock"></i>
                         <input type="password" id="password" placeholder="Mot de passe" required>
                     </div>
+                    <div class="auth-options" style="text-align: left; margin-bottom: 20px; font-size: 0.9rem;">
+                        <div style="margin-bottom: 8px;">
+                            <input type="checkbox" id="remember-email">
+                            <label for="remember-email">Se souvenir de l'email</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="remember-me">
+                            <label for="remember-me">Rester connecté</label>
+                        </div>
+                    </div>
                     <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt"></i> Connexion</button>
+                    <div style="margin-top: 15px;">
+                        <a href="#" id="forgot-password" style="color: var(--primary); font-size: 0.9rem;">Mot de passe
+                            oublié ?</a>
+                    </div>
                     <p id="login-error" class="error-msg"></p>
                 </form>
             </div>

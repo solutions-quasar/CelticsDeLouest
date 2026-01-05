@@ -116,6 +116,14 @@ body {
     font-size: 0.9rem;
 }
 
+.auth-options {
+    color: var(--text-dark);
+}
+
+.auth-options input[type="checkbox"] {
+    margin-right: 5px;
+}
+
 /* Dashboard Layout */
 #dashboard-screen {
     display: flex;
@@ -270,7 +278,8 @@ body {
     border-bottom: 1px solid #eee;
 }
 
-.btn-action {
+.btn-action,
+.btn-secondary {
     background-color: var(--secondary);
     color: white;
     border: none;
@@ -280,9 +289,22 @@ body {
     font-weight: 500;
 }
 
-.btn-action:hover {
+.btn-action:hover,
+.btn-secondary:hover {
     background-color: var(--primary);
 }
+
+#team-size-select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    color: var(--text-dark);
+    font-family: inherit;
+    cursor: pointer;
+    background-color: white;
+}
+
+
 
 /* Stats */
 .stats-grid {

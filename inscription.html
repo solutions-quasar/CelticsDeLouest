@@ -80,43 +80,38 @@
 
 <body>
 
-    <!-- Header -->
-    <header>
+    <!-- Navigation -->
+    <nav class="navbar">
         <div class="container nav-container">
-            <div class="logo">
-                <a href="index.html">
-                    <img src="images/logo.png" alt="Celtics Logo"> <span>Celtics de l'Ouest de Portneuf</span>
-                </a>
+            <a href="index.html" class="logo">
+                <img src="images/logo.png" alt="Logo Celtics" style="height: 50px; margin-right: 10px;">
+                Celtics de l'Ouest de Portneuf
+            </a>
+            <div class="menu-toggle" id="mobile-menu">
+                <i class="fas fa-bars"></i>
             </div>
-            <nav>
-                <ul class="nav-menu">
-                    <li><a href="index.html">Accueil</a></li>
-                    <li><a href="index.html#equipes">Nos Équipes</a></li>
-                    <li><a href="inscription.html" class="active">Inscriptions</a></li>
-                    <li><a href="index.html#valeurs">Nos Valeurs</a></li>
-                    <li class="nav-item-dropdown">
-                        <a href="#" class="nav-link">Le Club <i class="fas fa-chevron-down"></i></a>
-                        <div class="dropdown-menu">
-                            <a href="index.html#conseil">Conseil d'administration</a>
-                            <a href="index.html#arbitres">Nos Arbitres</a>
-                            <a href="https://celticsdelouest.org/pdf/2025_Pol_Int.pdf" target="_blank">Politique
-                                d'intégrité</a>
-                        </div>
-                    </li>
-                    <li><a href="boutique.html">Boutique en ligne</a></li>
-                    <li><a href="index.html#contact">Nous Joindre</a></li>
-                </ul>
-                <div class="hamburger">
-                    <span class="bar"></span>
-                    <span class="bar"></span>
-                    <span class="bar"></span>
-                </div>
-            </nav>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">Accueil</a></li>
+                <li><a href="index.html#equipes" class="nav-link">Nos Équipes</a></li>
+                <li><a href="inscription.html" class="nav-link active">Inscriptions</a></li>
+                <li><a href="index.html#valeurs" class="nav-link">Nos Valeurs</a></li>
+                <li class="nav-item-dropdown">
+                    <a href="#" class="nav-link">Le Club <i class="fas fa-chevron-down"
+                            style="font-size: 0.8rem; margin-left: 5px;"></i></a>
+                    <ul class="dropdown-menu">
+                        <li><a href="index.html#comite" class="nav-link dropdown-link">Conseil d'administration</a></li>
+                        <li><a href="index.html#arbitres" class="nav-link dropdown-link">Nos Arbitres</a></li>
+                    </ul>
+                </li>
+                <li><a href="boutique.html" class="nav-link">Boutique en ligne</a></li>
+                <li><a href="index.html#contact" class="nav-link">Nous Joindre</a></li>
+            </ul>
         </div>
-    </header>
+    </nav>
 
     <!-- Hero -->
-    <section class="hero-section" style="height: 40vh; min-height: 300px;">
+    <!-- Hero -->
+    <section class="hero" style="height: 40vh; min-height: 300px; padding-top: 80px;">
         <div class="hero-content">
             <h1>Inscription Saison 2025</h1>
             <p>Devenez membre de la famille des Celtics !</p>
@@ -286,13 +281,23 @@
             }
         });
 
-        // Mobile Menu Logic (reused)
-        const hamburger = document.querySelector(".hamburger");
+        // Mobile Menu Logic
+        const mobileMenuBtn = document.getElementById("mobile-menu");
         const navMenu = document.querySelector(".nav-menu");
-        hamburger.addEventListener("click", () => {
-            hamburger.classList.toggle("active");
-            navMenu.classList.toggle("active");
-        });
+
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener("click", () => {
+                navMenu.classList.toggle("active");
+                const icon = mobileMenuBtn.querySelector('i');
+                if (navMenu.classList.contains('active')) {
+                    icon.classList.remove('fa-bars');
+                    icon.classList.add('fa-times');
+                } else {
+                    icon.classList.remove('fa-times');
+                    icon.classList.add('fa-bars');
+                }
+            });
+        }
     </script>
 
 </body>

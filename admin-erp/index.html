@@ -289,6 +289,8 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Demandes d'inscription</h3>
+                                <button class="btn-action" id="open-registration-modal"><i class="fas fa-plus"></i>
+                                    Nouvelle Inscription</button>
                             </div>
                             <div class="card-body">
                                 <div class="table-container">
@@ -461,6 +463,54 @@
                 <div class="form-group">
                     <label>Photo (Optionnel)</label>
                     <input type="file" id="ref-image" accept="image/*">
+                </div>
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- REGISTRATION MODAL -->
+    <div class="modal" id="registration-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Détails Inscription</h2>
+            <form id="registration-form-admin">
+                <input type="hidden" id="reg-id">
+                <div class="form-group">
+                    <label>Enfant (Prénom / Nom)</label>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="reg-child-first" placeholder="Prénom" required>
+                        <input type="text" id="reg-child-last" placeholder="Nom" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Parent (Prénom / Nom)</label>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="reg-parent-first" placeholder="Prénom" required>
+                        <input type="text" id="reg-parent-last" placeholder="Nom" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Contact</label>
+                    <input type="email" id="reg-email" placeholder="Courriel" required>
+                    <input type="tel" id="reg-phone" placeholder="Téléphone" style="margin-top:5px;">
+                </div>
+                <div class="form-group">
+                    <label>Programme</label>
+                    <select id="reg-program" required>
+                        <option value="U4-U6">Timbits (U4-U6)</option>
+                        <option value="U7-U10">LSCP (U7-U10)</option>
+                        <option value="U11-U12">Ligue de Développement (U11-U12)</option>
+                        <option value="U13-U18">Compétitif (U13-U18)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Statut</label>
+                    <select id="reg-status">
+                        <option value="New">Nouveau</option>
+                        <option value="Paid">Payé</option>
+                        <option value="Completed">Terminé</option>
+                    </select>
                 </div>
                 <button type="submit" class="btn-save">Enregistrer</button>
             </form>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Celtics ERP | Administration</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Firebase SDKs (Module) -->
+    <script type="importmap">
+        {
+          "imports": {
+            "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
+            "firebase/storage": "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js",
+            "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+            "firebase/analytics": "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js"
+          }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="app">
+        <!-- Auth Screen -->
+        <div id="auth-screen" class="screen active">
+            <div class="login-box">
+                <div class="logo-area">
+                    <img src="../images/logo.png" alt="Celtics Logo">
+                    <h1>Celtics ERP</h1>
+                </div>
+                <form id="login-form">
+                    <div class="input-group">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="email" placeholder="Courriel administrateur" required>
+                    </div>
+                    <div class="input-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" placeholder="Mot de passe" required>
+                    </div>
+                    <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt"></i> Connexion</button>
+                    <p id="login-error" class="error-msg"></p>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div id="dashboard-screen" class="screen">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <img src="../images/logo.png" alt="Logo">
+                    <span>Admin</span>
+                </div>
+                <nav class="sidebar-nav">
+                    <button class="nav-btn active" data-target="view-dashboard"><i class="fas fa-home"></i> Tableau de
+                        bord</button>
+                    <button class="nav-btn" data-target="view-teams"><i class="fas fa-users"></i> Gestion
+                        Équipes</button>
+                    <button class="nav-btn" data-target="view-boutique"><i class="fas fa-store"></i> Boutique</button>
+                    <button class="nav-btn" data-target="view-inventory"><i class="fas fa-clipboard-list"></i>
+                        Inventaire</button>
+                </nav>
+                <div class="sidebar-footer">
+                    <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> Déconnexion</button>
+                </div>
+            </aside>
+
+            <main class="main-content">
+                <header class="top-bar">
+                    <h2 id="page-title">Tableau de bord</h2>
+                    <div class="user-info">
+                        <span id="user-email">admin@celtics.com</span>
+                        <div class="avatar"><i class="fas fa-user"></i></div>
+                    </div>
+                </header>
+
+                <div id="content-area">
+                    <!-- Views will be injected here -->
+
+                    <!-- Dashboard Home -->
+                    <div id="view-dashboard" class="view active">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="icon bg-blue"><i class="fas fa-tshirt"></i></div>
+                                <div class="info">
+                                    <h3>Produits</h3>
+                                    <p id="stat-products">0</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="icon bg-green"><i class="fas fa-users"></i></div>
+                                <div class="info">
+                                    <h3>Joueurs</h3>
+                                    <p id="stat-players">0</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="icon bg-orange"><i class="fas fa-boxes"></i></div>
+                                <div class="info">
+                                    <h3>Inventaire</h3>
+                                    <p id="stat-inventory">0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Teams View -->
+                    <div id="view-teams" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Générateur d'Équipes</h3>
+                                <button class="btn-action" id="open-player-modal"><i class="fas fa-plus"></i> Ajouter
+                                    Joueur</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="toolbar">
+                                    <button class="btn-secondary" id="generate-teams-btn">Générer les équipes</button>
+                                    <select id="team-size-select">
+                                        <option value="5">5 vs 5</option>
+                                        <option value="7">7 vs 7</option>
+                                        <option value="9">9 vs 9</option>
+                                        <option value="11">11 vs 11</option>
+                                    </select>
+                                </div>
+                                <div class="table-container">
+                                    <table id="players-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Nom</th>
+                                                <th>Âge</th>
+                                                <th>Niveau (1-10)</th>
+                                                <th>Position</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- JS will populate -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div id="generated-teams-result" class="teams-output"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Boutique View -->
+                    <div id="view-boutique" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gestion Boutique</h3>
+                                <button class="btn-action" id="open-product-modal"><i class="fas fa-plus"></i> Nouveau
+                                    Produit</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="product-grid" id="products-list">
+                                    <!-- JS will populate -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inventory View -->
+                    <div id="view-inventory" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Inventaire Matériel</h3>
+                                <button class="btn-action" id="open-inventory-modal"><i class="fas fa-plus"></i> Ajouter
+                                    Item</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-container">
+                                    <table id="inventory-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Article</th>
+                                                <th>Catégorie</th>
+                                                <th>Quantité</th>
+                                                <th>État</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- JS will populate -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Product Modal -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2 id="product-modal-title">Ajouter un produit</h2>
+            <form id="product-form">
+                <input type="hidden" id="product-id">
+                <div class="form-group">
+                    <label>Nom du produit</label>
+                    <input type="text" id="prod-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Prix ($)</label>
+                    <input type="number" id="prod-price" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Image</label>
+                    <input type="file" id="prod-image" accept="image/*">
+                    <div id="image-preview"></div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="prod-desc" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Player Modal -->
+    <div id="player-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Joueur</h2>
+            <form id="player-form">
+                <input type="hidden" id="player-id">
+                <div class="form-group">
+                    <label>Nom Complet</label>
+                    <input type="text" id="player-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Année de Naissance</label>
+                    <input type="number" id="player-year" required>
+                </div>
+                <div class="form-group">
+                    <label>Niveau (1: Débutant - 10: Expert)</label>
+                    <input type="number" id="player-skill" min="1" max="10" value="5" required>
+                </div>
+                <div class="form-group">
+                    <label>Position Préférée</label>
+                    <select id="player-pos">
+                        <option value="Attaquant">Attaquant</option>
+                        <option value="Milieu">Milieu</option>
+                        <option value="Défenseur">Défenseur</option>
+                        <option value="Gardien">Gardien</option>
+                        <option value="Polyvalent">Polyvalent</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Inventory Modal -->
+    <div id="inventory-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Article d'Inventaire</h2>
+            <form id="inventory-form">
+                <input type="hidden" id="inv-id">
+                <div class="form-group">
+                    <label>Nom de l'article</label>
+                    <input type="text" id="inv-name" placeholder="Ex: Ballons Taille 4" required>
+                </div>
+                <div class="form-group">
+                    <label>Catégorie</label>
+                    <select id="inv-cat">
+                        <option value="Ballons">Ballons</option>
+                        <option value="Vêtements">Vêtements</option>
+                        <option value="Entraînement">Matériel d'entraînement</option>
+                        <option value="Terrain">Terrain (Filets, Drapeaux)</option>
+                        <option value="Autre">Autre</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Quantité</label>
+                    <input type="number" id="inv-qty" required>
+                </div>
+                <div class="form-group">
+                    <label>État</label>
+                    <select id="inv-status">
+                        <option value="Neuf">Neuf</option>
+                        <option value="Bon">Bon</option>
+                        <option value="Usé">Usé</option>
+                        <option value="À remplacer">À remplacer</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Logic -->
+    <script type="module" src="js/app.js"></script>
+</body>
+
+</html>

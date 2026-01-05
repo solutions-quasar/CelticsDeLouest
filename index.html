@@ -34,16 +34,17 @@
             <ul class="nav-menu">
                 <li><a href="#hero" class="nav-link">Accueil</a></li>
                 <li><a href="#equipes" class="nav-link">Nos Équipes</a></li>
-                <li><a href="#inscription" class="nav-link">Inscription</a></li>
+                <li><a href="#inscription" class="nav-link">Inscriptions</a></li>
+                <li><a href="#valeurs" class="nav-link">Nos Valeurs</a></li>
                 <li class="nav-item-dropdown">
                     <a href="#" class="nav-link">Le Club <i class="fas fa-chevron-down"
                             style="font-size: 0.8rem; margin-left: 5px;"></i></a>
                     <ul class="dropdown-menu">
-                        <li><a href="#comite" class="nav-link dropdown-link">Comité</a></li>
+                        <li><a href="#comite" class="nav-link dropdown-link">Conseil d'administration</a></li>
                         <li><a href="#arbitres" class="nav-link dropdown-link">Nos Arbitres</a></li>
                     </ul>
                 </li>
-                <li><a href="#boutique" class="nav-link">Boutique en ligne</a></li>
+                <li><a href="boutique.html" class="nav-link">Boutique en ligne</a></li>
                 <li><a href="#contact" class="nav-link">Nous Joindre</a></li>
             </ul>
         </div>
@@ -58,18 +59,7 @@
         </div>
     </header>
 
-    <!-- Introduction -->
-    <section class="section">
-        <div class="container section-title">
-            <h2>Bienvenue aux Celtics</h2>
-            <p style="margin-bottom: 20px;">Le club des Celtics de l’Ouest de Portneuf oeuvre pour offrir aux jeunes (et
-                aux moins jeunes) de tout l’ouest du comté (de Portneuf à Saint-Ubalde) la possibilité de s’épanouir
-                dans la pratique du soccer et de participer aux ligues de Portneuf et Québec (en fonction de leur âge).
-            </p>
-            <p>L’encadrement offert bénévolement se veut inclusif et défendant les valeurs fondamentales du sport. Nous
-                visons à accompagner nos enfants dans un climat propice à leur développement sportif et personnel.</p>
-        </div>
-    </section>
+
 
     <!-- Teams / News Section -->
     <section id="equipes" class="section section-bg">
@@ -87,9 +77,11 @@
                         <h3>U13 • U15 • U16 • U18</h3>
                     </div>
                     <div class="team-body">
-                        <p>Nos équipes jouent dans la <strong>Ligue Quebec Metro</strong></p>
+                        <p>Nos équipes jouent dans la <strong>Ligue de Soccer Québec Métro Juvénile</strong></p>
                         <div class="team-league">
-                            <!-- Image removed as requested -->
+                            <a href="https://page.spordle.com/ligue-de-developpement-quebec" target="_blank">
+                                <img src="images/ligue_dev.png" alt="Ligue de Développement" class="league-logo">
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -102,8 +94,8 @@
                     <div class="team-body">
                         <p>Nos équipes jouent dans la <strong>Ligue de Développement</strong></p>
                         <div class="team-league">
-                            <a href="https://page.spordle.com/ligue-de-developpement-quebec" target="_blank">
-                                <img src="images/ligue_dev.png" alt="Ligue de Développement" class="league-logo">
+                            <a href="https://www.liguesoccerportneuf.com/calendrier" target="_blank">
+                                <img src="images/lscp.png" alt="LSCP" class="league-logo">
                             </a>
                         </div>
                     </div>
@@ -117,9 +109,7 @@
                     <div class="team-body">
                         <p>Nos équipes masculin jouent dans la <strong>LSCP</strong></p>
                         <div class="team-league">
-                            <a href="https://www.liguesoccerportneuf.com/calendrier" target="_blank">
-                                <img src="images/lscp.png" alt="LSCP" class="league-logo">
-                            </a>
+                            <img src="images/timbits.png" alt="Soccer Timbits" class="league-logo">
                         </div>
                     </div>
                 </div>
@@ -132,7 +122,7 @@
                     <div class="team-body">
                         <p>Jouent localement <strong>1 fois par semaine</strong></p>
                         <div class="team-league">
-                            <img src="images/timbits.png" alt="Soccer Timbits" class="league-logo">
+                            <img src="images/timbits_logo.png" alt="Soccer Timbits" class="league-logo">
                         </div>
                     </div>
                 </div>
@@ -197,6 +187,10 @@
                     <p>J’encourage tous les participants de manière civilisée.</p>
                 </div>
             </div>
+            <p style="text-align: center; margin-top: 20px; font-size: 0.9rem; color: #666;">
+                Source: <a href="https://rseq.ca" target="_blank"
+                    style="text-decoration: underline; color: var(--celtics-green);">RSEQ</a>
+            </p>
         </div>
     </section>
 
@@ -235,16 +229,10 @@
         </div>
     </section>
 
-    <!-- Arbitres Section -->
-    <section id="arbitres" class="section section-bg">
-        <div class="container section-title">
-            <h2>Nos Arbitres</h2>
-            <p>Information à venir.</p>
-        </div>
-    </section>
+
 
     <!-- Committee Section -->
-    <section id="comite" class="section">
+    <section id="comite" class="section section-bg">
         <div class="container">
             <div class="section-title">
                 <h2>Conseil d'Administration</h2>
@@ -293,12 +281,92 @@
                     <div class="member-role">Responsable des Arbitres</div>
                     <div class="member-name">Félix-Antoine Cantin</div>
                 </div>
+                <div class="member-card">
+                    <div class="member-role">Ligneur</div>
+                    <div class="member-name">Jasmin Moisan</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Arbitres Section -->
+    <section id="arbitres" class="section">
+        <div class="container">
+            <div class="section-title">
+                <h2>Nos Arbitres</h2>
+            </div>
+            <div class="committee-grid">
+                <div class="member-card">
+                    <div class="member-name">Charlotte Bédard</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Dany Ayotte</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Élodie Boutet</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Éloi Ayotte</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Émile Gingras</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Emily Duguay</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Félix-Antoine Cantin</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Gabrielle Tessier</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Jasmin Moisan</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Juan Manuel Gaspari</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Julien Berthiaume</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Laurence Thibault</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Léo Demers</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Loïk Coulombe</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Mamadou Manka</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Mathéo Quimper Hinton</div>
+                </div>
+                <div class="member-card">
+                    <div class="member-name">Naomie Petit</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Boutique Section -->
+    <section id="boutique" class="section section-bg">
+        <div class="container">
+            <div class="section-title">
+                <h2>Boutique en ligne</h2>
+                <p>Visitez notre boutique en ligne afin de vous procurer des vêtements et accessoires aux couleurs du
+                    Club</p>
+            </div>
+            <div style="text-align: center; margin-top: -20px;">
+                <a href="boutique.html" class="btn btn-primary">Visiter la Boutique</a>
             </div>
         </div>
     </section>
 
     <!-- Contact Section -->
-    <section id="contact" class="section section-bg">
+    <section id="contact" class="section">
         <div class="container">
             <div class="section-title">
                 <h2>Nous Joindre</h2>
@@ -330,11 +398,7 @@
                                 target="_blank">@celtics_de_louest_portneuf</a>
                         </div>
                     </div>
-                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
-                    <p style="font-size: 0.9rem; color: #666;">Pour toutes questions concernant ce site internet:<br>
-                        <strong>Philippe Moisan</strong> - <a
-                            href="mailto:m.philippe.moisan@gmail.com">m.philippe.moisan@gmail.com</a>
-                    </p>
+
                 </div>
 
                 <!-- Locations -->

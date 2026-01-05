@@ -138,7 +138,7 @@
         <div class="container">
             <h2>Inscription</h2>
             <p>Rejoignez les Celtics pour la saison 2025 !</p>
-            <a href="#" class="btn btn-primary">S'inscrire Maintenant</a>
+            <a href="inscription.html" class="btn btn-primary">S'inscrire Maintenant</a>
         </div>
     </section>
 
@@ -235,59 +235,15 @@
 
 
     <!-- Committee Section -->
-    <section id="comite" class="section section-bg">
+    <section id="conseil" class="section section-bg">
         <div class="container">
             <div class="section-title">
                 <h2>Conseil d'Administration</h2>
             </div>
 
-            <div class="committee-grid">
-                <div class="member-card">
-                    <div class="member-role">Président</div>
-                    <div class="member-name">Mathieu Gingras</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-role">Vice-président</div>
-                    <div class="member-name">Dany Ayotte</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-role">Trésorière</div>
-                    <div class="member-name">Marie-Pier Bouchard</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-role">Secrétaire</div>
-                    <div class="member-name">Meagan Léger Pouliot</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-role">Administrateur</div>
-                    <div class="member-name">Philippe Moisan</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-role">Administrateur</div>
-                    <div class="member-name">Guillaume Petit</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-role">Administrateur</div>
-                    <div class="member-name">Mathieu Rieg</div>
-                </div>
-            </div>
-
-            <div class="section-title" style="margin-top: 50px;">
-                <h3>Coordination</h3>
-            </div>
-            <div class="committee-grid">
-                <div class="member-card">
-                    <div class="member-role">Coordonnatrice Administrative</div>
-                    <div class="member-name">Clémence Bouillé</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-role">Responsable des Arbitres</div>
-                    <div class="member-name">Félix-Antoine Cantin</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-role">Ligneur</div>
-                    <div class="member-name">Jasmin Moisan</div>
-                </div>
+            <div id="board-container" class="committee-grid">
+                <!-- JS Will Populate -->
+                <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement du conseil...</div>
             </div>
         </div>
     </section>
@@ -298,58 +254,9 @@
             <div class="section-title">
                 <h2>Nos Arbitres</h2>
             </div>
-            <div class="committee-grid">
-                <div class="member-card">
-                    <div class="member-name">Charlotte Bédard</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Dany Ayotte</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Élodie Boutet</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Éloi Ayotte</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Émile Gingras</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Emily Duguay</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Félix-Antoine Cantin</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Gabrielle Tessier</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Jasmin Moisan</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Juan Manuel Gaspari</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Julien Berthiaume</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Laurence Thibault</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Léo Demers</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Loïk Coulombe</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Mamadou Manka</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Mathéo Quimper Hinton</div>
-                </div>
-                <div class="member-card">
-                    <div class="member-name">Naomie Petit</div>
-                </div>
+            <div id="referees-container" class="spectator-code-grid">
+                <!-- JS Will Populate -->
+                <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement des arbitres...</div>
             </div>
         </div>
     </section>
@@ -459,7 +366,106 @@
         </div>
     </footer>
 
-    <script src="script.js"></script>
+    <!-- Firebase & Dynamic Content Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
+            authDomain: "celticsdelouest.firebaseapp.com",
+            projectId: "celticsdelouest",
+            storageBucket: "celticsdelouest.firebasestorage.app",
+            messagingSenderId: "1078067192512",
+            appId: "1:1078067192512:web:ae3b414f15358d1bfb8325",
+            measurementId: "G-N5LFCG1QWT"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Load Board Members
+        async function loadBoard() {
+            const container = document.getElementById('board-container');
+            try {
+                // If empty in DB, nothing shows (handled by Seeding step in ERP)
+                const q = query(collection(db, "board_members"), orderBy("order", "asc"));
+                const snapshot = await getDocs(q);
+
+                if (!snapshot.empty) {
+                    container.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const card = document.createElement('div');
+                        card.className = 'board-card';
+
+                        // Image if available
+                        let imgHtml = '';
+                        if (data.imageUrl && data.imageUrl.length > 10) {
+                            imgHtml = `<img src="${data.imageUrl}" alt="${data.name}" style="width:100px; height:100px; border-radius:50%; object-fit:cover; margin-bottom:10px;">`;
+                        }
+
+                        card.innerHTML = `
+                            ${imgHtml}
+                            <span class="role">${data.role}</span>
+                            <h3>${data.name}</h3>
+                        `;
+                        container.appendChild(card);
+                    });
+                } else {
+                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Membres du conseil à venir.</p>';
+                }
+            } catch (e) {
+                console.error("Board load error", e);
+                // Fallback static or error
+                container.innerHTML = '<p>Erreur de chargement.</p>';
+            }
+        }
+
+        // Load Referees
+        async function loadReferees() {
+            const container = document.getElementById('referees-container');
+            try {
+                const q = query(collection(db, "referees"), orderBy("name", "asc"));
+                const snapshot = await getDocs(q);
+
+                if (!snapshot.empty) {
+                    container.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const card = document.createElement('div');
+                        card.className = 'spectator-card'; // Reusing style class
+
+                        // Image if available
+                        let imgHtml = '';
+                        if (data.imageUrl && data.imageUrl.length > 10) {
+                            // Use a specialized style for referee with image
+                            card.style.display = 'flex';
+                            card.style.flexDirection = 'column';
+                            card.style.alignItems = 'center';
+                            card.style.gap = '10px';
+                            imgHtml = `<img src="${data.imageUrl}" alt="${data.name}" style="width:80px; height:80px; border-radius:50%; object-fit:cover;">`;
+                        }
+
+                        card.innerHTML = `
+                            ${imgHtml}
+                            <h3>${data.name}</h3>
+                        `;
+                        container.appendChild(card);
+                    });
+                } else {
+                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Liste des arbitres à venir.</p>';
+                }
+            } catch (e) {
+                console.error("Refs load error", e);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadBoard();
+            loadReferees(); // Optional: if you want to reuse the exact static list instead of DB, remove this.
+        });
+    </script>
 </body>
 
 </html>

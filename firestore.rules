@@ -3,17 +3,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // PRODUCTS (Boutique)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // BOARD MEMBERS (Conseil d'administration)
+    match /board_members/{memberId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // REFEREES (Arbitres)
+    match /referees/{refereeId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // REGISTRATIONS (Inscriptions)
+    // Public can create (submit form), but only Admins can read (view list)
+    match /registrations/{regId} {
+      allow create: if true;
+      allow read, update, delete: if isAuthenticated();
+    }
+
+    // PLAYERS (Team Generator)
+    match /players/{playerId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // INVENTORY
+    match /inventory/{itemId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Default fallback: Deny everything else
     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 2, 4);
+      allow read, write: if false;
     }
   }
 }

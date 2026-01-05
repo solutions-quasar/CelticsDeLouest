@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inscription - Celtics de l'Ouest</title>
+    <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        .form-section {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .form-section h3 {
+            color: var(--celtics-green);
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--celtics-green);
+            padding-bottom: 10px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media(max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+        }
+
+        .success-message {
+            display: none;
+            background-color: var(--secondary-green);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="container nav-container">
+            <div class="logo">
+                <a href="index.html">
+                    <img src="images/logo.png" alt="Celtics Logo"> <span>Celtics de l'Ouest de Portneuf</span>
+                </a>
+            </div>
+            <nav>
+                <ul class="nav-menu">
+                    <li><a href="index.html">Accueil</a></li>
+                    <li><a href="index.html#equipes">Nos Équipes</a></li>
+                    <li><a href="inscription.html" class="active">Inscriptions</a></li>
+                    <li><a href="index.html#valeurs">Nos Valeurs</a></li>
+                    <li class="nav-item-dropdown">
+                        <a href="#" class="nav-link">Le Club <i class="fas fa-chevron-down"></i></a>
+                        <div class="dropdown-menu">
+                            <a href="index.html#conseil">Conseil d'administration</a>
+                            <a href="index.html#arbitres">Nos Arbitres</a>
+                            <a href="https://celticsdelouest.org/pdf/2025_Pol_Int.pdf" target="_blank">Politique
+                                d'intégrité</a>
+                        </div>
+                    </li>
+                    <li><a href="boutique.html">Boutique en ligne</a></li>
+                    <li><a href="index.html#contact">Nous Joindre</a></li>
+                </ul>
+                <div class="hamburger">
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero-section" style="height: 40vh; min-height: 300px;">
+        <div class="hero-content">
+            <h1>Inscription Saison 2025</h1>
+            <p>Devenez membre de la famille des Celtics !</p>
+        </div>
+    </section>
+
+    <!-- Form Section -->
+    <section class="section">
+        <div class="container">
+
+            <div id="success-message" class="success-message">
+                <i class="fas fa-check-circle" style="font-size: 3rem; margin-bottom: 20px;"></i>
+                <h2>Inscription Reçue !</h2>
+                <p>Nous avons bien reçu votre demande. Nous vous contacterons bientôt pour finaliser l'inscription.</p>
+                <a href="index.html" class="btn btn-primary" style="margin-top: 20px; display: inline-block;">Retour à
+                    l'accueil</a>
+            </div>
+
+            <form id="registration-form">
+
+                <div class="form-section">
+                    <h3>Information du Joueur</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Prénom de l'enfant</label>
+                            <input type="text" name="childFirstName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Nom de l'enfant</label>
+                            <input type="text" name="childLastName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Date de Naissance</label>
+                            <input type="date" name="dob" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Genre</label>
+                            <select name="gender" required>
+                                <option value="">Sélectionner</option>
+                                <option value="M">Garçon</option>
+                                <option value="F">Fille</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Information du Parent / Tuteur</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Prénom du Parent</label>
+                            <input type="text" name="parentFirstName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Nom du Parent</label>
+                            <input type="text" name="parentLastName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Courriel</label>
+                            <input type="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Téléphone</label>
+                            <input type="tel" name="phone" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Adresse Complète</label>
+                        <textarea name="address" rows="2" required></textarea>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Catégorie</h3>
+                    <div class="form-group">
+                        <label>Sélectionner le programme</label>
+                        <select name="program" required>
+                            <option value="">Choisir...</option>
+                            <option value="U4-U6">Timbits (U4-U6)</option>
+                            <option value="U7-U10">LSCP (U7-U10)</option>
+                            <option value="U11-U12">Ligue de Développement (U11-U12)</option>
+                            <option value="U13-U18">Compétitif (U13-U18)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Commentaires / Besoins particuliers</label>
+                        <textarea name="comments" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div style="text-align: center;">
+                    <button type="submit" class="btn btn-primary" style="padding: 15px 40px; font-size: 1.1rem;">Envoyer
+                        l'inscription</button>
+                </div>
+
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-col">
+                    <h4>Celtics de l'Ouest</h4>
+                    <p>Club de soccer de Portneuf.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Liens Utiles</h4>
+                    <ul class="footer-links">
+                        <li><a href="https://celticsdelouest.org/pdf/2025_Pol_Int.pdf" target="_blank">Politique
+                                d'intégrité</a></li>
+                        <li><a href="https://www.quebec.ca/tourisme-et-loisirs/encadrement-gouvernance-gestion-loisir-sport/porter-plainte-sport-loisir"
+                                target="_blank">Je Dénonce</a></li>
+                        <li><a href="https://www.liguesoccerportneuf.com/" target="_blank">Ligue de Soccer</a></li>
+                        <li><a href="admin-erp/index.html" target="_blank" style="color: #666; font-size: 0.8rem;"><i
+                                    class="fas fa-lock"></i> Admin</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="copyright">
+                <p>&copy; 2025 Club de soccer les Celtics de l'Ouest de Portneuf. Tous droits réservés.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
+            authDomain: "celticsdelouest.firebaseapp.com",
+            projectId: "celticsdelouest",
+            storageBucket: "celticsdelouest.firebasestorage.app",
+            messagingSenderId: "1078067192512",
+            appId: "1:1078067192512:web:ae3b414f15358d1bfb8325",
+            measurementId: "G-N5LFCG1QWT"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        document.getElementById('registration-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerText;
+            btn.innerText = "Envoi en cours...";
+            btn.disabled = true;
+
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.timestamp = serverTimestamp();
+            data.status = 'New';
+
+            try {
+                await addDoc(collection(db, "registrations"), data);
+                document.getElementById('registration-form').style.display = 'none';
+                document.getElementById('success-message').style.display = 'block';
+                window.scrollTo(0, 0);
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Une erreur est survenue: " + error.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // Mobile Menu Logic (reused)
+        const hamburger = document.querySelector(".hamburger");
+        const navMenu = document.querySelector(".nav-menu");
+        hamburger.addEventListener("click", () => {
+            hamburger.classList.toggle("active");
+            navMenu.classList.toggle("active");
+        });
+    </script>
+
+</body>
+
+</html>

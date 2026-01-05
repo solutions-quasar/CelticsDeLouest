@@ -86,6 +86,10 @@
                     <button class="nav-btn" data-target="view-boutique"><i class="fas fa-store"></i> Boutique</button>
                     <button class="nav-btn" data-target="view-inventory"><i class="fas fa-clipboard-list"></i>
                         Inventaire</button>
+                    <button class="nav-btn" data-target="view-board"><i class="fas fa-users-cog"></i> C.A.</button>
+                    <button class="nav-btn" data-target="view-referees"><i class="fas fa-whistle"></i> Arbitres</button>
+                    <button class="nav-btn" data-target="view-registrations"><i class="fas fa-file-signature"></i>
+                        Inscriptions</button>
                 </nav>
                 <div class="sidebar-footer">
                     <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> Déconnexion</button>
@@ -215,6 +219,65 @@
                         </div>
                     </div>
 
+                    <!-- BOARD VIEW -->
+                    <div id="view-board" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Conseil d'Administration</h3>
+                                <button class="btn-action" id="open-board-modal"><i class="fas fa-plus"></i> Nouveau
+                                    Membre</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="product-grid" id="board-list">
+                                    <!-- JS Will Populate -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- REFEREES VIEW -->
+                    <div id="view-referees" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gestion des Arbitres</h3>
+                                <button class="btn-action" id="open-referee-modal"><i class="fas fa-plus"></i> Nouvel
+                                    Arbitre</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="product-grid" id="referees-list">
+                                    <!-- JS Will Populate -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- REGISTRATIONS VIEW -->
+                    <div id="view-registrations" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Demandes d'inscription</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-container">
+                                    <table id="registrations-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Enfant</th>
+                                                <th>Programme</th>
+                                                <th>Parent</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- JS Will Populate -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </main>
         </div>
@@ -317,6 +380,54 @@
                         <option value="Usé">Usé</option>
                         <option value="À remplacer">À remplacer</option>
                     </select>
+                </div>
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- BOARD MODAL -->
+    <div class="modal" id="board-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Membre du Conseil</h2>
+            <form id="board-form">
+                <input type="hidden" id="board-id">
+                <div class="form-group">
+                    <label>Nom Complet</label>
+                    <input type="text" id="board-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Rôle (ex: Président, Trésorière)</label>
+                    <input type="text" id="board-role" required>
+                </div>
+                <div class="form-group">
+                    <label>Photo de profil</label>
+                    <input type="file" id="board-image" accept="image/*">
+                </div>
+                <div class="form-group">
+                    <label>Ordre d'affichage (1 = Premier)</label>
+                    <input type="number" id="board-order" value="99">
+                </div>
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- REFEREE MODAL -->
+    <div class="modal" id="referee-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Arbitre</h2>
+            <form id="referee-form">
+                <input type="hidden" id="referee-id">
+                <div class="form-group">
+                    <label>Nom Complet</label>
+                    <input type="text" id="ref-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Photo (Optionnel)</label>
+                    <input type="file" id="ref-image" accept="image/*">
                 </div>
                 <button type="submit" class="btn-save">Enregistrer</button>
             </form>

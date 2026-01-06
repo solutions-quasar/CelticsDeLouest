@@ -1,9 +1,9 @@
 // Firebase Configuration
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, orderBy, onSnapshot, getDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, orderBy, enableIndexedDbPersistence } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "firebase/auth";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
@@ -20,6 +20,15 @@ const analytics = getAnalytics(app);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
+
+// Enable Offline Persistence for Firestore
+enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code == 'failed-precondition') {
+        console.warn('Persistence failed: Multiple tabs open');
+    } else if (err.code == 'unimplemented') {
+        console.warn('Persistence not supported by browser');
+    }
+});
 
 // --- Global Cache for Editing ---
 const dataCache = {
@@ -172,7 +181,6 @@ document.querySelectorAll('.view-toggle-btn').forEach(btn => {
 function setupClickableCard(cardSelector, cacheKey, modalId, idFieldId, populateCallback) {
     document.querySelectorAll(cardSelector).forEach(card => {
         card.addEventListener('click', (e) => {
-            // Checks to prevent opening modal on delete/action buttons
             if (e.target.closest('.btn-delete') ||
                 e.target.closest('.delete-board') ||
                 e.target.closest('.delete-ref') ||
@@ -191,10 +199,8 @@ function setupClickableCard(cardSelector, cacheKey, modalId, idFieldId, populate
                 document.getElementById(idFieldId).value = id;
                 populateCallback(data);
                 const modal = document.getElementById(modalId);
-                // Reset any Error/Loading states in the modal
                 const form = modal.querySelector('form');
                 if (form) setLoading(form, false);
-
                 modal.classList.add('active');
             }
         });
@@ -207,7 +213,9 @@ function setLoading(form, isLoading) {
     if (!btn) return;
 
     if (isLoading) {
-        btn.setAttribute('data-original-text', btn.innerHTML);
+        if (!btn.hasAttribute('data-original-text')) {
+            btn.setAttribute('data-original-text', btn.innerHTML);
+        }
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
         btn.disabled = true;
     } else {
@@ -240,6 +248,8 @@ document.getElementById('board-form')?.addEventListener('submit', async (e) => {
         const order = parseInt(document.getElementById('board-order').value) || 99;
         const file = document.getElementById('board-image').files[0];
 
+        if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
+
         const data = { name, role, order };
         await uploadAndSave('board_members', id, data, file);
 
@@ -247,7 +257,7 @@ document.getElementById('board-form')?.addEventListener('submit', async (e) => {
         loadBoard();
     } catch (err) {
         console.error(err);
-        alert("Erreur lors de l'enregistrement: " + err.message);
+        alert("Erreur lors de l'enregistrement :\n" + (err.message || err));
     } finally {
         setLoading(form, false);
     }
@@ -301,6 +311,8 @@ document.getElementById('referee-form')?.addEventListener('submit', async (e) =>
         const name = document.getElementById('ref-name').value;
         const file = document.getElementById('ref-image').files[0];
 
+        if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
+
         const data = { name };
         await uploadAndSave('referees', id, data, file);
 
@@ -308,7 +320,7 @@ document.getElementById('referee-form')?.addEventListener('submit', async (e) =>
         loadReferees();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + err.message);
+        alert("Erreur: " + (err.message || err));
     } finally {
         setLoading(form, false);
     }
@@ -363,6 +375,8 @@ document.getElementById('product-form')?.addEventListener('submit', async (e) =>
         const desc = document.getElementById('prod-desc').value;
         const file = document.getElementById('prod-image').files[0];
 
+        if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
+
         const data = { name, price, desc };
         await uploadAndSave('products', id, data, file);
 
@@ -371,7 +385,7 @@ document.getElementById('product-form')?.addEventListener('submit', async (e) =>
         updateStats();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + err.message);
+        alert("Erreur: " + (err.message || err));
     } finally {
         setLoading(form, false);
     }
@@ -434,7 +448,7 @@ document.getElementById('player-form')?.addEventListener('submit', async (e) => 
         updateStats();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + err.message);
+        alert("Erreur: " + (err.message || err));
     } finally {
         setLoading(form, false);
     }
@@ -512,7 +526,7 @@ document.getElementById('inventory-form')?.addEventListener('submit', async (e) 
         updateStats();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + err.message);
+        alert("Erreur: " + (err.message || err));
     } finally {
         setLoading(form, false);
     }
@@ -594,7 +608,7 @@ document.getElementById('registration-form-admin')?.addEventListener('submit', a
         loadRegistrations();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + err.message);
+        alert("Erreur: " + (err.message || err));
     } finally {
         setLoading(form, false);
     }
@@ -681,22 +695,21 @@ function setupDeleteButton(btnClass, collectionName, callback) {
 
 // Updated Helper: Returns Promise
 async function uploadAndSave(collectionName, id, data, imageFile) {
-    let imageUrl = '';
+    // Default imageUrl to empty string if creating new and no image
+    if (!data.imageUrl && !imageFile && !id) data.imageUrl = '';
+
     if (imageFile) {
         const storageRef = ref(storage, `${collectionName}/${imageFile.name}_${Date.now()}`);
         await uploadBytes(storageRef, imageFile);
-        imageUrl = await getDownloadURL(storageRef);
+        const imageUrl = await getDownloadURL(storageRef);
+        data.imageUrl = imageUrl;
     }
-
-    if (imageUrl) data.imageUrl = imageUrl;
 
     if (id) {
         await updateDoc(doc(db, collectionName, id), data);
     } else {
-        if (!data.imageUrl && imageFile !== undefined) data.imageUrl = '';
         await addDoc(collection(db, collectionName), data);
     }
-    // No callback here, we return Promise
 }
 
 

@@ -91,7 +91,10 @@ if (loginForm) {
 }
 
 if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => signOut(auth));
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('celtics_admin_last_view'); // Clear view state on logout
+        signOut(auth);
+    });
 }
 
 onAuthStateChanged(auth, (user) => {
@@ -99,7 +102,17 @@ onAuthStateChanged(auth, (user) => {
         authScreen.classList.remove('active');
         dashboardScreen.classList.add('active');
         document.getElementById('user-email').textContent = user.email;
-        loadDashboardData();
+
+        // Restore last view
+        const lastView = localStorage.getItem('celtics_admin_last_view');
+        if (lastView) {
+            const btn = document.querySelector(`.nav-btn[data-target="${lastView}"]`);
+            if (btn) btn.click();
+            else loadDashboardData();
+        } else {
+            loadDashboardData();
+        }
+
         seedDatabase();
     } else {
         dashboardScreen.classList.remove('active');
@@ -138,6 +151,10 @@ navBtns.forEach(btn => {
 
         btn.classList.add('active');
         const targetId = btn.getAttribute('data-target');
+
+        // Save navigation state
+        localStorage.setItem('celtics_admin_last_view', targetId);
+
         document.getElementById(targetId).classList.add('active');
         pageTitle.innerText = btn.innerText;
 

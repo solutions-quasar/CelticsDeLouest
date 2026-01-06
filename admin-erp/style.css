@@ -469,6 +469,10 @@ th {
     width: 100%;
     max-width: 500px;
     position: relative;
+    max-height: 90vh;
+    /* Ensure modal fits on screen vertically */
+    overflow-y: auto;
+    /* Enable scroll inside modal if needed */
     animation: slideDown 0.3s;
 }
 
@@ -515,6 +519,20 @@ th {
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 6px;
+}
+
+/* Image Preview Styles */
+.image-preview-mt {
+    margin-top: 10px;
+}
+
+.image-preview-container img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 1px solid #eee;
+    display: block;
 }
 
 /* --- GRID VIEW MODE --- */

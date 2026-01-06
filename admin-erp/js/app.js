@@ -242,16 +242,61 @@ function setLoading(form, isLoading) {
     }
 }
 
+// --- IMAGE PREVIEW HELPER ---
+function setupImagePreview(inputId, previewId) {
+    const input = document.getElementById(inputId);
+    const preview = document.getElementById(previewId);
+
+    if (input && preview) {
+        input.addEventListener('change', function () {
+            const file = this.files[0];
+            if (file) {
+                // Check size immediately on selection for better UX
+                if (file.size > 5 * 1024 * 1024) {
+                    alert("L'image est trop volumineuse (Max 5MB).");
+                    this.value = ''; // clear input
+                    preview.innerHTML = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.addEventListener("load", function () {
+                    preview.innerHTML = `<img src="${this.result}" alt="Aperçu">`;
+                });
+                reader.readAsDataURL(file);
+            } else {
+                preview.innerHTML = '';
+            }
+        });
+    }
+}
+
+function setExistingPreview(previewId, imageUrl) {
+    const preview = document.getElementById(previewId);
+    if (preview) {
+        if (imageUrl) {
+            preview.innerHTML = `<img src="${imageUrl}" alt="Actuelle">`;
+        } else {
+            preview.innerHTML = '';
+        }
+    }
+}
+
+
 // --- BOARD LOGIC ---
 const boardModal = document.getElementById('board-modal');
 const openBoardModalBtn = document.getElementById('open-board-modal');
 if (openBoardModalBtn) openBoardModalBtn.addEventListener('click', () => {
     document.getElementById('board-form').reset();
     document.getElementById('board-id').value = '';
+    document.getElementById('board-image-preview').innerHTML = '';
     setLoading(document.getElementById('board-form'), false);
     boardModal.classList.add('active');
 });
 if (boardModal) boardModal.querySelector('.close-modal').addEventListener('click', () => boardModal.classList.remove('active'));
+
+// Setup Preview
+setupImagePreview('board-image', 'board-image-preview');
 
 document.getElementById('board-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -303,6 +348,7 @@ async function loadBoard() {
         document.getElementById('board-name').value = data.name;
         document.getElementById('board-role').value = data.role;
         document.getElementById('board-order').value = data.order;
+        setExistingPreview('board-image-preview', data.imageUrl);
     });
     setupDeleteButton('.delete-board', 'board_members', () => loadBoard());
 }
@@ -313,10 +359,13 @@ const openRefModalBtn = document.getElementById('open-referee-modal');
 if (openRefModalBtn) openRefModalBtn.addEventListener('click', () => {
     document.getElementById('referee-form').reset();
     document.getElementById('referee-id').value = '';
+    document.getElementById('ref-image-preview').innerHTML = '';
     setLoading(document.getElementById('referee-form'), false);
     refModal.classList.add('active');
 });
 if (refModal) refModal.querySelector('.close-modal').addEventListener('click', () => refModal.classList.remove('active'));
+
+setupImagePreview('ref-image', 'ref-image-preview');
 
 document.getElementById('referee-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -364,6 +413,7 @@ async function loadReferees() {
 
     setupClickableCard('.ref-card', 'referees', 'referee-modal', 'referee-id', (data) => {
         document.getElementById('ref-name').value = data.name;
+        setExistingPreview('ref-image-preview', data.imageUrl);
     });
     setupDeleteButton('.delete-ref', 'referees', () => loadReferees());
 }
@@ -374,11 +424,13 @@ const openProdModalBtn = document.getElementById('open-product-modal');
 if (openProdModalBtn) openProdModalBtn.addEventListener('click', () => {
     document.getElementById('product-form').reset();
     document.getElementById('product-id').value = '';
-    document.getElementById('image-preview').innerHTML = '';
+    document.getElementById('prod-image-preview').innerHTML = '';
     setLoading(document.getElementById('product-form'), false);
     productModal.classList.add('active');
 });
 if (productModal) productModal.querySelector('.close-modal').addEventListener('click', () => productModal.classList.remove('active'));
+
+setupImagePreview('prod-image', 'prod-image-preview');
 
 document.getElementById('product-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -430,6 +482,7 @@ async function loadProducts() {
         document.getElementById('prod-name').value = data.name;
         document.getElementById('prod-price').value = data.price;
         document.getElementById('prod-desc').value = data.desc;
+        setExistingPreview('prod-image-preview', data.imageUrl);
     });
     setupDeleteButton('.delete-prod', 'products', () => { loadProducts(); updateStats(); });
 }
@@ -715,8 +768,12 @@ async function uploadAndSave(collectionName, id, data, imageFile) {
     // Default imageUrl to empty string if creating new and no image
     if (!data.imageUrl && !imageFile && !id) data.imageUrl = '';
 
+    // sanitize filename
     if (imageFile) {
-        const storageRef = ref(storage, `${collectionName}/${imageFile.name}_${Date.now()}`);
+        // Sanitize string: Remove non-alphanumeric chars (keep dots, hyphens)
+        const sanitizedName = imageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storageRef = ref(storage, `${collectionName}/${Date.now()}_${sanitizedName}`);
+
         await uploadBytes(storageRef, imageFile);
         const imageUrl = await getDownloadURL(storageRef);
         data.imageUrl = imageUrl;

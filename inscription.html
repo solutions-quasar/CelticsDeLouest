@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inscription - Celtics de l'Ouest</title>
-    <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+    <link rel="icon" type="image/png" href="images/favicon.png">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -56,6 +56,16 @@
             font-weight: 500;
         }
 
+        .form-group.checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group.checkbox-group input {
+            width: auto;
+        }
+
         .form-group input,
         .form-group select,
         .form-group textarea {
@@ -75,6 +85,48 @@
             text-align: center;
             margin-top: 20px;
         }
+
+        .closed-message {
+            display: none;
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 50px auto;
+            max-width: 600px;
+        }
+
+        .price-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 10px;
+            border: 2px solid var(--secondary-green);
+        }
+
+        .final-price {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--celtics-green);
+        }
+
+        /* Radio buttons for Yes/No */
+        .radio-group {
+            display: flex;
+            gap: 20px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .radio-option input {
+            width: auto;
+        }
     </style>
 </head>
 
@@ -85,7 +137,7 @@
         <div class="container nav-container">
             <a href="index.html" class="logo">
                 <img src="images/logo.png" alt="Logo Celtics" style="height: 50px; margin-right: 10px;">
-                Celtics de l'Ouest de Portneuf
+                Celtics de l'Ouest
             </a>
             <div class="menu-toggle" id="mobile-menu">
                 <i class="fas fa-bars"></i>
@@ -94,117 +146,192 @@
                 <li><a href="index.html" class="nav-link">Accueil</a></li>
                 <li><a href="index.html#equipes" class="nav-link">Nos Équipes</a></li>
                 <li><a href="inscription.html" class="nav-link active">Inscriptions</a></li>
-                <li><a href="index.html#valeurs" class="nav-link">Nos Valeurs</a></li>
                 <li class="nav-item-dropdown">
                     <a href="#" class="nav-link">Le Club <i class="fas fa-chevron-down"
                             style="font-size: 0.8rem; margin-left: 5px;"></i></a>
                     <ul class="dropdown-menu">
-                        <li><a href="index.html#comite" class="nav-link dropdown-link">Conseil d'administration</a></li>
-                        <li><a href="index.html#arbitres" class="nav-link dropdown-link">Nos Arbitres</a></li>
+                        <li><a href="index.html#conseil" class="nav-link dropdown-link">C.A.</a></li>
+                        <li><a href="index.html#arbitres" class="nav-link dropdown-link">Arbitres</a></li>
                     </ul>
                 </li>
-                <li><a href="boutique.html" class="nav-link">Boutique en ligne</a></li>
-                <li><a href="index.html#contact" class="nav-link">Nous Joindre</a></li>
             </ul>
         </div>
     </nav>
 
     <!-- Hero -->
-    <!-- Hero -->
     <section class="hero" style="height: 40vh; min-height: 300px; padding-top: 80px;">
         <div class="hero-content">
             <h1>Inscription Saison 2025</h1>
-            <p>Devenez membre de la famille des Celtics !</p>
+            <p>Rejoignez les Celtics de l'Ouest de Portneuf !</p>
         </div>
     </section>
 
-    <!-- Form Section -->
-    <section class="section">
+    <!-- Messages -->
+    <div id="closed-message" class="closed-message">
+        <h2><i class="fas fa-lock"></i> Inscriptions Fermées</h2>
+        <p>La période d'inscription n'est pas ouverte pour le moment. Veuillez revenir plus tard ou nous contacter.</p>
+        <a href="index.html" class="btn btn-primary" style="margin-top:15px;">Retour à l'accueil</a>
+    </div>
+
+    <!-- Main Form Container -->
+    <section class="section" id="form-container" style="display:none;">
         <div class="container">
+
+            <div id="welcome-message-container"
+                style="margin-bottom: 20px; background: #e9ecef; padding: 20px; border-radius: 8px; display:none;">
+                <p id="welcome-text" style="font-style:italic; text-align:center; margin:0;"></p>
+            </div>
 
             <div id="success-message" class="success-message">
                 <i class="fas fa-check-circle" style="font-size: 3rem; margin-bottom: 20px;"></i>
                 <h2>Inscription Reçue !</h2>
-                <p>Nous avons bien reçu votre demande. Nous vous contacterons bientôt pour finaliser l'inscription.</p>
-                <a href="index.html" class="btn btn-primary" style="margin-top: 20px; display: inline-block;">Retour à
-                    l'accueil</a>
+                <p>Nous avons bien reçu votre demande. Merci de faire partie de l'équipe !</p>
+                <div style="margin-top:20px;">
+                    <button onclick="window.location.reload()" class="btn btn-secondary">Inscrire un autre
+                        enfant</button>
+                    <a href="index.html" class="btn btn-primary">Retour à l'accueil</a>
+                </div>
             </div>
 
             <form id="registration-form">
 
+                <!-- IDENTITÉ JOUEUR -->
                 <div class="form-section">
-                    <h3>Information du Joueur</h3>
+                    <h3><i class="fas fa-user"></i> Identité du Joueur</h3>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label>Prénom de l'enfant</label>
+                            <label>Sexe (Obligatoire)</label>
+                            <div class="radio-group" style="padding: 10px 0;">
+                                <label class="radio-option"><input type="radio" name="gender" value="F" required>
+                                    Féminin</label>
+                                <label class="radio-option"><input type="radio" name="gender" value="M" required>
+                                    Masculin</label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Date de Naissance (Obligatoire)</label>
+                            <input type="date" id="dob-input" name="dob" required>
+                            <small style="color:#666;">Le coût est calculé selon l'année de naissance.</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Prénom</label>
                             <input type="text" name="childFirstName" required>
                         </div>
                         <div class="form-group">
-                            <label>Nom de l'enfant</label>
+                            <label>Nom</label>
                             <input type="text" name="childLastName" required>
                         </div>
-                        <div class="form-group">
-                            <label>Date de Naissance</label>
-                            <input type="date" name="dob" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Genre</label>
-                            <select name="gender" required>
-                                <option value="">Sélectionner</option>
-                                <option value="M">Garçon</option>
-                                <option value="F">Fille</option>
-                            </select>
-                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Maladie ou allergies à signaler (Obligatoire - "Aucune" si s.o.)</label>
+                        <textarea name="medical" rows="2" placeholder="Ex: Asthme, Allergie aux arachides..."
+                            required></textarea>
                     </div>
                 </div>
 
+                <!-- COORDONNÉES -->
                 <div class="form-section">
-                    <h3>Information du Parent / Tuteur</h3>
+                    <h3><i class="fas fa-map-marker-alt"></i> Coordonnées</h3>
+                    <div class="form-group">
+                        <label>Adresse (Numéro et Rue)</label>
+                        <input type="text" name="addressLine" required>
+                    </div>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label>Prénom du Parent</label>
-                            <input type="text" name="parentFirstName" required>
+                            <label>Ville</label>
+                            <input type="text" name="city" required>
                         </div>
                         <div class="form-group">
-                            <label>Nom du Parent</label>
-                            <input type="text" name="parentLastName" required>
+                            <label>Code Postal</label>
+                            <input type="text" name="postalCode" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Numéro de téléphone</label>
+                        <input type="tel" name="phoneFamily" placeholder="XXX-XXX-XXXX" required>
+                    </div>
+                </div>
+
+                <!-- PARENTS -->
+                <div class="form-section">
+                    <h3><i class="fas fa-users"></i> Parents / Tuteurs</h3>
+
+                    <h4 style="font-size:1.1rem; margin-bottom:10px;">Parent 1 (Responsable)</h4>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Prénom & Nom</label>
+                            <input type="text" name="parent1Name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Courriel (pour communications)</label>
+                            <input type="email" name="parent1Email" required>
+                        </div>
+                    </div>
+
+                    <h4 style="font-size:1.1rem; margin-bottom:10px; margin-top:15px;">Parent 2 (Optionnel)</h4>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Prénom & Nom</label>
+                            <input type="text" name="parent2Name">
                         </div>
                         <div class="form-group">
                             <label>Courriel</label>
-                            <input type="email" name="email" required>
+                            <input type="email" name="parent2Email">
                         </div>
-                        <div class="form-group">
-                            <label>Téléphone</label>
-                            <input type="tel" name="phone" required>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Adresse Complète</label>
-                        <textarea name="address" rows="2" required></textarea>
                     </div>
                 </div>
 
+                <!-- TERMS -->
                 <div class="form-section">
-                    <h3>Catégorie</h3>
-                    <div class="form-group">
-                        <label>Sélectionner le programme</label>
-                        <select name="program" required>
-                            <option value="">Choisir...</option>
-                            <option value="U4-U6">Timbits (U4-U6)</option>
-                            <option value="U7-U10">LSCP (U7-U10)</option>
-                            <option value="U11-U12">Ligue de Développement (U11-U12)</option>
-                            <option value="U13-U18">Compétitif (U13-U18)</option>
-                        </select>
+                    <h3><i class="fas fa-file-contract"></i> Autorisations</h3>
+
+                    <div class="form-group" style="background:#f9f9f9; padding:15px; border-radius:5px;">
+                        <label style="font-weight:bold; line-height:1.4; margin-bottom:10px;">
+                            J’autorise les Celtics de l’Ouest de Portneuf à utiliser des photos de mon enfant prises
+                            lors des entraînements,
+                            des matchs ou des événements reliés au club sur des documents publicitaires ou sur leur site
+                            internet.
+                        </label>
+                        <div class="radio-group">
+                            <label class="radio-option"><input type="radio" name="photoAuth" value="Oui" required>
+                                Oui</label>
+                            <label class="radio-option"><input type="radio" name="photoAuth" value="Non" required>
+                                Non</label>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Commentaires / Besoins particuliers</label>
-                        <textarea name="comments" rows="3"></textarea>
+
+                    <p style="font-size:0.9rem; color:#666; margin-top:10px;">
+                        <i class="fas fa-info-circle"></i> Si vous êtes en situation de faible revenu, le programme
+                        d’Accès-loisirs peut surement vous aider.
+                    </p>
+                </div>
+
+                <!-- TARIFICATION -->
+                <div class="form-section">
+                    <h3><i class="fas fa-tag"></i> Tarification</h3>
+
+                    <div class="form-group checkbox-group" id="discount-section">
+                        <label style="font-weight:normal; cursor:pointer;">
+                            <input type="checkbox" id="is-second-child"> Appliquer rabais 2ème enfant (-15$)
+                        </label>
+                        <label style="font-weight:normal; cursor:pointer; margin-left:20px;">
+                            <input type="checkbox" id="is-third-child"> Appliquer rabais 3ème enfant+ (-20$)
+                        </label>
+                    </div>
+
+                    <div id="calc-result" class="price-display">
+                        <div id="base-price-display">Année de naissance requise...</div>
+                        <div class="final-price" id="final-price-display">-- $</div>
+                        <input type="hidden" name="finalPrice" id="final-price-input">
+                        <input type="hidden" name="programCat" id="program-cat-input">
                     </div>
                 </div>
 
                 <div style="text-align: center;">
-                    <button type="submit" class="btn btn-primary" style="padding: 15px 40px; font-size: 1.1rem;">Envoyer
-                        l'inscription</button>
+                    <button type="submit" class="btn btn-primary" style="padding: 15px 40px; font-size: 1.2rem;">
+                        <i class="fas fa-paper-plane"></i> Envoyer l'inscription
+                    </button>
                 </div>
 
             </form>
@@ -226,14 +353,13 @@
                                 d'intégrité</a></li>
                         <li><a href="https://www.quebec.ca/tourisme-et-loisirs/encadrement-gouvernance-gestion-loisir-sport/porter-plainte-sport-loisir"
                                 target="_blank">Je Dénonce</a></li>
-                        <li><a href="https://www.liguesoccerportneuf.com/" target="_blank">Ligue de Soccer</a></li>
                         <li><a href="admin-erp/index.html" target="_blank" style="color: #666; font-size: 0.8rem;"><i
                                     class="fas fa-lock"></i> Admin</a></li>
                     </ul>
                 </div>
             </div>
             <div class="copyright">
-                <p>&copy; 2025 Club de soccer les Celtics de l'Ouest de Portneuf. Tous droits réservés.</p>
+                <p>&copy; 2025 Club de soccer les Celtics de l'Ouest de Portneuf.</p>
             </div>
         </div>
     </footer>
@@ -241,7 +367,7 @@
     <!-- Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
@@ -256,35 +382,160 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        // State
+        let settings = null;
+
+        // Elements
+        const formContainer = document.getElementById('form-container');
+        const closedMessage = document.getElementById('closed-message');
+        const dobInput = document.getElementById('dob-input');
+
+        const isSecondChild = document.getElementById('is-second-child');
+        const isThirdChild = document.getElementById('is-third-child');
+
+        // Load Settings
+        async function init() {
+            try {
+                const docRef = doc(db, "settings", "current_season");
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    settings = docSnap.data();
+
+                    // Check if Open
+                    if (settings.registrationOpen) {
+                        formContainer.style.display = 'block';
+                        closedMessage.style.display = 'none';
+
+                        // Show welcome message
+                        if (settings.welcomeMessage) {
+                            const msgDiv = document.getElementById('welcome-message-container');
+                            document.getElementById('welcome-text').innerText = settings.welcomeMessage;
+                            msgDiv.style.display = 'block';
+                        }
+                    } else {
+                        formContainer.style.display = 'none';
+                        closedMessage.style.display = 'block';
+                    }
+                } else {
+                    console.warn("No settings found, assuming closed.");
+                    formContainer.style.display = 'none';
+                    closedMessage.style.display = 'block';
+                }
+
+            } catch (e) {
+                console.error("Error loading settings:", e);
+                // Fallback safe
+                formContainer.style.display = 'none';
+                closedMessage.style.display = 'block';
+            }
+        }
+
+        // Logic Price Calculation
+        function updatePrice() {
+            if (!settings || !settings.pricingGrid) return;
+
+            const dob = dobInput.value;
+            if (!dob) {
+                document.getElementById('base-price-display').innerText = "Année de naissance requise...";
+                document.getElementById('final-price-display').innerText = "-- $";
+                return;
+            }
+
+            const year = new Date(dob).getFullYear();
+
+            // Find price row
+            // PricingGrid uses 'year' as string or int. 
+            // We search for exact match, or use '2007+' logic if needed? 
+            // In the admin, we saved straightforward years. 
+            // For 'Senior', user put '2007 et moins'. This is hard to parse dynamically if not standardized.
+            // Let's iterate and try to match.
+
+            // Since user put "2007 et moins", we need to handle that.
+            // Let's try exact match first.
+            let match = settings.pricingGrid.find(r => r.year == year.toString());
+
+            // If no match, check if older than smallest year (likely Senior)
+            // Or use a logic. 
+            // Assuming the list covers specific years, and 'Senior' covers < 2008.
+            if (!match) {
+                if (year <= 2007) {
+                    // Try finding the senior row
+                    match = settings.pricingGrid.find(r => r.category.toLowerCase().includes('senior') || r.year.includes('2007'));
+                }
+            }
+
+            if (match) {
+                let price = match.price;
+                let discount = 0;
+
+                if (isSecondChild.checked) {
+                    discount = settings.discount2nd || 15;
+                    // Reset third
+                    isThirdChild.checked = false;
+                } else if (isThirdChild.checked) {
+                    discount = settings.discount3rd || 20;
+                }
+
+                const final = Math.max(0, price - discount);
+
+                document.getElementById('base-price-display').innerText = `Catégorie: ${match.category} (Base: ${match.price}$)`;
+                document.getElementById('final-price-display').innerText = `${final} $`;
+
+                // Form Hidden Inputs
+                document.getElementById('final-price-input').value = final;
+                document.getElementById('program-cat-input').value = match.category;
+            } else {
+                document.getElementById('base-price-display').innerText = `Aucun tarif trouvé pour ${year}`;
+                document.getElementById('final-price-display').innerText = "-- $";
+            }
+        }
+
+        // Listeners
+        dobInput.addEventListener('change', updatePrice);
+        isSecondChild.addEventListener('change', () => {
+            if (isSecondChild.checked) isThirdChild.checked = false;
+            updatePrice();
+        });
+        isThirdChild.addEventListener('change', () => {
+            if (isThirdChild.checked) isSecondChild.checked = false;
+            updatePrice();
+        });
+
+        // Submit Logic
         document.getElementById('registration-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = e.target.querySelector('button[type="submit"]');
-            const originalText = btn.innerText;
-            btn.innerText = "Envoi en cours...";
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
             btn.disabled = true;
 
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData.entries());
             data.timestamp = serverTimestamp();
             data.status = 'New';
+            data.yearOfBirth = new Date(data.dob).getFullYear(); // Store year easily
+
+            // Handle checkbox boolean
+            data.discountApplied = isSecondChild.checked ? '2nd Child' : (isThirdChild.checked ? '3rd+ Child' : 'None');
 
             try {
                 await addDoc(collection(db, "registrations"), data);
                 document.getElementById('registration-form').style.display = 'none';
                 document.getElementById('success-message').style.display = 'block';
+                document.getElementById('welcome-message-container').style.display = 'none';
                 window.scrollTo(0, 0);
             } catch (error) {
                 console.error("Error:", error);
                 alert("Une erreur est survenue: " + error.message);
-                btn.innerText = originalText;
+                btn.innerHTML = originalText;
                 btn.disabled = false;
             }
         });
 
-        // Mobile Menu Logic
+        // Toggle Mobile Menu
         const mobileMenuBtn = document.getElementById("mobile-menu");
         const navMenu = document.querySelector(".nav-menu");
-
         if (mobileMenuBtn) {
             mobileMenuBtn.addEventListener("click", () => {
                 navMenu.classList.toggle("active");
@@ -298,6 +549,10 @@
                 }
             });
         }
+
+        // Init
+        init();
+
     </script>
 
 </body>

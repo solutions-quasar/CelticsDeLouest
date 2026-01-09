@@ -1,7 +1,7 @@
 // Firebase Configuration
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, orderBy, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, enableIndexedDbPersistence, serverTimestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -37,7 +37,9 @@ const dataCache = {
     players: {},
     board: {},
     referees: {},
-    registrations: {}
+    registrations: {},
+    coaches: {},
+    admins: {}
 };
 
 // --- Auth Logic ---
@@ -76,6 +78,21 @@ if (loginForm) {
 
     const forgotBtn = document.getElementById('forgot-password');
     if (forgotBtn) {
+        const generateTeamsBtn = document.getElementById('generate-teams-btn');
+        if (generateTeamsBtn) {
+            generateTeamsBtn.addEventListener('click', async () => {
+                const user = auth.currentUser;
+                if (!user) return;
+
+                const roles = await getUserRole(user.email);
+                if (roles && roles.includes('SuperAdmin')) {
+                    alert("Génération des équipes en cours... (Fonctionnalité complète à venir)");
+                } else {
+                    alert("Accès refusé. Seuls les super administrateurs peuvent générer des équipes.");
+                }
+            });
+        }
+
         forgotBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
@@ -101,6 +118,10 @@ onAuthStateChanged(auth, (user) => {
     if (user) {
         authScreen.classList.remove('active');
         dashboardScreen.classList.add('active');
+
+        // CHECK ROLE
+        if (window.checkAdminAndSetupUI) window.checkAdminAndSetupUI(user);
+
         document.getElementById('user-email').textContent = user.email;
 
         // Restore last view
@@ -169,6 +190,9 @@ navBtns.forEach(btn => {
         if (targetId === 'view-board') loadBoard();
         if (targetId === 'view-referees') loadReferees();
         if (targetId === 'view-registrations') loadRegistrations();
+        if (targetId === 'view-coaches') loadCoaches();
+        if (targetId === 'view-settings') loadSettings();
+        if (targetId === 'view-matches') loadMatches();
     });
 });
 
@@ -187,8 +211,23 @@ document.querySelectorAll('.view-toggle-btn').forEach(btn => {
 
         // Update Container Class
         if (container) {
-            container.classList.remove('view-grid', 'view-list');
-            container.classList.add(`view-${viewType}`);
+            if (targetId === 'matches-view-container') {
+                const calView = document.getElementById('calendar-view');
+                const listView = document.getElementById('matches-list');
+
+                if (viewType === 'calendar') {
+                    calView.style.display = 'block';
+                    listView.style.display = 'none';
+                    // Trigger resize for FullCalendar
+                    setTimeout(() => { if (window.calendarAPI) window.calendarAPI.updateSize(); }, 50);
+                } else {
+                    calView.style.display = 'none';
+                    listView.style.display = 'grid'; // Grid by default for list
+                }
+            } else {
+                container.classList.remove('view-grid', 'view-list');
+                container.classList.add(`view-${viewType}`);
+            }
         }
     });
 });
@@ -405,7 +444,7 @@ async function loadReferees() {
     snapshot.forEach(doc => {
         const data = doc.data();
         dataCache.referees[doc.id] = data;
-        const card = createCard(data.imageUrl, data.name, '', doc.id, 'edit-ref', 'delete-ref', 'fa-gavel');
+        const card = createCard(data.imageUrl, data.name, '', doc.id, 'edit-ref', 'delete-ref', 'fa-flag');
         card.setAttribute('data-id', doc.id);
         card.classList.add('ref-card');
         list.appendChild(card);
@@ -770,13 +809,18 @@ async function uploadAndSave(collectionName, id, data, imageFile) {
 
     // sanitize filename
     if (imageFile) {
-        // Sanitize string: Remove non-alphanumeric chars (keep dots, hyphens)
-        const sanitizedName = imageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const storageRef = ref(storage, `${collectionName}/${Date.now()}_${sanitizedName}`);
+        try {
+            // Sanitize string: Remove non-alphanumeric chars (keep dots, hyphens)
+            const sanitizedName = imageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const storageRef = ref(storage, `${collectionName}/${Date.now()}_${sanitizedName}`);
 
-        await uploadBytes(storageRef, imageFile);
-        const imageUrl = await getDownloadURL(storageRef);
-        data.imageUrl = imageUrl;
+            await uploadBytes(storageRef, imageFile);
+            const imageUrl = await getDownloadURL(storageRef);
+            data.imageUrl = imageUrl;
+        } catch (uploadErr) {
+            console.error("Upload failed:", uploadErr);
+            throw new Error("Échec de l'envoi de l'image : " + uploadErr.message);
+        }
     }
 
     if (id) {
@@ -799,3 +843,717 @@ async function updateStats() {
 function loadDashboardData() { updateStats(); }
 
 async function seedDatabase() { /* ... existing seeder ... */ }
+
+// --- ADMIN MANAGEMENT LOGIC ---
+const adminModal = document.getElementById('admin-modal');
+const openAdminModalBtn = document.getElementById('open-admin-modal');
+const navAdminsBtn = document.getElementById('nav-admins-btn');
+
+if (openAdminModalBtn) openAdminModalBtn.addEventListener('click', () => {
+    document.getElementById('admin-form').reset();
+    document.getElementById('admin-id').value = '';
+    setLoading(document.getElementById('admin-form'), false);
+    adminModal.classList.add('active');
+});
+if (adminModal) adminModal.querySelector('.close-modal').addEventListener('click', () => adminModal.classList.remove('active'));
+
+document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    setLoading(form, true);
+
+    try {
+        const id = document.getElementById('admin-id').value;
+        const email = document.getElementById('admin-email').value;
+        const name = document.getElementById('admin-name').value;
+
+        // Collect roles from checkboxes
+        const roles = [];
+        document.querySelectorAll('#roles-checkbox-group input[type="checkbox"]:checked').forEach(cb => {
+            roles.push(cb.value);
+        });
+
+        if (roles.length === 0) throw new Error("Veuillez sélectionner au moins un rôle.");
+
+        // Check if email already exists (if new)
+        if (!id) {
+            const q = query(collection(db, "admins"), where("email", "==", email));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) throw new Error("Cet email est déjà enregistré comme administrateur.");
+        }
+
+        const data = { email, name, role: roles }; // saved as array
+
+        if (id) {
+            await updateDoc(doc(db, "admins", id), data);
+        } else {
+            await addDoc(collection(db, "admins"), data);
+        }
+
+        adminModal.classList.remove('active');
+        loadAdmins();
+    } catch (err) {
+        console.error(err);
+        alert("Erreur: " + (err.message || err));
+    } finally {
+        setLoading(form, false);
+    }
+});
+
+async function loadAdmins() {
+    const table = document.getElementById('admins-table')?.querySelector('tbody');
+    if (!table) return;
+
+    table.innerHTML = '<tr><td colspan="4">Chargement...</td></tr>';
+
+    try {
+        // Fetch Firestore Admins
+        const snapshot = await getDocs(collection(db, "admins"));
+        table.innerHTML = '';
+        dataCache.admins = {};
+
+        if (snapshot.empty) {
+            table.innerHTML = '<tr><td colspan="4">Aucun administrateur trouvé.</td></tr>';
+        }
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            dataCache.admins[doc.id] = data;
+            const row = document.createElement('tr');
+
+            // Handle legacy strings vs modern arrays
+            const rolesArray = Array.isArray(data.role) ? data.role : [data.role];
+            const rolesHtml = rolesArray.map(r => `
+                <span class="badge ${r === 'SuperAdmin' ? 'badge-primary' : 'badge-secondary'}" style="margin-right:5px; margin-bottom:5px; display:inline-block;">
+                    ${r}
+                </span>
+            `).join('');
+
+            row.innerHTML = `
+                <td>${data.email}</td>
+                <td>${data.name}</td>
+                <td>${rolesHtml}</td>
+                <td>
+                    <button class="btn-icon edit-admin" data-id="${doc.id}" style="margin-right:8px;"><i class="fas fa-edit"></i></button>
+                    <button class="btn-icon delete-admin" data-id="${doc.id}" style="color:red;"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
+            table.appendChild(row);
+        });
+
+        // Setup Edit
+        table.querySelectorAll('.edit-admin').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                const data = dataCache.admins[id];
+                if (data) {
+                    document.getElementById('admin-id').value = id;
+                    document.getElementById('admin-email').value = data.email;
+                    document.getElementById('admin-name').value = data.name;
+
+                    // Set Checks
+                    const rolesArray = Array.isArray(data.role) ? data.role : [data.role];
+                    document.querySelectorAll('#roles-checkbox-group input[type="checkbox"]').forEach(cb => {
+                        cb.checked = rolesArray.includes(cb.value);
+                    });
+
+                    adminModal.classList.add('active');
+                }
+            });
+        });
+
+        // Setup Delete
+        table.querySelectorAll('.delete-admin').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (confirm("Supprimer cet administrateur ?")) {
+                    const id = btn.getAttribute('data-id');
+                    try {
+                        await deleteDoc(doc(db, "admins", id));
+                        loadAdmins();
+                    } catch (e) {
+                        alert("Erreur: " + e.message);
+                    }
+                }
+            });
+        });
+    } catch (e) {
+        console.error("Erreur loadAdmins:", e);
+        table.innerHTML = `<tr><td colspan="4" style="color:red">Erreur: ${e.message}</td></tr>`;
+    }
+}
+
+// --- GLOBAL ROLE CHECK ---
+async function getUserRole(email) {
+    // 1. Hardcoded SuperAdmins (God Mode)
+    const lowerEmail = email.toLowerCase();
+    const hardcodedSuperAdmins = ['admin@celtics.com', 'celtics.portneuf@gmail.com', 'bensult78@gmail.com'];
+    if (hardcodedSuperAdmins.includes(lowerEmail)) return ['SuperAdmin'];
+
+    // 2. Check Firestore
+    try {
+        const q = query(collection(db, "admins"), where("email", "==", email));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            const roleData = snapshot.docs[0].data().role;
+            return Array.isArray(roleData) ? roleData : [roleData]; // Always array
+        }
+    } catch (e) {
+        console.warn("Error checking admin role:", e);
+    }
+    return []; // No roles
+}
+
+// Ensure Benjamin is in the DB list for visibility
+async function ensureBenjaminInDb() {
+    const email = "bensult78@gmail.com";
+    try {
+        const q = query(collection(db, "admins"), where("email", "==", email));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+            await addDoc(collection(db, "admins"), {
+                email: email,
+                name: "Benjamin Sultan",
+                role: ["SuperAdmin"]
+            });
+            console.log("Benjamin auto-added to DB");
+        }
+    } catch (e) {
+        console.error("Auto-add Benjamin failed", e);
+    }
+}
+
+// Hook into Nav clicks to load Admins
+document.getElementById('nav-admins-btn')?.addEventListener('click', loadAdmins);
+
+// EXPORT to window for button usage if needed, or re-run role check
+window.checkAdminAndSetupUI = async (user) => {
+    if (!user) return;
+
+    // Auto-ensure Benjamin is in DB (just in case)
+    if (user.email.toLowerCase() === 'bensult78@gmail.com') {
+        await ensureBenjaminInDb();
+    }
+
+    const roles = await getUserRole(user.email);
+    console.log("User Roles:", roles);
+
+    const isSuper = roles.includes('SuperAdmin');
+
+    if (isSuper) {
+        if (navAdminsBtn) navAdminsBtn.style.display = 'block';
+    } else {
+        if (navAdminsBtn) navAdminsBtn.style.display = 'none';
+
+        // If user is on admin view but dropped rights, redirect
+        if (document.getElementById('view-admins').classList.contains('active')) {
+            const dashboardBtn = document.querySelector('.nav-btn[data-target="view-dashboard"]');
+            if (dashboardBtn) dashboardBtn.click();
+        }
+    }
+    return roles;
+};
+
+// --- COACHES LOGIC ---
+const coachModal = document.getElementById('coach-modal');
+const openCoachModalBtn = document.getElementById('open-coach-modal');
+
+if (openCoachModalBtn) openCoachModalBtn.addEventListener('click', () => {
+    document.getElementById('coach-form').reset();
+    document.getElementById('coach-id').value = '';
+    document.getElementById('coach-image-preview').innerHTML = '';
+    setLoading(document.getElementById('coach-form'), false);
+    coachModal.classList.add('active');
+});
+
+if (coachModal) coachModal.querySelector('.close-modal').addEventListener('click', () => coachModal.classList.remove('active'));
+
+// Setup Preview
+setupImagePreview('coach-image', 'coach-image-preview');
+
+document.getElementById('coach-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    setLoading(form, true);
+
+    try {
+        const id = document.getElementById('coach-id').value;
+        const name = document.getElementById('coach-name').value;
+        const policeExpiry = document.getElementById('coach-police-expiry').value;
+        const file = document.getElementById('coach-image').files[0];
+
+        if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
+
+        const data = { name, policeExpiry };
+        await uploadAndSave('coaches', id, data, file);
+
+        coachModal.classList.remove('active');
+        loadCoaches();
+    } catch (err) {
+        console.error(err);
+        alert("Erreur: " + (err.message || err));
+    } finally {
+        setLoading(form, false);
+    }
+});
+
+async function loadCoaches() {
+    const list = document.getElementById('coaches-list');
+    if (!list) return;
+
+    list.innerHTML = '<p>Chargement...</p>';
+    if (!list.classList.contains('view-grid')) list.classList.add('view-grid');
+
+    const q = query(collection(db, "coaches"), orderBy("name", "asc"));
+    const snapshot = await getDocs(q);
+    list.innerHTML = '';
+    dataCache.coaches = {};
+
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        dataCache.coaches[doc.id] = data;
+
+        let subtitle = '';
+        if (data.policeExpiry) {
+            const date = new Date(data.policeExpiry);
+            const today = new Date();
+            const color = date < today ? 'red' : 'green';
+            subtitle = `Police exp: <span style="color:${color}">${data.policeExpiry}</span>`;
+        } else {
+            subtitle = `<span style="color:red">Vérification police requise</span>`;
+        }
+
+        const card = createCard(data.imageUrl, data.name, subtitle, doc.id, 'edit-coach', 'delete-coach', 'fa-whistle');
+        card.setAttribute('data-id', doc.id);
+        card.classList.add('coach-card');
+        list.appendChild(card);
+    });
+
+    setupClickableCard('.coach-card', 'coaches', 'coach-modal', 'coach-id', (data) => {
+        document.getElementById('coach-name').value = data.name;
+        document.getElementById('coach-police-expiry').value = data.policeExpiry || '';
+        setExistingPreview('coach-image-preview', data.imageUrl);
+    });
+    setupDeleteButton('.delete-coach', 'coaches', () => loadCoaches());
+}
+
+
+// --- GLOBAL SETTINGS LOGIC ---
+const saveSettingsBtn = document.getElementById('save-settings-btn');
+const addPriceRowBtn = document.getElementById('add-price-row-btn');
+
+if (addPriceRowBtn) {
+    addPriceRowBtn.addEventListener('click', () => {
+        addPriceRow(null);
+    });
+}
+
+function addPriceRow(data) {
+    const tbody = document.getElementById('pricing-tbody');
+    const tr = document.createElement('tr');
+
+    // Default values
+    const year = data ? data.year : "2022";
+    const cat = data ? data.category : "Timbits";
+    const price = data ? data.price : 75;
+
+    tr.innerHTML = `
+        <td><input type="text" class="price-year" value="${year}" style="width:80px;"></td>
+        <td><input type="text" class="price-cat" value="${cat}"></td>
+        <td><input type="number" class="price-val" value="${price}" style="width:80px;"></td>
+        <td><button class="btn-icon text-danger remove-row"><i class="fas fa-trash"></i></button></td>
+    `;
+
+    tr.querySelector('.remove-row').addEventListener('click', () => tr.remove());
+    tbody.appendChild(tr);
+}
+
+if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', async () => {
+        saveSettingsBtn.disabled = true;
+        saveSettingsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sauvegarde...';
+
+        try {
+            const settings = {
+                registrationOpen: document.getElementById('reg-status-toggle').checked,
+                welcomeMessage: document.getElementById('setting-welcome-msg').value,
+                discount2nd: parseFloat(document.getElementById('setting-discount-2').value) || 0,
+                discount3rd: parseFloat(document.getElementById('setting-discount-3').value) || 0,
+                pricingGrid: []
+            };
+
+            document.querySelectorAll('#pricing-tbody tr').forEach(tr => {
+                settings.pricingGrid.push({
+                    year: tr.querySelector('.price-year').value,
+                    category: tr.querySelector('.price-cat').value,
+                    price: parseFloat(tr.querySelector('.price-val').value) || 0
+                });
+            });
+
+            // Use a fixed ID 'current_season' for easy retrieval
+            await setDoc(doc(db, "settings", "current_season"), settings);
+            alert("Configuration sauvegardée avec succès !");
+
+        } catch (e) {
+            console.error(e);
+            alert("Erreur de sauvegarde: " + e.message);
+        } finally {
+            saveSettingsBtn.disabled = false;
+            saveSettingsBtn.innerHTML = '<i class="fas fa-save"></i> Sauvegarder Tout';
+        }
+    });
+}
+
+async function loadSettings() {
+    try {
+        const docRef = doc(db, "settings", "current_season");
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            document.getElementById('reg-status-toggle').checked = data.registrationOpen || false;
+            document.getElementById('setting-welcome-msg').value = data.welcomeMessage || '';
+            document.getElementById('setting-discount-2').value = data.discount2nd || 15;
+            document.getElementById('setting-discount-3').value = data.discount3rd || 20;
+
+            const tbody = document.getElementById('pricing-tbody');
+            tbody.innerHTML = '';
+            if (data.pricingGrid && Array.isArray(data.pricingGrid)) {
+                // Sort by year desc (if numbers) or keep order
+                data.pricingGrid.forEach(item => addPriceRow(item));
+            }
+        } else {
+            // Seed defaults with 2025 Rates provided by User
+            addPriceRow({ year: '2022', category: 'Timbits', price: 75 });
+            addPriceRow({ year: '2021', category: 'Timbits', price: 75 });
+            addPriceRow({ year: '2020', category: 'Timbits', price: 75 });
+            addPriceRow({ year: '2019', category: 'U7', price: 140 });
+            addPriceRow({ year: '2018', category: 'U8', price: 140 });
+            addPriceRow({ year: '2017', category: 'U9', price: 160 });
+            addPriceRow({ year: '2016', category: 'U10', price: 160 });
+            addPriceRow({ year: '2015', category: 'U11', price: 170 });
+            addPriceRow({ year: '2014', category: 'U12', price: 170 });
+            addPriceRow({ year: '2013', category: 'U13', price: 190 });
+            addPriceRow({ year: '2012', category: 'U14', price: 190 });
+            addPriceRow({ year: '2011', category: 'U15', price: 190 });
+            addPriceRow({ year: '2010', category: 'U16', price: 200 });
+            addPriceRow({ year: '2009', category: 'U17', price: 200 });
+            addPriceRow({ year: '2008', category: 'U18', price: 200 });
+            addPriceRow({ year: '2007+', category: 'Senior', price: 230 });
+
+            // Special Options
+            addPriceRow({ year: 'Option', category: 'Senior Réserviste (4 parties)', price: 80 });
+            addPriceRow({ year: 'Option', category: 'Entrainement Seul (U7-U12)', price: 30 });
+            addPriceRow({ year: 'Option', category: 'Entrainement Seul (U13+)', price: 40 });
+        }
+    } catch (e) {
+        console.error("Error loading settings", e);
+    }
+}
+
+// --- MATCHES LOGIC ---
+const matchModal = document.getElementById('match-modal');
+const openMatchModalBtn = document.getElementById('open-match-modal');
+
+if (openMatchModalBtn) openMatchModalBtn.addEventListener('click', () => {
+    document.getElementById('match-form').reset();
+    document.getElementById('match-id').value = '';
+    loadRefereesIntoSelects(); // Refresh referees list
+    setLoading(document.getElementById('match-form'), false);
+    matchModal.classList.add('active');
+});
+
+if (matchModal) matchModal.querySelector('.close-modal').addEventListener('click', () => matchModal.classList.remove('active'));
+
+async function loadRefereesIntoSelects() {
+    // Populate the 3 selects with referee names
+    const q = query(collection(db, "referees"), orderBy("name", "asc"));
+    const snapshot = await getDocs(q);
+
+    // Helper to fill a select
+    const fillSelect = (id) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        // Keep first option
+        sel.innerHTML = '<option value="">-- Non assigné --</option>';
+        snapshot.forEach(doc => {
+            const r = doc.data();
+            const opt = document.createElement('option');
+            opt.value = doc.id; // Store ID
+            opt.textContent = r.name;
+            sel.appendChild(opt);
+        });
+    };
+
+    fillSelect('match-ref-center');
+    fillSelect('match-ref-asst1');
+    fillSelect('match-ref-asst2');
+}
+
+document.getElementById('match-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    setLoading(form, true);
+
+    try {
+        const id = document.getElementById('match-id').value;
+
+        const data = {
+            date: document.getElementById('match-date').value,
+            time: document.getElementById('match-time').value,
+            category: document.getElementById('match-category').value,
+            opponent: document.getElementById('match-opponent').value,
+            field: document.getElementById('match-field').value,
+            refCenter: document.getElementById('match-ref-center').value,
+            refAsst1: document.getElementById('match-ref-asst1').value,
+            refAsst2: document.getElementById('match-ref-asst2').value,
+            timestamp: serverTimestamp() // To sort by creation or date? Better sort by date field in query
+        };
+
+        if (id) {
+            await updateDoc(doc(db, "matches", id), data);
+        } else {
+            await addDoc(collection(db, "matches"), data);
+        }
+
+        matchModal.classList.remove('active');
+        loadMatches();
+    } catch (err) {
+        console.error(err);
+        alert("Erreur: " + (err.message || err));
+    } finally {
+        setLoading(form, false);
+    }
+});
+
+async function loadMatches() {
+    const list = document.getElementById('matches-list');
+    const calEl = document.getElementById('calendar');
+
+    // Init List View
+    if (!list.classList.contains('view-grid')) list.classList.add('view-grid');
+
+    // Init Calendar
+    // We destroy previous instance to apply new config if needed (e.g. user navigation)
+    if (window.calendarAPI) {
+        window.calendarAPI.destroy();
+        window.calendarAPI = null;
+    }
+
+    if (typeof FullCalendar !== 'undefined' && calEl) {
+        window.calendarAPI = new FullCalendar.Calendar(calEl, {
+            initialView: 'timeGridWeek',
+            locale: 'fr',
+            buttonText: {
+                today: "Aujourd'hui",
+                month: 'Mois',
+                week: 'Semaine',
+                day: 'Jour',
+                list: 'Liste',
+                year: 'Année'
+            },
+            height: 'auto',
+            editable: true, // Enable Drag & Drop
+            droppable: true,
+            // Custom Content (Teams + Field)
+            eventContent: function (arg) {
+                let italicContent = document.createElement('div');
+                italicContent.style.fontStyle = 'italic';
+                italicContent.style.fontSize = '0.9em';
+                italicContent.innerText = '📍 ' + (arg.event.extendedProps.field || '?');
+
+                let titleContent = document.createElement('div');
+                titleContent.style.fontWeight = 'bold';
+                titleContent.innerText = arg.timeText;
+
+                let descContent = document.createElement('div');
+                descContent.innerText = `${arg.event.extendedProps.category} vs ${arg.event.extendedProps.opponent}`;
+
+                let arrayOfDomNodes = [titleContent, descContent, italicContent];
+                return { domNodes: arrayOfDomNodes };
+            },
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'multiMonthYear,dayGridMonth,timeGridWeek,listMonth'
+            },
+            dayMaxEvents: false, // Show all events
+            // Open Modal on Date Click (Create)
+            dateClick: (info) => {
+                const form = document.getElementById('match-form');
+                if (form) form.reset();
+                document.getElementById('match-id').value = '';
+
+                // Handle Date and Time extraction
+                const dateObj = info.date;
+                const yyyy = dateObj.getFullYear();
+                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const dd = String(dateObj.getDate()).padStart(2, '0');
+                const dateStr = `${yyyy}-${mm}-${dd}`;
+
+                let timeStr = '19:00';
+                // If the view has time (e.g. timeGridWeek), or dateStr contains T
+                if (info.allDay === false || info.view.type.includes('time') || info.dateStr.includes('T')) {
+                    const hh = String(dateObj.getHours()).padStart(2, '0');
+                    const min = String(dateObj.getMinutes()).padStart(2, '0');
+                    timeStr = `${hh}:${min}`;
+                }
+
+                document.getElementById('match-date').value = dateStr;
+                document.getElementById('match-time').value = timeStr;
+
+                loadRefereesIntoSelects().then(() => {
+                    document.getElementById('match-modal').classList.add('active');
+                });
+            },
+            // Open Modal on Event Click (Edit)
+            eventClick: (info) => {
+                const matchId = info.event.id;
+                if (dataCache.matches && dataCache.matches[matchId]) {
+                    const data = dataCache.matches[matchId];
+                    loadRefereesIntoSelects().then(() => {
+                        document.getElementById('match-id').value = matchId;
+                        document.getElementById('match-date').value = data.date;
+                        document.getElementById('match-time').value = data.time;
+                        document.getElementById('match-category').value = data.category;
+                        document.getElementById('match-opponent').value = data.opponent;
+                        document.getElementById('match-field').value = data.field;
+                        document.getElementById('match-ref-center').value = data.refCenter || '';
+                        document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
+                        document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
+
+                        document.getElementById('match-modal').classList.add('active');
+                    });
+                }
+            },
+            // Handle Drag & Drop (Update Date/Time)
+            eventDrop: async (info) => {
+                const matchId = info.event.id;
+                const newDate = info.event.start;
+
+                // Format Date YYYY-MM-DD
+                const yyyy = newDate.getFullYear();
+                const mm = String(newDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(newDate.getDate()).padStart(2, '0');
+                const dateStr = `${yyyy}-${mm}-${dd}`;
+
+                // Format Time HH:MM
+                const hh = String(newDate.getHours()).padStart(2, '0');
+                const min = String(newDate.getMinutes()).padStart(2, '0');
+                const timeStr = `${hh}:${min}`;
+
+                try {
+                    const docRef = doc(db, "matches", matchId);
+                    await updateDoc(docRef, {
+                        date: dateStr,
+                        time: timeStr
+                    });
+                    // Update Cache
+                    if (dataCache.matches[matchId]) {
+                        dataCache.matches[matchId].date = dateStr;
+                        dataCache.matches[matchId].time = timeStr;
+                    }
+                    console.log("Match updated via drag & drop");
+                } catch (e) {
+                    console.error("Error updating match drop:", e);
+                    alert("Erreur lors du déplacement du match: " + e.message);
+                    info.revert();
+                }
+            }
+        });
+        window.calendarAPI.render();
+    }
+
+    try {
+        const q = query(collection(db, "matches"));
+        const snapshot = await getDocs(q);
+
+        // Load Referees
+        if (!dataCache.referees || Object.keys(dataCache.referees).length === 0) {
+            const refSnap = await getDocs(collection(db, "referees"));
+            dataCache.referees = {};
+            refSnap.forEach(r => dataCache.referees[r.id] = r.data());
+        }
+
+        list.innerHTML = '';
+        dataCache.matches = {};
+        const events = [];
+        const matchDocs = [];
+
+        snapshot.forEach(doc => matchDocs.push({ id: doc.id, ...doc.data() }));
+
+        // Sort client-side to avoid index issues
+        matchDocs.sort((a, b) => {
+            if (a.date !== b.date) return a.date.localeCompare(b.date);
+            return a.time.localeCompare(b.time);
+        });
+
+        if (matchDocs.length === 0) {
+            list.innerHTML = '<p>Aucun match prévu.</p>';
+        } else {
+            matchDocs.forEach(data => {
+                dataCache.matches[data.id] = data;
+
+                // Calendar Event
+                const startStr = `${data.date}T${data.time}`;
+                events.push({
+                    id: data.id,
+                    title: `${data.category} vs ${data.opponent}`,
+                    start: startStr,
+                    color: '#008744',
+                    extendedProps: {
+                        category: data.category,
+                        opponent: data.opponent,
+                        field: data.field
+                    }
+                });
+
+                // List Item
+                const getRefName = (rid) => (rid && dataCache.referees[rid]) ? dataCache.referees[rid].name : (rid ? 'non assigné' : 'non assigné');
+
+                const subtitle = `
+                    <div style="font-size:0.85rem; text-align:left; margin-top:5px;">
+                        <strong><i class="fas fa-clock"></i> ${data.date} à ${data.time}</strong><br>
+                        Vs ${data.opponent} (${data.category})<br>
+                        Terrain: ${data.field}
+                    </div>
+                    <div style="font-size:0.8rem; text-align:left; margin-top:8px; border-top:1px solid #eee; padding-top:5px;">
+                        <i class="fas fa-flag"></i> C: ${getRefName(data.refCenter)}<br>
+                        <i class="fas fa-flag-checkered"></i> A1: ${getRefName(data.refAsst1)}<br>
+                        <i class="fas fa-flag-checkered"></i> A2: ${getRefName(data.refAsst2)}
+                    </div>
+                `;
+
+                const card = createCard(null, `${data.category} vs ${data.opponent}`, subtitle, data.id, 'edit-match', 'delete-match', 'fa-futbol');
+                card.querySelector('p').style.whiteSpace = 'normal';
+                card.style.height = 'auto';
+                card.setAttribute('data-id', data.id);
+                card.classList.add('match-card');
+                list.appendChild(card);
+            });
+        }
+
+        // Update Calendar Events
+        if (window.calendarAPI) {
+            window.calendarAPI.removeAllEvents();
+            window.calendarAPI.addEventSource(events);
+        }
+
+    } catch (e) {
+        console.error("Error loading matches:", e);
+        list.innerHTML = `<p style="color:red">Erreur chargement: ${e.message}</p>`;
+    }
+
+    setupClickableCard('.match-card', 'matches', 'match-modal', 'match-id', async (data) => {
+        await loadRefereesIntoSelects();
+        document.getElementById('match-date').value = data.date;
+        document.getElementById('match-time').value = data.time;
+        document.getElementById('match-category').value = data.category;
+        document.getElementById('match-opponent').value = data.opponent;
+        document.getElementById('match-field').value = data.field;
+        document.getElementById('match-ref-center').value = data.refCenter || '';
+        document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
+        document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
+    });
+
+    setupDeleteButton('.delete-match', 'matches', () => loadMatches());
+}

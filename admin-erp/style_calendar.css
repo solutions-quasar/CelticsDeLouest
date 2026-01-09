@@ -1,0 +1,73 @@
+/* Calendar Integration */
+#calendar {
+    max-width: 100%;
+    margin: 0 auto;
+    font-family: 'Inter', sans-serif;
+    padding: 10px;
+}
+
+
+.fc .fc-toolbar-title {
+    font-size: 1.25rem !important;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.fc .fc-button-primary {
+    background-color: var(--primary) !important;
+    border-color: var(--primary) !important;
+    text-transform: capitalize;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+    background-color: var(--primary-dark) !important;
+    border-color: var(--primary-dark) !important;
+}
+
+.fc-event {
+    cursor: pointer;
+    border: none !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fc-event:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    z-index: 5;
+}
+
+/* Fix event content layout */
+.fc-daygrid-event {
+    white-space: normal !important;
+    align-items: flex-start !important;
+}
+
+.fc-event-main {
+    display: flex !important;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px;
+}
+
+/* Hover effect on days (Month View) */
+.fc-daygrid-day {
+    transition: background-color 0.2s ease;
+}
+
+.fc-daygrid-day:hover {
+    background-color: rgba(46, 204, 113, 0.1);
+    /* Light green tint */
+    cursor: pointer;
+}
+
+/* Hover effect on slots (Week View) */
+.fc-timegrid-slot-lane:hover {
+    background-color: rgba(46, 204, 113, 0.15);
+    cursor: pointer;
+}
+
+/* Highlight today */
+.fc-day-today {
+    background-color: rgba(46, 204, 113, 0.05) !important;
+}

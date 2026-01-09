@@ -309,27 +309,55 @@ a {
     gap: 30px;
 }
 
-.member-card {
+.board-card {
     background: white;
     padding: 30px;
     border-radius: 10px;
     text-align: center;
     box-shadow: var(--shadow-card);
     border-top: 3px solid var(--celtics-green);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 0.3s;
 }
 
-.member-role {
+.board-card:hover {
+    transform: translateY(-5px);
+}
+
+.board-card img,
+.board-card .board-img-empty {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 15px;
+    border: 3px solid var(--celtics-green);
+    background-color: var(--light-gray);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-size: 2.5rem;
+}
+
+.board-card .role {
     color: var(--celtics-green);
     font-weight: 700;
     text-transform: uppercase;
-    font-size: 0.8rem;
-    margin-bottom: 5px;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    display: block;
 }
 
-.member-name {
-    font-size: 1.1rem;
-    font-weight: 600;
+.board-card h3 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin: 0;
 }
+
 
 /* Contact & Map */
 .contact-split {
@@ -603,4 +631,39 @@ footer {
 .doc-box .btn-primary {
     display: inline-block;
     /* Ensure margin applies */
+}
+
+/* Referee Cards */
+.referee-card {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 0.3s;
+    border-left: 5px solid var(--celtics-green);
+}
+
+.referee-card img,
+.referee-card .ref-img-empty {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 10px;
+    border: 2px solid var(--celtics-green);
+    background-color: var(--light-gray);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-size: 1.5rem;
+}
+
+.referee-card h3 {
+    font-size: 1rem;
+    margin: 0;
 }

@@ -5,6 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Celtics ERP | Administration</title>
+    <script>
+        // Force trailing slash to ensure relative paths working correctly
+        if (window.location.pathname.endsWith('/admin-erp')) {
+            window.location.replace(window.location.pathname + '/');
+        }
+    </script>
     <link rel="icon" type="image/png" href="../images/favicon.png">
 
     <!-- Fonts -->
@@ -16,7 +22,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./style_calendar.css">
 
     <!-- Firebase SDKs (Module) -->
     <script type="importmap">
@@ -29,6 +36,14 @@
             "firebase/analytics": "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js"
           }
         }
+    </script>
+    <!-- FullCalendar -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    <script>
+        // French translation for FullCalendar
+        document.addEventListener('DOMContentLoaded', function () {
+            // It will be initialized in app.js
+        });
     </script>
 </head>
 
@@ -90,6 +105,13 @@
                     <button class="nav-btn" data-target="view-referees"><i class="fas fa-gavel"></i> Arbitres</button>
                     <button class="nav-btn" data-target="view-registrations"><i class="fas fa-file-signature"></i>
                         Inscriptions</button>
+                    <button class="nav-btn" data-target="view-coaches"><i class="fas fa-stopwatch"></i> Coachs</button>
+                    <button class="nav-btn" data-target="view-matches"><i class="fas fa-futbol"></i> Matchs</button>
+                    <button class="nav-btn" data-target="view-settings"><i class="fas fa-cogs"></i>
+                        Configuration</button>
+                    <button class="nav-btn" data-target="view-admins" id="nav-admins-btn" style="display:none;"><i
+                            class="fas fa-users-cog"></i>
+                        Utilisateurs</button>
                 </nav>
                 <div class="sidebar-footer">
                     <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> Déconnexion</button>
@@ -313,6 +335,151 @@
                         </div>
                     </div>
 
+                    <!-- COACHS VIEW -->
+                    <div id="view-coaches" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gestion des Entraîneurs</h3>
+                                <button class="btn-action" id="open-coach-modal"><i class="fas fa-plus"></i> Ajouter
+                                    Coach</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="coaches-list" class="grid-container">
+                                    <p>Chargement...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MATCHS VIEW -->
+                    <div id="view-matches" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Calendrier des Matchs (Domicile)</h3>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="calendar"
+                                        data-target="matches-view-container"><i
+                                            class="fas fa-calendar-alt"></i></button>
+                                    <button class="view-toggle-btn" data-view="list"
+                                        data-target="matches-view-container"><i class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-match-modal"><i class="fas fa-plus"></i>
+                                        Ajouter</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="matches-view-container">
+                                    <!-- Calendar View -->
+                                    <div id="calendar-view" class="sub-view active">
+                                        <div id="calendar"></div>
+                                    </div>
+
+                                    <!-- List View -->
+                                    <div id="matches-list" class="match-grid sub-view" style="display:none;">
+                                        <p>Chargement des matchs...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SETTINGS VIEW (Configuration) -->
+                    <div id="view-settings" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Configuration & Inscriptions</h3>
+                                <button class="btn-save" id="save-settings-btn"><i class="fas fa-save"></i>
+                                    Sauvegarder Tout</button>
+                            </div>
+                            <div class="card-body">
+                                <!-- Status Section -->
+                                <div class="form-group"
+                                    style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid var(--secondary);">
+                                    <label style="display:flex; align-items:center; cursor:pointer;">
+                                        <input type="checkbox" id="reg-status-toggle"
+                                            style="width:20px; height:20px; margin-right:10px;">
+                                        <span style="font-weight:bold; font-size:1.1rem;">Ouvrir la période
+                                            d'inscriptions</span>
+                                    </label>
+                                    <p class="text-sm" style="margin-top:5px; color:#666;">Cocher pour rendre le
+                                        formulaire visible sur le site public.</p>
+                                </div>
+
+                                <!-- Text Section -->
+                                <div class="form-group">
+                                    <label>Message d'accueil (Inscriptions)</label>
+                                    <textarea id="setting-welcome-msg" rows="8"
+                                        style="width:100%; border:1px solid #ddd; padding:10px; border-radius:4px;"></textarea>
+                                </div>
+
+                                <!-- Global Discounts -->
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="form-group">
+                                            <label>Rabais 2ème enfant ($)</label>
+                                            <input type="number" id="setting-discount-2" value="15">
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-group">
+                                            <label>Rabais 3ème enfant + ($)</label>
+                                            <input type="number" id="setting-discount-3" value="20">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr>
+
+                                <!-- Pricing Grid -->
+                                <h4>Grille Tarifaire (Par année de naissance)</h4>
+                                <div class="table-container">
+                                    <table id="pricing-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Année</th>
+                                                <th>Catégorie</th>
+                                                <th>Prix ($)</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="pricing-tbody">
+                                            <!-- JS Populated -->
+                                        </tbody>
+                                    </table>
+                                    <button class="btn-secondary" id="add-price-row-btn" style="margin-top:10px;"><i
+                                            class="fas fa-plus"></i> Ajouter une année</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ADMINS VIEW -->
+                    <div id="view-admins" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gestion des Utilisateurs</h3>
+                                <button class="btn-action" id="open-admin-modal"><i class="fas fa-user-plus"></i>
+                                    Ajouter Utilisateur</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-container">
+                                    <table id="admins-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Email</th>
+                                                <th>Nom</th>
+                                                <th>Rôle</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- JS Will Populate -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </main>
         </div>
@@ -520,8 +687,164 @@
         </div>
     </div>
 
+    <!-- ADMIN MODAL -->
+    <div class="modal" id="admin-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Utilisateur Plateforme</h2>
+            <form id="admin-form">
+                <input type="hidden" id="admin-id">
+                <div class="form-group">
+                    <label>Email (ID de connexion)</label>
+                    <input type="email" id="admin-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Nom</label>
+                    <input type="text" id="admin-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Rôles / Permissions</label>
+                    <div id="roles-checkbox-group"
+                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
+                        <label
+                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" value="SuperAdmin"
+                                style="width:18px; height:18px; margin-right:8px;"> SuperAdmin (Accès total)
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" value="Equipes" style="width:18px; height:18px; margin-right:8px;">
+                            Équipes & Coachs
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" value="Boutique" style="width:18px; height:18px; margin-right:8px;">
+                            Boutique & Inventaire
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" value="Club" style="width:18px; height:18px; margin-right:8px;"> C.A.
+                            & Arbitres
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" value="Inscriptions"
+                                style="width:18px; height:18px; margin-right:8px;"> Inscriptions
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" value="Matchs" style="width:18px; height:18px; margin-right:8px;">
+                            Matchs (Calendrier)
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" value="Config" style="width:18px; height:18px; margin-right:8px;">
+                            Configuration
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Coach Modal -->
+    <div class="modal" id="coach-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Entraîneur</h2>
+            <form id="coach-form">
+                <input type="hidden" id="coach-id">
+
+                <div class="form-group">
+                    <label>Nom Complet</label>
+                    <input type="text" id="coach-name" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Expiration Filiation Policière</label>
+                    <input type="date" id="coach-police-expiry">
+                    <small>Date à laquelle la vérification expire.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Photo</label>
+                    <input type="file" id="coach-image" accept="image/*">
+                    <div id="coach-image-preview" class="image-preview"></div>
+                </div>
+
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Match Modal -->
+    <div class="modal" id="match-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Détails du Match</h2>
+            <form id="match-form">
+                <input type="hidden" id="match-id">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="match-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Heure</label>
+                    <input type="time" id="match-time" required>
+                </div>
+                <div class="form-group">
+                    <label>Catégorie</label>
+                    <select id="match-category">
+                        <option value="U9">U9</option>
+                        <option value="U10">U10</option>
+                        <option value="U11">U11</option>
+                        <option value="U12">U12</option>
+                        <option value="U13">U13</option>
+                        <option value="U14">U14</option>
+                        <option value="U15">U15</option>
+                        <option value="U16">U16</option>
+                        <option value="U17">U17</option>
+                        <option value="U18">U18</option>
+                        <option value="Senior">Senior</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Adversaire</label>
+                    <input type="text" id="match-opponent" placeholder="Ex: CS Dieppe, Codiac..." required>
+                </div>
+                <div class="form-group">
+                    <label>Terrain</label>
+                    <input type="text" id="match-field" value="Terrain Principal" required>
+                </div>
+                <hr style="margin: 15px 0;">
+                <h4>Assignation Arbitres</h4>
+                <div class="form-group">
+                    <label>Arbitre Central</label>
+                    <select id="match-ref-center">
+                        <option value="">-- Non assigné --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Assistant 1</label>
+                    <select id="match-ref-asst1">
+                        <option value="">-- Non assigné --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Assistant 2</label>
+                    <select id="match-ref-asst2">
+                        <option value="">-- Non assigné --</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Main Logic -->
-    <script type="module" src="js/app.js"></script>
+    <script type="module" src="./js/app.js?v=1.1"></script>
 </body>
 
 </html>

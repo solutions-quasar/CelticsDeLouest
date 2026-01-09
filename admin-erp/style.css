@@ -598,9 +598,26 @@ th {
 
 .view-list .product-card-admin p {
     margin: 0;
-    margin-right: 20px;
-    color: #666;
 }
+
+.btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: 0.2s;
+    padding: 5px;
+}
+
+.btn-icon:hover {
+    transform: scale(1.1);
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
+
 
 .view-list .product-actions {
     margin: 0;

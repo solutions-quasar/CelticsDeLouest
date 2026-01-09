@@ -40,7 +40,7 @@
                     <a href="#" class="nav-link">Le Club <i class="fas fa-chevron-down"
                             style="font-size: 0.8rem; margin-left: 5px;"></i></a>
                     <ul class="dropdown-menu">
-                        <li><a href="#comite" class="nav-link dropdown-link">Conseil d'administration</a></li>
+                        <li><a href="#conseil" class="nav-link dropdown-link">Conseil d'administration</a></li>
                         <li><a href="#arbitres" class="nav-link dropdown-link">Nos Arbitres</a></li>
                     </ul>
                 </li>
@@ -399,10 +399,12 @@
                         const card = document.createElement('div');
                         card.className = 'board-card';
 
-                        // Image if available
+                        // Image or Placeholder for alignment
                         let imgHtml = '';
                         if (data.imageUrl && data.imageUrl.length > 10) {
-                            imgHtml = `<img src="${data.imageUrl}" alt="${data.name}" style="width:100px; height:100px; border-radius:50%; object-fit:cover; margin-bottom:10px;">`;
+                            imgHtml = `<img src="${data.imageUrl}" alt="${data.name}">`;
+                        } else {
+                            imgHtml = `<div class="board-img-empty"><i class="fas fa-user"></i></div>`;
                         }
 
                         card.innerHTML = `
@@ -434,17 +436,14 @@
                     snapshot.forEach(doc => {
                         const data = doc.data();
                         const card = document.createElement('div');
-                        card.className = 'spectator-card'; // Reusing style class
+                        card.className = 'referee-card';
 
-                        // Image if available
+                        // Image or Placeholder for alignment
                         let imgHtml = '';
                         if (data.imageUrl && data.imageUrl.length > 10) {
-                            // Use a specialized style for referee with image
-                            card.style.display = 'flex';
-                            card.style.flexDirection = 'column';
-                            card.style.alignItems = 'center';
-                            card.style.gap = '10px';
-                            imgHtml = `<img src="${data.imageUrl}" alt="${data.name}" style="width:80px; height:80px; border-radius:50%; object-fit:cover;">`;
+                            imgHtml = `<img src="${data.imageUrl}" alt="${data.name}">`;
+                        } else {
+                            imgHtml = `<div class="ref-img-empty"><i class="fas fa-user"></i></div>`;
                         }
 
                         card.innerHTML = `

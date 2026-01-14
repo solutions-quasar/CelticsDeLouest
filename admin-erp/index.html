@@ -650,19 +650,35 @@
                 </div>
                 <div class="form-group"
                     style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
-                    <label>Assignation</label>
-                    <select id="inv-assign-type" style="margin-bottom: 10px;">
-                        <option value="none">Aucun (En stock)</option>
-                        <option value="player">Joueur</option>
-                        <option value="coach">Entraîneur</option>
-                    </select>
+                    <label style="display:flex; justify-content:space-between; align-items:center;">
+                        Distribution du Stock
+                        <span id="inv-stock-remaining"
+                            style="font-size: 0.9em; background: var(--primary); color: white; padding: 2px 8px; border-radius: 12px;">Stock:
+                            -</span>
+                    </label>
 
-                    <div id="inv-assign-target-container" style="display:none;">
-                        <input type="text" id="inv-assign-search" placeholder="Rechercher..."
-                            style="margin-bottom: 5px; font-size: 0.9rem;">
-                        <select id="inv-assign-target">
+                    <!-- Add Distribution Form -->
+                    <div style="display: flex; gap: 5px; margin-bottom: 15px; flex-wrap: wrap;">
+                        <select id="dist-type" style="flex: 1; min-width: 100px; font-size: 0.85rem;">
+                            <option value="">Type...</option>
+                            <option value="coach">Coach</option>
+                            <option value="player">Joueur</option>
+                        </select>
+                        <select id="dist-target" style="flex: 2; min-width: 150px; font-size: 0.85rem;" disabled>
                             <option value="">Sélectionner...</option>
                         </select>
+                        <input type="number" id="dist-qty" placeholder="Qté" min="1"
+                            style="width: 60px; font-size: 0.85rem;">
+                        <button type="button" id="btn-add-dist" class="btn-save"
+                            style="width: auto; padding: 5px 10px; font-size: 0.9rem;">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+
+                    <!-- Distributions List -->
+                    <div id="inv-distributions-list"
+                        style="max-height: 150px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 4px; padding: 5px;">
+                        <p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution.</p>
                     </div>
                 </div>
                 <button type="submit" class="btn-save">Enregistrer</button>
@@ -1120,7 +1136,7 @@
     </div>
 
     <!-- Main Logic -->
-    <script type="module" src="./js/app.js?v=1.5"></script>
+    <script type="module" src="./js/app.js?v=1.6"></script>
 </body>
 
 </html>

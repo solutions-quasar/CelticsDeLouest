@@ -1292,16 +1292,19 @@ document.getElementById('inventory-form')?.addEventListener('submit', async (e) 
 
     try {
         const id = document.getElementById('inv-id').value;
-        const assignType = document.getElementById('inv-assign-type').value;
-        const assignTo = document.getElementById('inv-assign-target').value;
+
+        // Preserve distributions if editing existing item
+        let distributions = [];
+        if (id && dataCache.inventory && dataCache.inventory[id] && dataCache.inventory[id].distributions) {
+            distributions = dataCache.inventory[id].distributions;
+        }
 
         const data = {
             name: document.getElementById('inv-name').value,
             category: document.getElementById('inv-cat').value,
             quantity: parseInt(document.getElementById('inv-qty').value),
             status: document.getElementById('inv-status').value,
-            assignedType: assignType,
-            assignedTo: (assignType !== 'none' && assignTo) ? assignTo : null
+            distributions: distributions // Keep existing distributions
         };
 
         await uploadAndSave('inventory', id, data, null);
@@ -1332,7 +1335,7 @@ async function loadInventory() {
     if (!targetList) return;
 
     targetList.innerHTML = '<p>Chargement...</p>';
-    await ensurePeopleData(); // Ensure names are available
+    await ensurePeopleData(); // Ensure names are available for players and coaches
 
     const snapshot = await getDocs(collection(db, "inventory"));
     targetList.innerHTML = '';
@@ -1342,15 +1345,27 @@ async function loadInventory() {
         const data = doc.data();
         dataCache.inventory[doc.id] = data;
 
-        let subtitle = `${data.category} | Qty: ${data.quantity} | ${data.status}`;
-        if (data.assignedType && data.assignedTo && data.assignedType !== 'none') {
-            let assigneeName = 'Inconnu';
-            if (data.assignedType === 'player' && dataCache.players[data.assignedTo]) {
-                assigneeName = dataCache.players[data.assignedTo].name;
-            } else if (data.assignedType === 'coach' && dataCache.coaches[data.assignedTo]) {
-                assigneeName = dataCache.coaches[data.assignedTo].name;
-            }
-            subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-user-tag"></i> ${assigneeName}</span>`;
+        // Calculate Stock Logic
+        let distributedCount = 0;
+        let distributions = data.distributions || [];
+
+        // Backwards compatibility migration on read
+        if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
+            distributions = [{
+                type: data.assignedType,
+                id: data.assignedTo,
+                qty: 1, // Assume 1 for old assignments
+                name: 'Ancienne assignation'
+            }];
+        }
+
+        distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
+        const stockRemaining = (parseInt(data.quantity) || 0) - distributedCount;
+
+        let subtitle = `${data.category} | Détails: <span style="font-weight:bold;">${stockRemaining} en stock</span> / ${data.quantity} total`;
+
+        if (distributedCount > 0) {
+            subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${distributedCount} distribué(s)</span>`;
         }
 
         const card = createCard(null, data.name, subtitle, doc.id, 'edit-inv', 'delete-inv', 'fa-box');
@@ -1360,24 +1375,190 @@ async function loadInventory() {
     });
 
     setupClickableCard('.inv-card', 'inventory', 'inventory-modal', 'inv-id', async (data) => {
+        const invId = document.getElementById('inv-id').value; // Set by setupClickableCard logic before callback usually, but safer to use param or data
+        // Actually setupClickableCard puts ID in hidden input BEFORE calling this callback (if implemented standardly)
+        // Let's verify data content. data is the firestore data object. We need the ID.
+        // The ID is usually put in the hidden field passed as 4th arg ('inv-id').
+        const currentInvId = document.getElementById('inv-id').value;
+
         document.getElementById('inv-name').value = data.name;
         document.getElementById('inv-cat').value = data.category;
         document.getElementById('inv-qty').value = data.quantity;
         document.getElementById('inv-status').value = data.status;
 
-        // Populate Assignment
-        const typeSelect = document.getElementById('inv-assign-type');
-        const targetContainer = document.getElementById('inv-assign-target-container');
+        // --- DISTRIBUTION LOGIC ---
 
-        if (data.assignedType && data.assignedType !== 'none') {
-            typeSelect.value = data.assignedType;
-            targetContainer.style.display = 'block';
-            await populateAssignmentSelect(data.assignedType, data.assignedTo);
-        } else {
-            typeSelect.value = 'none';
-            targetContainer.style.display = 'none';
+        // 1. Prepare Distributions Data
+        let distributions = data.distributions || [];
+        // Migration logic for UI
+        if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
+            let name = "Inconnu";
+            if (data.assignedType === 'coach' && dataCache.coaches[data.assignedTo]) name = dataCache.coaches[data.assignedTo].name;
+            if (data.assignedType === 'player' && dataCache.players[data.assignedTo]) name = dataCache.players[data.assignedTo].name;
+            distributions = [{
+                type: data.assignedType,
+                id: data.assignedTo,
+                qty: 1,
+                name: name
+            }];
         }
+
+        // 2. Elements
+        const distTypeSel = document.getElementById('dist-type');
+        const distTargetSel = document.getElementById('dist-target');
+        const distQtyInput = document.getElementById('dist-qty');
+        const btnAddDist = document.getElementById('btn-add-dist');
+        const listEl = document.getElementById('inv-distributions-list');
+        const stockEl = document.getElementById('inv-stock-remaining');
+
+        // 3. Render Function
+        const renderDistributions = () => {
+            listEl.innerHTML = '';
+            let distributedCount = 0;
+            const totalQty = parseInt(document.getElementById('inv-qty').value) || 0;
+
+            if (!distributions || distributions.length === 0) {
+                listEl.innerHTML = '<p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution.</p>';
+            } else {
+                distributions.forEach((d, index) => {
+                    distributedCount += (parseInt(d.qty) || 0);
+
+                    // Resolve Name if missing/stale
+                    let name = d.name || 'Inconnu';
+                    if (d.type === 'coach' && dataCache.coaches && dataCache.coaches[d.id]) name = dataCache.coaches[d.id].name;
+                    if (d.type === 'player' && dataCache.players && dataCache.players[d.id]) name = dataCache.players[d.id].name;
+
+                    const div = document.createElement('div');
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.style.alignItems = 'center';
+                    div.style.borderBottom = '1px solid #eee';
+                    div.style.padding = '4px 0';
+                    div.style.fontSize = '0.9rem';
+
+                    div.innerHTML = `
+                        <span>
+                            <span style="font-weight:600; color: var(--primary);">x${d.qty}</span> 
+                            ${name} <i style="font-size:0.8em; color:#888;">(${d.type === 'coach' ? 'Coach' : 'Joueur'})</i>
+                        </span>
+                        <button type="button" class="del-dist-btn" data-index="${index}" style="background:none; border:none; color:#dc3545; cursor:pointer;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                     `;
+                    listEl.appendChild(div);
+                });
+
+                // Attach delete handlers
+                listEl.querySelectorAll('.del-dist-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        if (!window.confirm('Annuler cette distribution ?')) return; // Could use showConfirm if available
+                        const idx = parseInt(btn.getAttribute('data-index'));
+                        distributions.splice(idx, 1);
+                        await saveDistributions();
+                        renderDistributions();
+                    });
+                });
+            }
+
+            const remaining = totalQty - distributedCount;
+            stockEl.textContent = `Stock: ${remaining}`;
+            stockEl.style.backgroundColor = remaining > 0 ? 'var(--primary)' : 'var(--danger)';
+
+            // Disable add button if no stock (optional, maybe allow negative for adjustments?) 
+            // Let's allow but warn or show negative stock.
+        };
+
+        // 4. Helper to Save
+        const saveDistributions = async () => {
+            try {
+                await updateDoc(doc(db, "inventory", currentInvId), {
+                    distributions: distributions,
+                    assignedType: 'mixed', // Legacy flag update
+                    assignedTo: 'mixed'
+                });
+                // Update Cache logic if needed
+            } catch (e) {
+                console.error(e);
+                alert('Erreur sauvegarde distribution: ' + e.message);
+            }
+        };
+
+        // 5. Populate Dropdowns on Type Change
+        distTypeSel.value = '';
+        distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
+        distTargetSel.disabled = true;
+        distQtyInput.value = '';
+
+        distTypeSel.onchange = () => {
+            const type = distTypeSel.value;
+            distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
+            if (!type) {
+                distTargetSel.disabled = true;
+                return;
+            }
+            distTargetSel.disabled = false;
+
+            let source = [];
+            if (type === 'coach') {
+                source = Object.keys(dataCache.coaches || {}).map(k => ({ id: k, ...dataCache.coaches[k] }));
+            } else if (type === 'player') {
+                // If dataCache.allPlayers exists (from team modal logic), use it. Else fall back to cache.players
+                if (dataCache.allPlayers) source = dataCache.allPlayers;
+                else source = Object.keys(dataCache.players || {}).map(k => ({ id: k, ...dataCache.players[k] }));
+            }
+
+            source.sort((a, b) => a.name.localeCompare(b.name));
+            source.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = item.name;
+                distTargetSel.appendChild(opt);
+            });
+        };
+
+        // 6. Add Button Logic
+        btnAddDist.onclick = async () => {
+            const type = distTypeSel.value;
+            const targetId = distTargetSel.value;
+            const qty = parseInt(distQtyInput.value);
+
+            if (!type || !targetId || !qty || qty <= 0) {
+                alert('Veuillez remplir tous les champs correctement.');
+                return;
+            }
+
+            // Check stock?
+            let currentDist = 0;
+            distributions.forEach(d => currentDist += (parseInt(d.qty) || 0));
+            const total = parseInt(document.getElementById('inv-qty').value) || 0;
+            if (currentDist + qty > total) {
+                if (!confirm(`Attention: Stock insuffisant (${total - currentDist} restants). Continuer quand même ?`)) return;
+            }
+
+            // Get Name
+            let name = distTargetSel.options[distTargetSel.selectedIndex].text;
+
+            distributions.push({
+                type: type,
+                id: targetId,
+                name: name,
+                qty: qty,
+                date: new Date().toISOString()
+            });
+
+            await saveDistributions();
+            renderDistributions();
+
+            // Reset fields
+            distQtyInput.value = '';
+            // keep selection for fast input? maybe not
+        };
+
+        // Initial Render
+        renderDistributions();
     });
+
+    // Refresh stats when deleted
     setupDeleteButton('.delete-inv', 'inventory', () => { loadInventory(); updateStats(); });
 }
 

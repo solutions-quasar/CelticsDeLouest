@@ -252,6 +252,7 @@ navBtns.forEach(btn => {
         if (targetId === 'view-settings') loadSettings();
         if (targetId === 'view-matches') loadMatches();
         if (targetId === 'view-sponsors') loadSponsors();
+        if (targetId === 'view-seasons') loadSeasons();
     });
 });
 
@@ -747,6 +748,7 @@ if (openTeamModalBtn) openTeamModalBtn.addEventListener('click', async () => {
     document.getElementById('team-id').value = '';
 
     await populateCoachSelect('team-coach');
+    await populateSeasonSelect('team-season');
 
     const div = document.getElementById('team-players-list');
     if (div) div.innerHTML = '';
@@ -783,6 +785,33 @@ async function populateCoachSelect(selectId, selectedId = null) {
     });
 }
 
+async function populateSeasonSelect(selectId, selectedId = null) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+
+    if (!dataCache.seasons || Object.keys(dataCache.seasons).length === 0) {
+        const snapshot = await getDocs(collection(db, "seasons"));
+        dataCache.seasons = {};
+        snapshot.forEach(doc => dataCache.seasons[doc.id] = doc.data());
+    }
+
+    sel.innerHTML = '<option value="">-- Choisir une saison --</option>';
+
+    const items = [];
+    Object.keys(dataCache.seasons).forEach(key => {
+        items.push({ id: key, name: dataCache.seasons[key].name });
+    });
+    items.sort((a, b) => a.name.localeCompare(b.name));
+
+    items.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        if (s.id === selectedId) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
 document.getElementById('team-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -793,7 +822,8 @@ document.getElementById('team-form')?.addEventListener('submit', async (e) => {
         const data = {
             name: document.getElementById('team-name').value,
             category: document.getElementById('team-category').value,
-            coachId: document.getElementById('team-coach').value
+            coachId: document.getElementById('team-coach').value,
+            seasonId: document.getElementById('team-season').value
         };
 
         if (id) {
@@ -821,6 +851,7 @@ async function loadTeams() {
 
     try {
         await populateCoachSelect('team-coach');
+        await populateSeasonSelect('team-season');
 
         const snapshot = await getDocs(collection(db, "teams"));
         list.innerHTML = '';
@@ -850,8 +881,12 @@ async function loadTeams() {
             }
 
             const count = teamCounts[doc.id] || 0;
+            let seasonName = 'Aucune saison';
+            if (data.seasonId && dataCache.seasons[data.seasonId]) {
+                seasonName = dataCache.seasons[data.seasonId].name;
+            }
 
-            const subtitle = `<span style="color:#666;">${data.category}</span><br><i class="fas fa-user-tie"></i> ${coachName}<br><i class="fas fa-users"></i> ${count} Joueurs`;
+            const subtitle = `<span style="color:#666;">${data.category}</span><br><i class="fas fa-calendar-alt"></i> ${seasonName}<br><i class="fas fa-user-tie"></i> ${coachName}<br><i class="fas fa-users"></i> ${count} Joueurs`;
 
             const card = createCard(null, data.name, subtitle, doc.id, 'edit-team', 'delete-team', 'fa-shield-alt');
             card.setAttribute('data-id', doc.id);
@@ -865,6 +900,7 @@ async function loadTeams() {
             document.getElementById('team-name').value = data.name;
             document.getElementById('team-category').value = data.category || 'U9-U10';
             await populateCoachSelect('team-coach', data.coachId);
+            await populateSeasonSelect('team-season', data.seasonId);
 
             // Find team ID
             let teamId = null;
@@ -1199,10 +1235,38 @@ async function loadPlayersDirectory() {
 // --- INVENTORY LOGIC ---
 const inventoryModal = document.getElementById('inventory-modal');
 const openInvModalBtn = document.getElementById('open-inventory-modal');
-const assignTypeSelect = document.getElementById('inv-assign-type');
-const assignTargetContainer = document.getElementById('inv-assign-target-container');
-const assignTargetSelect = document.getElementById('inv-assign-target');
-const assignSearchInput = document.getElementById('inv-assign-search');
+
+// Tab Switching logic for Inventory
+if (inventoryModal) {
+    const tabs = inventoryModal.querySelectorAll('.tab-link');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.getAttribute('data-tab');
+            tabs.forEach(t => t.classList.remove('active'));
+            inventoryModal.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById(target).classList.add('active');
+        });
+    });
+}
+
+function resetInventoryModalTabs() {
+    const tabs = inventoryModal.querySelectorAll('.tab-link');
+    const contents = inventoryModal.querySelectorAll('.tab-content');
+    tabs.forEach(t => t.classList.remove('active'));
+    contents.forEach(c => c.classList.remove('active'));
+    if (tabs[0]) tabs[0].classList.add('active');
+    if (contents[0]) contents[0].classList.add('active');
+}
+
+function switchToInventoryStockTab() {
+    const tabs = inventoryModal.querySelectorAll('.tab-link');
+    const contents = inventoryModal.querySelectorAll('.tab-content');
+    tabs.forEach(t => t.classList.remove('active'));
+    contents.forEach(c => c.classList.remove('active'));
+    if (tabs[1]) tabs[1].classList.add('active');
+    if (contents[1]) contents[1].classList.add('active');
+}
 
 async function ensurePeopleData() {
     if (!dataCache.players || Object.keys(dataCache.players).length === 0) {
@@ -1217,72 +1281,95 @@ async function ensurePeopleData() {
     }
 }
 
-async function populateAssignmentSelect(type, selectedId = null) {
-    if (!assignTargetSelect) return;
-    assignTargetSelect.innerHTML = '<option value="">Chargement...</option>';
-    await ensurePeopleData();
-    assignTargetSelect.innerHTML = '<option value="">Sélectionner...</option>';
-
-    let source = {};
-    if (type === 'player') source = dataCache.players;
-    else if (type === 'coach') source = dataCache.coaches;
-
-    const items = [];
-    Object.keys(source).forEach(key => {
-        items.push({ id: key, name: source[key].name });
-    });
-
-    items.sort((a, b) => a.name.localeCompare(b.name));
-
-    items.forEach(item => {
-        const opt = document.createElement('option');
-        opt.value = item.id;
-        opt.textContent = item.name;
-        if (selectedId === item.id) opt.selected = true;
-        assignTargetSelect.appendChild(opt);
-    });
-}
-
-if (assignTypeSelect) {
-    assignTypeSelect.addEventListener('change', () => {
-        const type = assignTypeSelect.value;
-        if (type === 'none') {
-            assignTargetContainer.style.display = 'none';
-            assignTargetSelect.value = '';
-        } else {
-            assignTargetContainer.style.display = 'block';
-            populateAssignmentSelect(type);
-        }
-    });
-}
-
-if (assignSearchInput) {
-    assignSearchInput.addEventListener('keyup', (e) => {
-        const term = e.target.value.toLowerCase();
-        Array.from(assignTargetSelect.options).forEach(opt => {
-            if (opt.value === "") return;
-            const text = opt.textContent.toLowerCase();
-            if (text.includes(term)) {
-                opt.style.display = '';
-            } else {
-                opt.style.display = 'none';
-            }
-        });
-    });
-}
-
 if (openInvModalBtn) openInvModalBtn.addEventListener('click', () => {
     document.getElementById('inventory-form').reset();
     document.getElementById('inv-id').value = '';
+    document.getElementById('inv-id').removeAttribute('data-is-batch');
+    document.getElementById('inv-batch-badge').style.display = 'none';
 
-    // Reset Assignment UI
-    if (assignTypeSelect) assignTypeSelect.value = 'none';
-    if (assignTargetContainer) assignTargetContainer.style.display = 'none';
-    if (assignTargetSelect) assignTargetSelect.innerHTML = '<option value="">Sélectionner...</option>';
+    // Reset new fields
+    document.getElementById('inv-model').value = '';
+    document.getElementById('inv-size').value = '';
+    document.getElementById('inv-number').value = '';
+    document.getElementById('inv-number').disabled = false;
+    document.getElementById('inv-qty').disabled = false;
 
+    // Reset Distribution UI
+    document.getElementById('dist-type').value = '';
+    document.getElementById('dist-target').innerHTML = '<option value="">Sélectionner...</option>';
+    document.getElementById('dist-target').disabled = true;
+    document.getElementById('inv-distributions-list').innerHTML = '<p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution enregistrée.</p>';
+    document.getElementById('inv-stock-remaining').textContent = 'Stock disponible: -';
+    document.getElementById('inv-dist-helper-form').style.display = 'flex';
+    document.getElementById('inv-dist-label').style.display = 'block';
+
+    resetInventoryModalTabs();
     setLoading(document.getElementById('inventory-form'), false);
     inventoryModal.classList.add('active');
 });
+
+// --- BATCH INVENTORY LOGIC ---
+const inventoryBatchModal = document.getElementById('inventory-batch-modal');
+const openInvBatchModalBtn = document.getElementById('open-inventory-batch-modal');
+
+if (openInvBatchModalBtn) openInvBatchModalBtn.addEventListener('click', () => {
+    document.getElementById('inventory-batch-form').reset();
+    setLoading(document.getElementById('inventory-batch-form'), false);
+    inventoryBatchModal.classList.add('active');
+});
+
+if (inventoryBatchModal) inventoryBatchModal.querySelector('.close-modal').addEventListener('click', () => inventoryBatchModal.classList.remove('active'));
+
+document.getElementById('inventory-batch-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+
+    const baseName = document.getElementById('batch-inv-name').value;
+    const model = document.getElementById('batch-inv-model').value;
+    const size = document.getElementById('batch-inv-size').value;
+    const startNum = parseInt(document.getElementById('batch-num-start').value);
+    const endNum = parseInt(document.getElementById('batch-num-end').value);
+    const category = document.getElementById('batch-inv-cat').value;
+
+    if (startNum > endNum) {
+        return showAlert('Le numéro de début doit être inférieur au numéro de fin.', 'error');
+    }
+
+    const count = endNum - startNum + 1;
+    if (!confirm(`Vous allez créer ${count} articles. Continuer ?`)) return;
+
+    const batchId = 'batch_' + Date.now();
+    setLoading(form, true);
+
+    try {
+        for (let i = startNum; i <= endNum; i++) {
+            const data = {
+                name: `${baseName} #${i}`,
+                model: model,
+                size: size,
+                number: i,
+                quantity: 1,
+                category: category,
+                status: "Neuf",
+                batchId: batchId,
+                distributions: []
+            };
+            // Pass empty ID to create new doc
+            await uploadAndSave('inventory', '', data, null);
+        }
+
+        inventoryBatchModal.classList.remove('active');
+        showAlert(`${count} articles ont été créés avec succès !`, 'success');
+        loadInventory();
+        updateStats();
+    } catch (err) {
+        console.error(err);
+        showAlert("Erreur lors de la création du lot : " + (err.message || err), 'error');
+    } finally {
+        setLoading(form, false);
+    }
+});
+
 if (inventoryModal) inventoryModal.querySelector('.close-modal').addEventListener('click', () => inventoryModal.classList.remove('active'));
 
 document.getElementById('inventory-form')?.addEventListener('submit', async (e) => {
@@ -1292,22 +1379,45 @@ document.getElementById('inventory-form')?.addEventListener('submit', async (e) 
 
     try {
         const id = document.getElementById('inv-id').value;
+        const isBatch = document.getElementById('inv-id').hasAttribute('data-is-batch');
 
-        // Preserve distributions if editing existing item
-        let distributions = [];
-        if (id && dataCache.inventory && dataCache.inventory[id] && dataCache.inventory[id].distributions) {
-            distributions = dataCache.inventory[id].distributions;
+        if (isBatch) {
+            // Update all items in batch with common details
+            const batchId = id;
+            // We need the items array or fetch from cache
+            const toUpdate = Object.values(dataCache.inventory).filter(item => item.batchId === batchId);
+
+            const commonData = {
+                category: document.getElementById('inv-cat').value,
+                model: document.getElementById('inv-model').value || "",
+                size: document.getElementById('inv-size').value || "",
+                status: document.getElementById('inv-status').value
+            };
+
+            for (const item of toUpdate) {
+                await updateDoc(doc(db, "inventory", item.id), commonData);
+            }
+            showAlert(`Lot mis à jour (${toUpdate.length} articles).`, "success");
+        } else {
+            // Preserve distributions if editing existing item
+            let distributions = [];
+            if (id && dataCache.inventory && dataCache.inventory[id] && dataCache.inventory[id].distributions) {
+                distributions = dataCache.inventory[id].distributions;
+            }
+
+            const data = {
+                name: document.getElementById('inv-name').value,
+                category: document.getElementById('inv-cat').value,
+                quantity: parseInt(document.getElementById('inv-qty').value),
+                status: document.getElementById('inv-status').value,
+                model: document.getElementById('inv-model').value || "",
+                size: document.getElementById('inv-size').value || "",
+                number: parseInt(document.getElementById('inv-number').value) || null,
+                distributions: distributions // Keep existing distributions
+            };
+
+            await uploadAndSave('inventory', id, data, null);
         }
-
-        const data = {
-            name: document.getElementById('inv-name').value,
-            category: document.getElementById('inv-cat').value,
-            quantity: parseInt(document.getElementById('inv-qty').value),
-            status: document.getElementById('inv-status').value,
-            distributions: distributions // Keep existing distributions
-        };
-
-        await uploadAndSave('inventory', id, data, null);
 
         inventoryModal.classList.remove('active');
         loadInventory();
@@ -1335,56 +1445,378 @@ async function loadInventory() {
     if (!targetList) return;
 
     targetList.innerHTML = '<p>Chargement...</p>';
-    await ensurePeopleData(); // Ensure names are available for players and coaches
+    await ensurePeopleData();
 
     const snapshot = await getDocs(collection(db, "inventory"));
     targetList.innerHTML = '';
     dataCache.inventory = {};
-
+    const items = [];
     snapshot.forEach(doc => {
-        const data = doc.data();
-        dataCache.inventory[doc.id] = data;
+        const d = doc.data();
+        d.id = doc.id;
+        items.push(d);
+        dataCache.inventory[doc.id] = d;
+    });
 
-        // Calculate Stock Logic
+    const groups = {};
+    const singles = [];
+
+    items.forEach(item => {
+        if (item.batchId) {
+            if (!groups[item.batchId]) groups[item.batchId] = [];
+            groups[item.batchId].push(item);
+        } else {
+            singles.push(item);
+        }
+    });
+
+    // --- RENDER BATCHES ---
+    Object.keys(groups).forEach(batchId => {
+        const batchItems = groups[batchId];
+        batchItems.sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0));
+
+        const first = batchItems[0];
+        const last = batchItems[batchItems.length - 1];
+        const baseName = first.name.split(' #')[0];
+
+        let totalQty = 0;
+        let totalDistributed = 0;
+        batchItems.forEach(item => {
+            totalQty += (parseInt(item.quantity) || 0);
+            let distributedCount = 0;
+            let distributions = item.distributions || [];
+            // Migration
+            if ((!distributions || distributions.length === 0) && item.assignedType && item.assignedType !== 'none' && item.assignedTo) {
+                distributedCount = 1;
+            } else {
+                distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
+            }
+            totalDistributed += distributedCount;
+        });
+
+        const stockRemaining = totalQty - totalDistributed;
+        const subtitle = `${first.category} | Lot #${first.number}-#${last.number} | ${first.model} | <span style="font-weight:bold;">${stockRemaining} en stock</span> / ${totalQty}`;
+
+        const card = createCard(null, `${baseName} (Lot)`, subtitle, batchId, 'edit-inv-batch', 'delete-inv-batch', 'fa-layer-group');
+        card.setAttribute('data-batch-id', batchId);
+        card.classList.add('inv-batch-card');
+        targetList.appendChild(card);
+    });
+
+    // --- RENDER SINGLES ---
+    singles.forEach(data => {
         let distributedCount = 0;
         let distributions = data.distributions || [];
 
-        // Backwards compatibility migration on read
         if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
-            distributions = [{
-                type: data.assignedType,
-                id: data.assignedTo,
-                qty: 1, // Assume 1 for old assignments
-                name: 'Ancienne assignation'
-            }];
+            distributedCount = 1;
+        } else {
+            distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
         }
 
-        distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
         const stockRemaining = (parseInt(data.quantity) || 0) - distributedCount;
+        let subtitle = `${data.category} | <span style="font-weight:bold;">${stockRemaining} en stock</span> / ${data.quantity} total`;
+        if (distributedCount > 0) subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${distributedCount} distribué(s)</span>`;
 
-        let subtitle = `${data.category} | Détails: <span style="font-weight:bold;">${stockRemaining} en stock</span> / ${data.quantity} total`;
-
-        if (distributedCount > 0) {
-            subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${distributedCount} distribué(s)</span>`;
-        }
-
-        const card = createCard(null, data.name, subtitle, doc.id, 'edit-inv', 'delete-inv', 'fa-box');
-        card.setAttribute('data-id', doc.id);
+        const card = createCard(null, data.name, subtitle, data.id, 'edit-inv', 'delete-inv', 'fa-box');
+        card.setAttribute('data-id', data.id);
         card.classList.add('inv-card');
         targetList.appendChild(card);
     });
 
+    // Refresh stats when deleted
+    setupDeleteButton('.delete-inv', 'inventory', () => { loadInventory(); updateStats(); });
+
+    // Handle batch deletion
+    const batchDelBtns = document.querySelectorAll('.delete-inv-batch');
+    batchDelBtns.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const bid = btn.getAttribute('data-id');
+            if (confirm("Supprimer tout ce lot d'articles ? Cette action est irréversible.")) {
+                try {
+                    const toDelete = items.filter(item => item.batchId === bid);
+                    for (const item of toDelete) {
+                        await deleteDoc(doc(db, "inventory", item.id));
+                    }
+                    showAlert("Lot supprimé avec succès.", "success");
+                    loadInventory();
+                    updateStats();
+                } catch (err) {
+                    console.error(err);
+                    showAlert("Erreur lors de la suppression du lot.", "error");
+                }
+            }
+        });
+    });
+
+    // Handle batch click
+    document.querySelectorAll('.inv-batch-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const batchId = card.getAttribute('data-batch-id');
+            const batchItems = items.filter(item => item.batchId === batchId);
+            batchItems.sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0));
+            const first = batchItems[0];
+
+            inventoryModal.classList.add('active');
+            resetInventoryModalTabs();
+
+            document.getElementById('inv-batch-badge').style.display = 'inline-block';
+            document.getElementById('inv-id').value = batchId;
+            document.getElementById('inv-id').setAttribute('data-is-batch', 'true');
+
+            document.getElementById('inv-name').value = first.name.split(' #')[0];
+            document.getElementById('inv-cat').value = first.category;
+            document.getElementById('inv-qty').value = batchItems.length;
+            document.getElementById('inv-qty').disabled = true;
+            document.getElementById('inv-status').value = first.status;
+            document.getElementById('inv-model').value = first.model || "";
+            document.getElementById('inv-size').value = first.size || "";
+            document.getElementById('inv-number').value = "";
+            document.getElementById('inv-number').disabled = true;
+
+            document.getElementById('inv-dist-helper-form').style.display = 'none';
+            document.getElementById('inv-dist-label').style.display = 'none';
+
+            // Render batch stock management view
+            renderBatchStockList(batchItems);
+        });
+    });
+
+    function renderBatchStockList(batchItems) {
+        const listEl = document.getElementById('inv-distributions-list');
+        const stockEl = document.getElementById('inv-stock-remaining');
+
+        listEl.innerHTML = `
+            <div style="margin-bottom: 20px; font-weight: 600; color: #555; display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-list-ol"></i> Liste des articles du lot (${batchItems.length})
+            </div>
+            <div class="batch-items-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;">
+            </div>
+        `;
+
+        const grid = listEl.querySelector('.batch-items-grid');
+        let libres = 0;
+
+        batchItems.forEach(item => {
+            const isDist = item.distributions && item.distributions.length > 0;
+            if (!isDist) libres++;
+
+            const card = document.createElement('div');
+            card.className = "batch-item-row";
+            card.style.cssText = 'background: white; border: 1px solid #eee; padding: 12px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.02);';
+
+            let assignedTo = isDist ? item.distributions[0].name : '<span style="color: #28a745; font-style: italic;">Disponible</span>';
+
+            card.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div style="width: 40px; height: 40px; background: #f0f4f8; color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; border: 2px solid #e1e8ef;">
+                        ${item.number}
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; color: #333; font-size: 0.95rem;">Article n°${item.number}</div>
+                        <div style="font-size: 0.85rem; color: #777;">${assignedTo}</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-manage-individual" style="background: ${isDist ? '#f1f3f5' : 'var(--primary)'}; color: ${isDist ? '#495057' : 'white'}; border: none; padding: 8px 15px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 600; transition: transform 0.2s;">
+                    ${isDist ? 'Gérer' : 'Associer'}
+                </button>
+            `;
+
+            grid.appendChild(card);
+
+            card.querySelector('.btn-manage-individual').addEventListener('click', () => {
+                // To manage an individual item, we just re-open the modal as a single item
+                // This is a neat trick: we find the element that corresponds to the single item and click it
+                // OR we just manually trigger the single item fill logic.
+
+                // Let's use the manual approach to be safe
+                document.getElementById('inv-batch-badge').style.display = 'none';
+                document.getElementById('inv-id').value = item.id;
+                document.getElementById('inv-id').removeAttribute('data-is-batch');
+
+                const cardEl = document.querySelector(`.inv-card[data-id="${item.id}"]`);
+                if (cardEl) {
+                    cardEl.click();
+                } else {
+                    fillInventoryModal(item);
+                }
+                // Ensure we stay on Stock tab
+                switchToInventoryStockTab();
+            });
+        });
+
+        stockEl.textContent = `Libres: ${libres} / ${batchItems.length}`;
+        stockEl.style.background = libres > 0 ? 'var(--primary)' : 'var(--danger)';
+    }
+
+    function fillInventoryModal(data) {
+        document.getElementById('inv-name').value = data.name;
+        document.getElementById('inv-cat').value = data.category;
+        document.getElementById('inv-qty').value = data.quantity;
+        document.getElementById('inv-qty').disabled = false;
+        document.getElementById('inv-status').value = data.status;
+        document.getElementById('inv-model').value = data.model || "";
+        document.getElementById('inv-size').value = data.size || "";
+        document.getElementById('inv-number').value = data.number || "";
+        document.getElementById('inv-number').disabled = false;
+
+        document.getElementById('inv-dist-helper-form').style.display = 'flex';
+        document.getElementById('inv-dist-label').style.display = 'block';
+
+        // switchToInventoryStockTab is handled by the caller or needed here if manual
+        // but for safety we don't reset to 0 if we want to stay
+        // resetInventoryModalTabs(); <--- Removed reset to allow staying on current tab
+
+        // Distribution logic refresh (borrowed from setupClickableCard handler)
+        renderSingleInventoryDistributions(data);
+    }
+
+    function renderSingleInventoryDistributions(data) {
+        const currentInvId = data.id;
+        let distributions = data.distributions || [];
+        // Migration logic for UI
+        if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
+            let name = "Inconnu";
+            if (data.assignedType === 'coach' && dataCache.coaches[data.assignedTo]) name = dataCache.coaches[data.assignedTo].name;
+            if (data.assignedType === 'player' && dataCache.players[data.assignedTo]) name = dataCache.players[data.assignedTo].name;
+            distributions = [{
+                type: data.assignedType,
+                id: data.assignedTo,
+                qty: 1,
+                name: name
+            }];
+        }
+
+        const distTypeSel = document.getElementById('dist-type');
+        const distTargetSel = document.getElementById('dist-target');
+        const distQtyInput = document.getElementById('dist-qty');
+        const btnAddDist = document.getElementById('btn-add-dist');
+        const listEl = document.getElementById('inv-distributions-list');
+        const stockEl = document.getElementById('inv-stock-remaining');
+
+        const renderDistributions = () => {
+            listEl.innerHTML = '';
+            let distributedCount = 0;
+            const totalQty = parseInt(document.getElementById('inv-qty').value) || 0;
+
+            if (!distributions || distributions.length === 0) {
+                listEl.innerHTML = '<p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution.</p>';
+            } else {
+                distributions.forEach((d, index) => {
+                    distributedCount += (parseInt(d.qty) || 0);
+                    let name = d.name || 'Inconnu';
+                    if (d.type === 'coach' && dataCache.coaches && dataCache.coaches[d.id]) name = dataCache.coaches[d.id].name;
+                    if (d.type === 'player' && dataCache.players && dataCache.players[d.id]) name = dataCache.players[d.id].name;
+
+                    const div = document.createElement('div');
+                    div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 10px 0; font-size: 0.9rem;';
+                    div.innerHTML = `
+                        <span>
+                            <span style="font-weight:700; color: var(--primary); background: #eef2f7; padding: 2px 8px; border-radius: 4px; margin-right: 10px;">x${d.qty}</span> 
+                            <span style="font-weight: 500;">${name}</span> <i style="font-size:0.8em; color:#999; margin-left: 5px;">(${d.type === 'coach' ? 'Coach' : 'Joueur'})</i>
+                        </span>
+                        <button type="button" class="del-dist-btn" data-index="${index}" style="background:none; border:none; color:#dc3545; cursor:pointer; font-size: 1.1rem;">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                     `;
+                    listEl.appendChild(div);
+                });
+
+                listEl.querySelectorAll('.del-dist-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        if (!await showConfirm('Annuler cette distribution ?')) return;
+                        const idx = parseInt(btn.getAttribute('data-index'));
+                        distributions.splice(idx, 1);
+                        await saveDistributions();
+                        renderDistributions();
+                    });
+                });
+            }
+
+            const remaining = totalQty - distributedCount;
+            stockEl.textContent = `Stock: ${remaining}`;
+            stockEl.style.backgroundColor = remaining > 0 ? 'var(--primary)' : 'var(--danger)';
+        };
+
+        const saveDistributions = async () => {
+            try {
+                await updateDoc(doc(db, "inventory", currentInvId), {
+                    distributions: distributions,
+                    assignedType: 'mixed',
+                    assignedTo: 'mixed'
+                });
+                dataCache.inventory[currentInvId].distributions = distributions; // Sync cache
+            } catch (e) {
+                console.error(e);
+                showAlert('Erreur sauvegarde distribution: ' + e.message, 'error');
+            }
+        };
+
+        distTypeSel.value = '';
+        distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
+        distTargetSel.disabled = true;
+        distQtyInput.value = '1';
+
+        distTypeSel.onchange = () => {
+            const type = distTypeSel.value;
+            distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
+            if (!type) { distTargetSel.disabled = true; return; }
+            distTargetSel.disabled = false;
+
+            let source = [];
+            if (type === 'coach') source = Object.keys(dataCache.coaches || {}).map(k => ({ id: k, ...dataCache.coaches[k] }));
+            else if (type === 'player') source = dataCache.allPlayers || Object.keys(dataCache.players || {}).map(k => ({ id: k, ...dataCache.players[k] }));
+
+            source.sort((a, b) => a.name.localeCompare(b.name));
+            source.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = item.name;
+                distTargetSel.appendChild(opt);
+            });
+        };
+
+        btnAddDist.onclick = async () => {
+            const type = distTypeSel.value;
+            const targetId = distTargetSel.value;
+            const qty = parseInt(distQtyInput.value);
+
+            if (!type || !targetId || !qty || qty <= 0) return showAlert('Veuillez remplir tous les champs.', 'warning');
+
+            let currentDist = 0;
+            distributions.forEach(d => currentDist += (parseInt(d.qty) || 0));
+            const total = parseInt(document.getElementById('inv-qty').value) || 0;
+            if (currentDist + qty > total) {
+                if (!await showConfirm(`Attention: Stock insuffisant (${total - currentDist} restants). Continuer ?`)) return;
+            }
+
+            let name = distTargetSel.options[distTargetSel.selectedIndex].text;
+            distributions.push({ type, id: targetId, name, qty, date: new Date().toISOString() });
+            await saveDistributions();
+            renderDistributions();
+            distQtyInput.value = '1';
+        };
+
+        renderDistributions();
+    }
+
     setupClickableCard('.inv-card', 'inventory', 'inventory-modal', 'inv-id', async (data) => {
-        const invId = document.getElementById('inv-id').value; // Set by setupClickableCard logic before callback usually, but safer to use param or data
-        // Actually setupClickableCard puts ID in hidden input BEFORE calling this callback (if implemented standardly)
-        // Let's verify data content. data is the firestore data object. We need the ID.
-        // The ID is usually put in the hidden field passed as 4th arg ('inv-id').
         const currentInvId = document.getElementById('inv-id').value;
 
         document.getElementById('inv-name').value = data.name;
         document.getElementById('inv-cat').value = data.category;
         document.getElementById('inv-qty').value = data.quantity;
         document.getElementById('inv-status').value = data.status;
+        document.getElementById('inv-model').value = data.model || "";
+        document.getElementById('inv-size').value = data.size || "";
+        document.getElementById('inv-number').value = data.number || "";
+
+        // Only reset tabs if we are not explicitly staying on Stock tab
+        // However, usually we want to reset. But for batch click we want to skip.
+        // The most robust way is to check a global or pass it?
+        // Actually, renderBatchStockList calls switchToInventoryStockTab AFTER the click handler is done.
+        resetInventoryModalTabs();
 
         // --- DISTRIBUTION LOGIC ---
 
@@ -1410,6 +1842,8 @@ async function loadInventory() {
         const btnAddDist = document.getElementById('btn-add-dist');
         const listEl = document.getElementById('inv-distributions-list');
         const stockEl = document.getElementById('inv-stock-remaining');
+
+        distQtyInput.value = '1';
 
         // 3. Render Function
         const renderDistributions = () => {
@@ -1487,7 +1921,7 @@ async function loadInventory() {
         distTypeSel.value = '';
         distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
         distTargetSel.disabled = true;
-        distQtyInput.value = '';
+        distQtyInput.value = '1';
 
         distTypeSel.onchange = () => {
             const type = distTypeSel.value;
@@ -1550,7 +1984,7 @@ async function loadInventory() {
             renderDistributions();
 
             // Reset fields
-            distQtyInput.value = '';
+            distQtyInput.value = '1';
             // keep selection for fast input? maybe not
         };
 
@@ -2612,5 +3046,274 @@ async function loadSponsors() {
     } catch (e) {
         console.error(e);
         list.innerHTML = '<p style="color:red">Erreur lors du chargement.</p>';
+    }
+}
+
+// --- SEASONS LOGIC ---
+const seasonModal = document.getElementById('season-modal');
+const openSeasonModalBtn = document.getElementById('open-season-modal');
+
+// Tab Switching logic
+if (seasonModal) {
+    const tabs = seasonModal.querySelectorAll('.tab-link');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.getAttribute('data-tab');
+
+            // Remove active class from all tabs and contents
+            tabs.forEach(t => t.classList.remove('active'));
+            seasonModal.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // Add active class to clicked tab and target content
+            tab.classList.add('active');
+            document.getElementById(target).classList.add('active');
+        });
+    });
+}
+
+function resetSeasonModalTabs() {
+    const tabs = seasonModal.querySelectorAll('.tab-link');
+    const contents = seasonModal.querySelectorAll('.tab-content');
+
+    tabs.forEach(t => t.classList.remove('active'));
+    contents.forEach(c => c.classList.remove('active'));
+
+    if (tabs[0]) tabs[0].classList.add('active');
+    if (contents[0]) contents[0].classList.add('active');
+}
+
+if (openSeasonModalBtn) openSeasonModalBtn.addEventListener('click', () => {
+    document.getElementById('season-form').reset();
+    document.getElementById('season-id').value = '';
+    // Set default year
+    document.getElementById('season-year').value = new Date().getFullYear();
+    document.getElementById('season-stats-container').style.display = 'none';
+
+    // Reset lists
+    document.getElementById('season-teams-list').innerHTML = '<p style="color:#888; font-style:italic;">Aucune équipe pour cette saison.</p>';
+    document.getElementById('season-matches-list').innerHTML = '<p style="color:#888; font-style:italic;">Aucun match enregistré pour cette période.</p>';
+    document.getElementById('season-team-count-badge').textContent = "0 équipes";
+
+    resetSeasonModalTabs();
+    setLoading(document.getElementById('season-form'), false);
+    seasonModal.classList.add('active');
+});
+
+if (seasonModal) seasonModal.querySelector('.close-modal').addEventListener('click', () => seasonModal.classList.remove('active'));
+
+document.getElementById('season-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    setLoading(form, true);
+
+    try {
+        const id = document.getElementById('season-id').value;
+        const type = document.getElementById('season-type').value;
+        const year = parseInt(document.getElementById('season-year').value);
+        const name = document.getElementById('season-name').value;
+        const start = document.getElementById('season-start').value;
+        const end = document.getElementById('season-end').value;
+        const active = document.getElementById('season-active').checked;
+
+        const data = { type, year, name, start, end, active };
+
+        if (id) {
+            await updateDoc(doc(db, "seasons", id), data);
+        } else {
+            await addDoc(collection(db, "seasons"), data);
+        }
+
+        seasonModal.classList.remove('active');
+        loadSeasons();
+    } catch (err) {
+        console.error(err);
+        alert("Erreur: " + (err.message || err));
+    } finally {
+        setLoading(form, false);
+    }
+});
+
+async function loadSeasons() {
+    const list = document.getElementById('seasons-list');
+    if (!list) return;
+    if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
+    list.innerHTML = '<p>Chargement...</p>';
+
+    try {
+        const q = query(collection(db, "seasons"), orderBy("year", "desc"));
+        const snapshot = await getDocs(q);
+
+        list.innerHTML = '';
+        dataCache.seasons = {};
+
+        if (snapshot.empty) {
+            list.innerHTML = '<p>Aucune saison trouvée.</p>';
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            dataCache.seasons[doc.id] = data;
+
+            const icon = data.type === 'summer' ? 'fa-sun' : 'fa-snowflake';
+            const color = data.type === 'summer' ? '#f39c12' : '#3498db';
+            const status = data.active ? '<span style="color:var(--success); font-weight:bold;">Active</span>' : 'Terminée';
+
+            const subtitle = `
+                <span style="color:${color}"><i class="fas ${icon}"></i> ${data.type === 'summer' ? 'Été' : 'Hiver'}</span><br>
+                ${data.start} - ${data.end}<br>
+                ${status}
+            `;
+
+            // We assume createCard handles null image URL by showing the iconClass
+            const card = createCard(null, data.name, subtitle, doc.id, 'edit-season', 'delete-season', 'fa-calendar-alt');
+            card.setAttribute('data-id', doc.id);
+            // Override styles for season card specifically
+            const imgDiv = card.firstElementChild;
+            if (imgDiv) {
+                imgDiv.style.width = '100%';
+                imgDiv.style.height = '100px';
+                imgDiv.style.borderRadius = '8px 8px 0 0';
+                imgDiv.style.margin = '0 0 10px 0';
+                imgDiv.style.backgroundColor = color;
+                imgDiv.style.display = 'flex';
+                imgDiv.style.alignItems = 'center';
+                imgDiv.style.justifyContent = 'center';
+                imgDiv.innerHTML = `<i class="fas ${icon}" style="font-size:3rem; color:white;"></i>`;
+            }
+
+            card.classList.add('season-card');
+            list.appendChild(card);
+        });
+
+        setupClickableCard('.season-card', 'seasons', 'season-modal', 'season-id', (data) => {
+            document.getElementById('season-type').value = data.type;
+            document.getElementById('season-year').value = data.year;
+            document.getElementById('season-name').value = data.name;
+            document.getElementById('season-start').value = data.start;
+            document.getElementById('season-end').value = data.end;
+            document.getElementById('season-active').checked = data.active;
+
+            resetSeasonModalTabs();
+
+            const statsContainer = document.getElementById('season-stats-container');
+            const seasonId = document.getElementById('season-id').value;
+
+            if (statsContainer && seasonId) {
+                statsContainer.style.display = 'block';
+
+                // Load teams and calculate stats for this season
+                const renderSeasonData = async () => {
+                    const teamsListEl = document.getElementById('season-teams-list');
+                    teamsListEl.innerHTML = '<p>Chargement des données...</p>';
+
+                    try {
+                        // Get Teams for this season
+                        const qTeams = query(collection(db, "teams"), where("seasonId", "==", seasonId));
+                        const tSnap = await getDocs(qTeams);
+
+                        teamsListEl.innerHTML = '';
+                        let playerCount = 0;
+                        let teamIds = [];
+
+                        if (tSnap.empty) {
+                            teamsListEl.innerHTML = '<p style="color:#888; font-style:italic;">Aucune équipe pour cette saison.</p>';
+                            document.getElementById('season-stats-teams').textContent = "0";
+                            document.getElementById('season-team-count-badge').textContent = "0 équipes";
+                            document.getElementById('season-stats-players').textContent = "0";
+                        } else {
+                            document.getElementById('season-stats-teams').textContent = tSnap.size;
+                            document.getElementById('season-team-count-badge').textContent = `${tSnap.size} équipes`;
+
+                            tSnap.forEach(tDoc => {
+                                const tData = tDoc.data();
+                                teamIds.push(tDoc.id);
+                                const div = document.createElement('div');
+                                div.style.padding = '8px 12px';
+                                div.style.borderBottom = '1px solid #eee';
+                                div.style.background = '#fff';
+                                div.style.marginBottom = '5px';
+                                div.style.borderRadius = '6px';
+                                div.innerHTML = `<strong><i class="fas fa-shield-alt"></i> ${tData.name}</strong> <span style="font-size:0.8rem; color:#888; margin-left:10px;">${tData.category}</span>`;
+                                teamsListEl.appendChild(div);
+                            });
+
+                            // Calculate Player Count (simplified estimate or full fetch)
+                            // For accuracy, we'd need to fetch players with teamId in teamIds
+                            // But Firestore doesn't support 'in' with more than 30 values easily in some contexts.
+                            // We'll do a quick probe of the players collection if possible or just use a placeholder
+                            document.getElementById('season-stats-players').textContent = "...";
+
+                            const qPlayers = query(collection(db, "players")); // We fetch all then filter for count if we want to be safe but slow
+                            const pSnap = await getDocs(qPlayers);
+                            let seasonPlayers = 0;
+                            pSnap.forEach(pDoc => {
+                                if (teamIds.includes(pDoc.data().teamId)) seasonPlayers++;
+                            });
+                            document.getElementById('season-stats-players').textContent = seasonPlayers;
+                        }
+
+                        // Matches stats & Preview
+                        const matchesListEl = document.getElementById('season-matches-list');
+                        matchesListEl.innerHTML = '<p>Recherche des matchs...</p>';
+
+                        try {
+                            const qMatches = query(collection(db, "matches"),
+                                where("date", ">=", data.start),
+                                where("date", "<=", data.end)
+                            );
+                            const mSnap = await getDocs(qMatches);
+                            matchesListEl.innerHTML = '';
+
+                            if (mSnap.empty) {
+                                matchesListEl.innerHTML = '<p style="color:#888; font-style:italic;">Aucun match trouvé pour ces dates.</p>';
+                                document.getElementById('season-stats-matches').textContent = "0";
+                                document.getElementById('season-stats-progress').textContent = "0%";
+                            } else {
+                                document.getElementById('season-stats-matches').textContent = mSnap.size;
+
+                                // Calculate progress (matches with score vs total)
+                                let playedCount = 0;
+                                mSnap.forEach(mDoc => {
+                                    const mData = mDoc.data();
+                                    if (mData.scoreHome !== undefined && mData.scoreAway !== undefined) playedCount++;
+
+                                    const div = document.createElement('div');
+                                    div.style.padding = '8px 12px';
+                                    div.style.borderBottom = '1px solid #eee';
+                                    div.style.background = '#fff';
+                                    div.style.marginBottom = '5px';
+                                    div.style.borderRadius = '6px';
+                                    div.style.fontSize = '0.9rem';
+                                    div.innerHTML = `
+                                        <strong>${mData.date}</strong> - ${mData.homeTeam} vs ${mData.awayTeam} 
+                                        ${mData.scoreHome !== undefined ? `<span class="badge" style="background:#eee; color:#333; margin-left:10px;">${mData.scoreHome} - ${mData.scoreAway}</span>` : '<span class="badge" style="background:var(--primary); color:white; padding:2px 6px; border-radius:4px;">À venir</span>'}
+                                    `;
+                                    matchesListEl.appendChild(div);
+                                });
+
+                                const progress = Math.round((playedCount / mSnap.size) * 100);
+                                document.getElementById('season-stats-progress').textContent = `${progress}%`;
+                            }
+                        } catch (errMatch) {
+                            console.error(errMatch);
+                            matchesListEl.innerHTML = '<p style="color:#888;">Impossible de charger les matchs par date.</p>';
+                        }
+
+                    } catch (e) {
+                        console.error(e);
+                        teamsListEl.innerHTML = '<p style="color:red">Erreur lors du chargement des statistiques.</p>';
+                    }
+                };
+
+                renderSeasonData();
+            }
+        });
+
+        setupDeleteButton('.delete-season', 'seasons', () => loadSeasons());
+
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = `<p style="color:red">Erreur: ${e.message}</p>`;
     }
 }

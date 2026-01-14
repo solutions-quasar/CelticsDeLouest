@@ -488,6 +488,119 @@ th {
     }
 }
 
+/* Full Screen Modal Override */
+.modal-full .modal-content {
+    max-width: 100% !important;
+    width: 100vw !important;
+    max-height: 100vh !important;
+    height: 100vh !important;
+    border-radius: 0;
+    margin: 0;
+    padding: 50px;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-full form {
+    max-width: 800px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.modal-full h2 {
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2rem;
+    color: var(--primary);
+}
+
+.modal-full.active {
+    padding: 0;
+}
+
+/* Tabs System */
+.modal-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 0;
+}
+
+.tab-link {
+    padding: 12px 20px;
+    font-weight: 600;
+    color: var(--text-light);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: 0.3s;
+    font-size: 1.1rem;
+}
+
+.tab-link:hover {
+    color: var(--primary);
+}
+
+.tab-link.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.4s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Analytics Layout */
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.analytics-card {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 12px;
+    border-left: 5px solid var(--primary);
+    text-align: center;
+}
+
+.analytics-card h5 {
+    color: var(--text-light);
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.analytics-card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.btn-close-custom:hover {
+    background: var(--primary) !important;
+    color: white !important;
+}
+
 .close-modal {
     position: absolute;
     right: 20px;

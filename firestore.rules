@@ -77,6 +77,12 @@ service cloud.firestore {
     match /teams/{teamId} {
       allow read, write: if isAuthenticated();
     }
+
+    // SEASONS
+    match /seasons/{seasonId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
     
     // Default fallback: Deny everything else
     match /{document=**} {

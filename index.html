@@ -42,6 +42,8 @@
                     <ul class="dropdown-menu">
                         <li><a href="#conseil" class="nav-link dropdown-link">Conseil d'administration</a></li>
                         <li><a href="#arbitres" class="nav-link dropdown-link">Nos Arbitres</a></li>
+                        <li><a href="#coaches" class="nav-link dropdown-link">Nos Coachs</a></li>
+                        <li><a href="#sponsors" class="nav-link dropdown-link">Nos Sponsors</a></li>
                     </ul>
                 </li>
                 <li><a href="boutique.html" class="nav-link">Boutique en ligne</a></li>
@@ -68,6 +70,7 @@
 
             <div class="section-title">
                 <h2>Nos Équipes 2025</h2>
+                <p>Cliquez sur le logo de la ligue afin d’accéder au calendrier des matchs.</p>
             </div>
 
             <div class="teams-grid">
@@ -95,7 +98,7 @@
                     <div class="team-body">
                         <p>Nos équipes jouent dans la <strong>Ligue de Développement</strong></p>
                         <div class="team-league">
-                            <a href="https://page.spordle.com/ligue-de-developpement-quebec" target="_blank">
+                            <a href="https://page.spordle.com/fr/ligue-de-developpement-quebec" target="_blank">
                                 <img src="images/lscp.png" alt="LSCP" class="league-logo">
                             </a>
                         </div>
@@ -204,10 +207,30 @@
                 <!-- Soccer Adapté -->
                 <div class="doc-box">
                     <h3><i class="fas fa-wheelchair"></i> Soccer Adapté</h3>
-                    <p>Quelques clubs offrent du soccer adapté aux jeunes vivant avec une déficience intellectuelle ou
-                        physique.</p>
-                    <a href="https://celticsdelouest.org/pdf/soccer_adapte.pdf" target="_blank" class="btn btn-primary"
-                        style="font-size: 0.9rem; padding: 10px 20px;">En savoir plus (PDF)</a>
+                    <p>Quelques clubs associés à l’Association régionale de soccer de Québec (ARSQ) offrent à la
+                        clientèle de la région du soccer adapté. Cette offre permet aux jeunes vivant avec une
+                        déficience intellectuelle ou physique de participer à des activités physiques et d’avoir du
+                        plaisir en pratiquant et découvrant le soccer.</p>
+                    <ul style="list-style: none; margin-top: 15px; padding: 0;">
+                        <li style="margin-bottom: 8px;">
+                            <a href="https://www.arsq.qc.ca/soccer-adapte" target="_blank"
+                                style="color: var(--celtics-green); font-weight: 600;">
+                                <i class="fas fa-external-link-alt"></i> ARSQ - Soccer Adapté
+                            </a>
+                        </li>
+                        <li style="margin-bottom: 8px;">
+                            <a href="https://phenixdesrivieres.com/adapte/" target="_blank"
+                                style="color: var(--celtics-green); font-weight: 600;">
+                                <i class="fas fa-external-link-alt"></i> Phénix des Rivières
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://www.assco.ca/fr/page/powerchair_soccer.html" target="_blank"
+                                style="color: var(--celtics-green); font-weight: 600;">
+                                <i class="fas fa-external-link-alt"></i> ASSCO - Powerchair Soccer
+                            </a>
+                        </li>
+                    </ul>
                 </div>
 
                 <!-- Integrity Policies -->
@@ -257,6 +280,33 @@
             <div id="referees-container" class="spectator-code-grid">
                 <!-- JS Will Populate -->
                 <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement des arbitres...</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Coaches Section -->
+    <section id="coaches" class="section section-bg">
+        <div class="container">
+            <div class="section-title">
+                <h2>Nos Coachs</h2>
+            </div>
+            <div id="coaches-container" class="spectator-code-grid">
+                <!-- JS Will Populate -->
+                <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement des coachs...</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Nos Sponsors Section -->
+    <section id="sponsors" class="section">
+        <div class="container">
+            <div class="section-title">
+                <h2>Nos Sponsors</h2>
+                <p>Merci à nos partenaires qui soutiennent le développement de nos jeunes athlètes.</p>
+            </div>
+            <div id="sponsors-container" class="spectator-code-grid">
+                <!-- JS Will Populate -->
+                <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement des sponsors...</div>
             </div>
         </div>
     </section>
@@ -388,7 +438,6 @@
         async function loadBoard() {
             const container = document.getElementById('board-container');
             try {
-                // If empty in DB, nothing shows (handled by Seeding step in ERP)
                 const q = query(collection(db, "board_members"), orderBy("order", "asc"));
                 const snapshot = await getDocs(q);
 
@@ -396,6 +445,10 @@
                     container.innerHTML = '';
                     snapshot.forEach(doc => {
                         const data = doc.data();
+
+                        // Filter in memory to avoid complex index requirements
+                        if (data.visible === false) return;
+
                         const card = document.createElement('div');
                         card.className = 'board-card';
 
@@ -435,6 +488,10 @@
                     container.innerHTML = '';
                     snapshot.forEach(doc => {
                         const data = doc.data();
+
+                        // Filter in memory
+                        if (data.visible === false) return;
+
                         const card = document.createElement('div');
                         card.className = 'referee-card';
 
@@ -460,9 +517,89 @@
             }
         }
 
+        // Load Coaches
+        async function loadCoaches() {
+            const container = document.getElementById('coaches-container');
+            try {
+                const q = query(collection(db, "coaches"), orderBy("name", "asc"));
+                const snapshot = await getDocs(q);
+
+                if (!snapshot.empty) {
+                    container.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+
+                        // Filter in memory
+                        if (data.visible === false) return;
+
+                        const card = document.createElement('div');
+                        card.className = 'referee-card'; // Reusing style for consistency
+
+                        // Image or Placeholder for alignment
+                        let imgHtml = '';
+                        if (data.imageUrl && data.imageUrl.length > 10) {
+                            imgHtml = `<img src="${data.imageUrl}" alt="${data.name}">`;
+                        } else {
+                            imgHtml = `<div class="ref-img-empty"><i class="fas fa-user"></i></div>`;
+                        }
+
+                        card.innerHTML = `
+                            ${imgHtml}
+                            <h3>${data.name}</h3>
+                        `;
+                        container.appendChild(card);
+                    });
+                } else {
+                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Liste des coachs à venir.</p>';
+                }
+            } catch (e) {
+                console.error("Coaches load error", e);
+            }
+        }
+
+        // Load Sponsors
+        async function loadSponsors() {
+            const container = document.getElementById('sponsors-container');
+            try {
+                const q = query(collection(db, "sponsors"), where("visible", "==", true));
+                const snapshot = await getDocs(q);
+
+                if (!snapshot.empty) {
+                    container.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const card = document.createElement('div');
+                        card.className = 'referee-card'; // Reuse same card style
+
+                        // For sponsors, we prefer the logo style (contain)
+                        let imgHtml = '';
+                        if (data.imageUrl && data.imageUrl.length > 10) {
+                            imgHtml = `<a href="${data.url || '#'}" target="_blank" style="display:block; width:100%; height:120px; display:flex; align-items:center; justify-content:center;">
+                                <img src="${data.imageUrl}" alt="${data.name}" style="max-height:100%; max-width:100%; width:auto; height:auto; border-radius:0; object-fit:contain;">
+                            </a>`;
+                        } else {
+                            imgHtml = `<div class="ref-img-empty" style="height:120px; border-radius:0;"><i class="fas fa-handshake fa-2x"></i></div>`;
+                        }
+
+                        card.innerHTML = `
+                            ${imgHtml}
+                            <h3>${data.name}</h3>
+                        `;
+                        container.appendChild(card);
+                    });
+                } else {
+                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Nos sponsors seront affichés prochainement.</p>';
+                }
+            } catch (e) {
+                console.error("Sponsors load error", e);
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             loadBoard();
-            loadReferees(); // Optional: if you want to reuse the exact static list instead of DB, remove this.
+            loadReferees();
+            loadCoaches();
+            loadSponsors();
         });
     </script>
 </body>

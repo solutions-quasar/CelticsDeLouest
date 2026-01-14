@@ -49,6 +49,63 @@ const dashboardScreen = document.getElementById('dashboard-screen');
 const logoutBtn = document.getElementById('logout-btn');
 const loginError = document.getElementById('login-error');
 
+// --- Custom Alert/Confirm Functions ---
+window.showAlert = function (message, type = 'info') {
+    const modal = document.getElementById('custom-alert-modal');
+    const messageEl = document.getElementById('alert-message');
+    const iconEl = document.getElementById('alert-icon');
+
+    messageEl.textContent = message;
+
+    // Change icon based on type
+    if (type === 'success') {
+        iconEl.className = 'fas fa-check-circle';
+        iconEl.style.color = 'var(--success)';
+    } else if (type === 'error') {
+        iconEl.className = 'fas fa-exclamation-circle';
+        iconEl.style.color = 'var(--danger)';
+    } else if (type === 'warning') {
+        iconEl.className = 'fas fa-exclamation-triangle';
+        iconEl.style.color = 'var(--warning)';
+    } else {
+        iconEl.className = 'fas fa-info-circle';
+        iconEl.style.color = 'var(--primary)';
+    }
+
+    modal.classList.add('active');
+}
+
+window.showConfirm = function (message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-confirm-modal');
+        const messageEl = document.getElementById('confirm-message');
+        const okBtn = document.getElementById('confirm-ok-btn');
+        const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+        messageEl.textContent = message;
+
+        const cleanup = () => {
+            modal.classList.remove('active');
+            okBtn.onclick = null;
+            cancelBtn.onclick = null;
+        };
+
+        okBtn.onclick = () => {
+            cleanup();
+            resolve(true);
+        };
+
+        cancelBtn.onclick = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        modal.classList.add('active');
+    });
+}
+
+// --- Auth Logic ---
+
 const savedEmail = localStorage.getItem('celtics_admin_email');
 if (savedEmail && document.getElementById('remember-email')) {
     document.getElementById('email').value = savedEmail;
@@ -185,7 +242,8 @@ navBtns.forEach(btn => {
         }
 
         if (targetId === 'view-boutique') loadProducts();
-        if (targetId === 'view-teams') loadPlayers();
+        if (targetId === 'view-teams') loadTeams(); // Use new loadTeams instead of loadPlayers
+        if (targetId === 'view-players') loadPlayersDirectory();
         if (targetId === 'view-inventory') loadInventory();
         if (targetId === 'view-board') loadBoard();
         if (targetId === 'view-referees') loadReferees();
@@ -193,6 +251,7 @@ navBtns.forEach(btn => {
         if (targetId === 'view-coaches') loadCoaches();
         if (targetId === 'view-settings') loadSettings();
         if (targetId === 'view-matches') loadMatches();
+        if (targetId === 'view-sponsors') loadSponsors();
     });
 });
 
@@ -347,11 +406,12 @@ document.getElementById('board-form')?.addEventListener('submit', async (e) => {
         const name = document.getElementById('board-name').value;
         const role = document.getElementById('board-role').value;
         const order = parseInt(document.getElementById('board-order').value) || 99;
+        const visible = document.getElementById('board-visible').checked;
         const file = document.getElementById('board-image').files[0];
 
         if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
 
-        const data = { name, role, order };
+        const data = { name, role, order, visible };
         await uploadAndSave('board_members', id, data, file);
 
         boardModal.classList.remove('active');
@@ -372,21 +432,36 @@ async function loadBoard() {
     const q = query(collection(db, "board_members"), orderBy("order", "asc"));
     const snapshot = await getDocs(q);
     list.innerHTML = '';
-    dataCache.board = {};
-
+    const boardList = [];
     snapshot.forEach(doc => {
-        const data = doc.data();
-        dataCache.board[doc.id] = data;
-        const card = createCard(data.imageUrl, data.name, data.role, doc.id, 'edit-board', 'delete-board');
-        card.setAttribute('data-id', doc.id);
+        boardList.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Sort: Active first, then by order
+    boardList.sort((a, b) => {
+        const visA = a.visible !== false;
+        const visB = b.visible !== false;
+        if (visA !== visB) return visA ? -1 : 1;
+        return (a.order || 99) - (b.order || 99);
+    });
+
+    boardList.forEach(data => {
+        dataCache.board[data.id] = data;
+        const isInactive = data.visible === false;
+        const displayName = isInactive ? `${data.name} <small style="color:red">(Inactif)</small>` : data.name;
+
+        const card = createCard(data.imageUrl, displayName, data.role, data.id, 'edit-board', 'delete-board');
+        card.setAttribute('data-id', data.id);
         card.classList.add('clickable-card');
+        if (isInactive) card.style.opacity = '0.5';
         list.appendChild(card);
     });
 
     setupClickableCard('.clickable-card', 'board', 'board-modal', 'board-id', (data) => {
         document.getElementById('board-name').value = data.name;
         document.getElementById('board-role').value = data.role;
-        document.getElementById('board-order').value = data.order;
+        document.getElementById('board-order').value = data.order || 99;
+        document.getElementById('board-visible').checked = data.visible !== false;
         setExistingPreview('board-image-preview', data.imageUrl);
     });
     setupDeleteButton('.delete-board', 'board_members', () => loadBoard());
@@ -414,11 +489,12 @@ document.getElementById('referee-form')?.addEventListener('submit', async (e) =>
     try {
         const id = document.getElementById('referee-id').value;
         const name = document.getElementById('ref-name').value;
+        const visible = document.getElementById('ref-visible').checked;
         const file = document.getElementById('ref-image').files[0];
 
         if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
 
-        const data = { name };
+        const data = { name, visible };
         await uploadAndSave('referees', id, data, file);
 
         refModal.classList.remove('active');
@@ -438,21 +514,157 @@ async function loadReferees() {
 
     const q = query(collection(db, "referees"), orderBy("name", "asc"));
     const snapshot = await getDocs(q);
+
+    // Fetch all matches to calculate stats
+    const matchSnap = await getDocs(collection(db, "matches"));
+    const refCounts = {};
+    dataCache.allMatches = []; // Store for modal
+
+    matchSnap.forEach(mDoc => {
+        const m = mDoc.data();
+        dataCache.allMatches.push({ id: mDoc.id, ...m });
+
+        if (m.refCenter) refCounts[m.refCenter] = (refCounts[m.refCenter] || 0) + 1;
+        if (m.refAsst1) refCounts[m.refAsst1] = (refCounts[m.refAsst1] || 0) + 1;
+        if (m.refAsst2) refCounts[m.refAsst2] = (refCounts[m.refAsst2] || 0) + 1;
+    });
+
     list.innerHTML = '';
     dataCache.referees = {};
 
+    const refList = [];
     snapshot.forEach(doc => {
-        const data = doc.data();
-        dataCache.referees[doc.id] = data;
-        const card = createCard(data.imageUrl, data.name, '', doc.id, 'edit-ref', 'delete-ref', 'fa-flag');
-        card.setAttribute('data-id', doc.id);
+        refList.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Sort: Active first, then name
+    refList.sort((a, b) => {
+        const visA = a.visible !== false;
+        const visB = b.visible !== false;
+        if (visA !== visB) return visA ? -1 : 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    refList.forEach(data => {
+        dataCache.referees[data.id] = data;
+
+        const count = refCounts[data.id] || 0;
+        const isInactive = data.visible === false;
+        const displayName = isInactive ? `${data.name} <small style="color:red">(Inactif)</small>` : data.name;
+
+        const subtitle = `<span style="color:#666; font-size:0.9rem;"><i class="fas fa-whistle"></i> ${count} Match(s)</span>`;
+
+        const card = createCard(data.imageUrl, displayName, subtitle, data.id, 'edit-ref', 'delete-ref', 'fa-flag');
+        card.setAttribute('data-id', data.id);
         card.classList.add('ref-card');
+        if (isInactive) card.style.opacity = '0.5';
         list.appendChild(card);
     });
 
     setupClickableCard('.ref-card', 'referees', 'referee-modal', 'referee-id', (data) => {
         document.getElementById('ref-name').value = data.name;
+        document.getElementById('ref-visible').checked = data.visible !== false;
         setExistingPreview('ref-image-preview', data.imageUrl);
+
+        const refId = document.getElementById('referee-id').value;
+        const matchesListEl = document.getElementById('ref-matches-list');
+        const matchSelect = document.getElementById('ref-assign-match-select');
+        const assignBtn = document.getElementById('btn-assign-match');
+
+        // Helper to render matches list
+        const renderMatchesList = () => {
+            matchesListEl.innerHTML = '';
+            const myMatches = dataCache.allMatches.filter(m =>
+                m.refCenter === refId || m.refAsst1 === refId || m.refAsst2 === refId
+            ).sort((a, b) => {
+                const dateA = a.date;
+                const dateB = b.date;
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
+                return a.time.localeCompare(b.time);
+            });
+
+            if (myMatches.length === 0) {
+                matchesListEl.innerHTML = '<p style="color: #888; font-style: italic;">Aucun match assigné.</p>';
+            } else {
+                myMatches.forEach(m => {
+                    let role = 'Arbitre';
+                    if (m.refCenter === refId) role = 'Central';
+                    else if (m.refAsst1 === refId) role = 'Assistant 1';
+                    else if (m.refAsst2 === refId) role = 'Assistant 2';
+
+                    const div = document.createElement('div');
+                    div.style.borderBottom = '1px solid #eee';
+                    div.style.padding = '5px 0';
+                    div.innerHTML = `
+                        <div style="font-weight:bold; font-size:0.85rem;">${m.date} à ${m.time} (${role})</div>
+                        <div style="font-size:0.8rem;">${m.category} vs ${m.opponent}</div>
+                        <div style="font-size:0.75rem; color:#666;">Terrain: ${m.field}</div>
+                    `;
+                    matchesListEl.appendChild(div);
+                });
+            }
+        };
+
+        // Populate Match Select (Upcoming only ?) - Let's show all sorted desc
+        matchSelect.innerHTML = '<option value="">Choisir un match...</option>';
+        dataCache.allMatches.sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
+            .forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = `${m.date} ${m.time} - ${m.category} vs ${m.opponent}`;
+                matchSelect.appendChild(opt);
+            });
+
+        // Initialize display
+        renderMatchesList();
+
+        // Assign Button Logic
+        // Remove old listener if exists to prevent duplicates (simple way: clone/replace or just one global listener? 
+        // setupClickableCard adds listener every time? No, it's inside the callback executed ON CLICK of card. 
+        // BUT the button is in the modal which is static. Listeners will stack if we add them here.
+        // BETTER: assign onclick property to overwite.
+        assignBtn.onclick = async () => {
+            const matchId = matchSelect.value;
+            const role = document.getElementById('ref-assign-role-select').value;
+
+            if (!matchId) return alert("Veuillez choisir un match.");
+
+            const match = dataCache.allMatches.find(m => m.id === matchId);
+            if (!match) return;
+
+            // Check conflict: is ref already assigned to another role in this match?
+            if ((match.refCenter === refId && role !== 'refCenter') ||
+                (match.refAsst1 === refId && role !== 'refAsst1') ||
+                (match.refAsst2 === refId && role !== 'refAsst2')) {
+                if (!confirm("Cet arbitre est déjà assigné à ce match dans un autre rôle. Voulez-vous changer son rôle ?")) return;
+            }
+
+            try {
+                // Optimistic UI update
+                match[role] = refId;
+                // Clear other roles if he was there
+                if (role !== 'refCenter' && match.refCenter === refId) match.refCenter = '';
+                if (role !== 'refAsst1' && match.refAsst1 === refId) match.refAsst1 = '';
+                if (role !== 'refAsst2' && match.refAsst2 === refId) match.refAsst2 = '';
+
+                // Firestore Update
+                const updateData = {};
+                updateData[role] = refId;
+                // If we cleared others, we must update them too. Simpler: update all 3 ref fields to match state
+                await updateDoc(doc(db, "matches", matchId), {
+                    refCenter: match.refCenter || '',
+                    refAsst1: match.refAsst1 || '',
+                    refAsst2: match.refAsst2 || ''
+                });
+
+                renderMatchesList();
+                alert("Match assigné avec succès !");
+            } catch (e) {
+                console.error(e);
+                alert("Erreur lors de l'assignation : " + e.message);
+            }
+        };
+
     });
     setupDeleteButton('.delete-ref', 'referees', () => loadReferees());
 }
@@ -526,16 +738,355 @@ async function loadProducts() {
     setupDeleteButton('.delete-prod', 'products', () => { loadProducts(); updateStats(); });
 }
 
+// --- TEAMS LOGIC (Management) ---
+const teamModal = document.getElementById('team-modal');
+const openTeamModalBtn = document.getElementById('open-team-modal');
+
+if (openTeamModalBtn) openTeamModalBtn.addEventListener('click', async () => {
+    document.getElementById('team-form').reset();
+    document.getElementById('team-id').value = '';
+
+    await populateCoachSelect('team-coach');
+
+    const div = document.getElementById('team-players-list');
+    if (div) div.innerHTML = '';
+    setLoading(document.getElementById('team-form'), false);
+    teamModal.classList.add('active');
+});
+
+if (teamModal) teamModal.querySelector('.close-modal').addEventListener('click', () => teamModal.classList.remove('active'));
+
+async function populateCoachSelect(selectId, selectedId = null) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+
+    if (!dataCache.coaches || Object.keys(dataCache.coaches).length === 0) {
+        const cSnap = await getDocs(collection(db, "coaches"));
+        dataCache.coaches = {};
+        cSnap.forEach(doc => dataCache.coaches[doc.id] = doc.data());
+    }
+
+    sel.innerHTML = '<option value="">-- Aucun --</option>';
+
+    const items = [];
+    Object.keys(dataCache.coaches).forEach(key => {
+        items.push({ id: key, name: dataCache.coaches[key].name });
+    });
+    items.sort((a, b) => a.name.localeCompare(b.name));
+
+    items.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        if (c.id === selectedId) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+document.getElementById('team-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    setLoading(form, true);
+
+    try {
+        const id = document.getElementById('team-id').value;
+        const data = {
+            name: document.getElementById('team-name').value,
+            category: document.getElementById('team-category').value,
+            coachId: document.getElementById('team-coach').value
+        };
+
+        if (id) {
+            await updateDoc(doc(db, "teams", id), data);
+        } else {
+            await addDoc(collection(db, "teams"), data);
+        }
+
+        teamModal.classList.remove('active');
+        loadTeams();
+    } catch (err) {
+        console.error(err);
+        alert("Erreur: " + (err.message || err));
+    } finally {
+        setLoading(form, false);
+    }
+});
+
+async function loadTeams() {
+    const list = document.getElementById('teams-list');
+    if (!list) return;
+    if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
+
+    list.innerHTML = '<p>Chargement...</p>';
+
+    try {
+        await populateCoachSelect('team-coach');
+
+        const snapshot = await getDocs(collection(db, "teams"));
+        list.innerHTML = '';
+        dataCache.teams = {};
+
+        const pSnap = await getDocs(collection(db, "players"));
+        const teamCounts = {};
+        pSnap.forEach(p => {
+            const pd = p.data();
+            if (pd.teamId) {
+                teamCounts[pd.teamId] = (teamCounts[pd.teamId] || 0) + 1;
+            }
+        });
+
+        if (snapshot.empty) {
+            list.innerHTML = '<p>Aucune équipe trouvée.</p>';
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            dataCache.teams[doc.id] = data;
+
+            let coachName = 'Non assigné';
+            if (data.coachId && dataCache.coaches[data.coachId]) {
+                coachName = dataCache.coaches[data.coachId].name;
+            }
+
+            const count = teamCounts[doc.id] || 0;
+
+            const subtitle = `<span style="color:#666;">${data.category}</span><br><i class="fas fa-user-tie"></i> ${coachName}<br><i class="fas fa-users"></i> ${count} Joueurs`;
+
+            const card = createCard(null, data.name, subtitle, doc.id, 'edit-team', 'delete-team', 'fa-shield-alt');
+            card.setAttribute('data-id', doc.id);
+            card.classList.add('team-card');
+            list.appendChild(card);
+        });
+
+        setupClickableCard('.team-card', 'teams', 'team-modal', 'team-id', async (data) => {
+            console.log('Team card clicked, data:', data);
+
+            document.getElementById('team-name').value = data.name;
+            document.getElementById('team-category').value = data.category || 'U9-U10';
+            await populateCoachSelect('team-coach', data.coachId);
+
+            // Find team ID
+            let teamId = null;
+            Object.keys(dataCache.teams).forEach(k => { if (dataCache.teams[k] === data) teamId = k; });
+            console.log('Team ID:', teamId);
+
+            // Load all players for the selector (force reload to ensure fresh data)
+            console.log('Loading players from Firestore...');
+            try {
+                const allPlayersSnap = await getDocs(collection(db, "players"));
+                dataCache.allPlayers = [];
+                allPlayersSnap.forEach(p => {
+                    dataCache.allPlayers.push({ id: p.id, ...p.data() });
+                });
+
+                console.log('Loaded players:', dataCache.allPlayers.length);
+                console.log('Players data:', dataCache.allPlayers);
+
+                // Populate player selector with unassigned players
+                const playerSelect = document.getElementById('team-add-player-select');
+                console.log('Player select element:', playerSelect);
+
+                if (playerSelect && teamId) {
+                    playerSelect.innerHTML = '<option value="">Ajouter un joueur...</option>';
+
+                    // Filter players not in this team
+                    const availablePlayers = dataCache.allPlayers.filter(p => p.teamId !== teamId);
+                    console.log('Available players (not in team):', availablePlayers.length);
+
+                    availablePlayers.sort((a, b) => a.name.localeCompare(b.name));
+
+                    availablePlayers.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = `${p.name} (${p.pos || 'N/A'})`;
+                        playerSelect.appendChild(opt);
+                    });
+
+                    console.log('Player select populated with', availablePlayers.length, 'players');
+                } else {
+                    console.warn('Player select not found or teamId is null', { playerSelect, teamId });
+                }
+            } catch (error) {
+                console.error('Error loading players:', error);
+            }
+
+            // Function to render players list
+            const renderPlayersList = async () => {
+                const plList = document.getElementById('team-players-list');
+                if (!plList || !teamId) return;
+
+                plList.innerHTML = '<p>Chargement...</p>';
+
+                const q = query(collection(db, "players"), where("teamId", "==", teamId));
+                const snap = await getDocs(q);
+                plList.innerHTML = '';
+
+                if (snap.empty) {
+                    plList.innerHTML = '<p style="color:#888; font-style:italic;">Aucun joueur.</p>';
+                } else {
+                    snap.forEach(p => {
+                        const pd = p.data();
+                        const div = document.createElement('div');
+                        div.style.padding = '8px';
+                        div.style.borderBottom = '1px solid #eee';
+                        div.style.display = 'flex';
+                        div.style.justifyContent = 'space-between';
+                        div.style.alignItems = 'center';
+                        div.innerHTML = `
+                            <span><i class="fas fa-user"></i> ${pd.name} <span style="color:#888; font-size:0.8rem;">(${pd.pos})</span></span>
+                            <button type="button" class="remove-player-btn" data-player-id="${p.id}" 
+                                style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        `;
+                        plList.appendChild(div);
+                    });
+
+                    // Add event listeners to remove buttons
+                    plList.querySelectorAll('.remove-player-btn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const playerId = btn.getAttribute('data-player-id');
+                            const confirmed = await showConfirm('Retirer ce joueur de l\'équipe ?');
+                            if (!confirmed) return;
+
+                            try {
+                                await updateDoc(doc(db, "players", playerId), { teamId: '' });
+
+                                // Update cache
+                                const playerIndex = dataCache.allPlayers.findIndex(p => p.id === playerId);
+                                if (playerIndex !== -1) {
+                                    dataCache.allPlayers[playerIndex].teamId = '';
+                                }
+
+                                // Refresh displays
+                                await renderPlayersList();
+
+                                // Refresh player selector
+                                playerSelect.innerHTML = '<option value="">Ajouter un joueur...</option>';
+                                const availablePlayers = dataCache.allPlayers.filter(p => p.teamId !== teamId);
+                                availablePlayers.sort((a, b) => a.name.localeCompare(b.name));
+                                availablePlayers.forEach(p => {
+                                    const opt = document.createElement('option');
+                                    opt.value = p.id;
+                                    opt.textContent = `${p.name} (${p.pos || 'N/A'})`;
+                                    playerSelect.appendChild(opt);
+                                });
+
+                                showAlert('Joueur retiré avec succès !', 'success');
+                            } catch (e) {
+                                console.error(e);
+                                showAlert('Erreur : ' + e.message, 'error');
+                            }
+                        });
+                    });
+                }
+            };
+
+            // Initial render
+            await renderPlayersList();
+
+            // Add player button handler
+            const addPlayerBtn = document.getElementById('btn-add-player-to-team');
+            if (addPlayerBtn) {
+                addPlayerBtn.onclick = async () => {
+                    const playerSelect = document.getElementById('team-add-player-select');
+                    const playerId = playerSelect.value;
+                    if (!playerId) return showAlert('Veuillez sélectionner un joueur.', 'warning');
+
+                    try {
+                        await updateDoc(doc(db, "players", playerId), { teamId: teamId });
+
+                        // Update cache
+                        const playerIndex = dataCache.allPlayers.findIndex(p => p.id === playerId);
+                        if (playerIndex !== -1) {
+                            dataCache.allPlayers[playerIndex].teamId = teamId;
+                        }
+
+                        // Refresh displays
+                        await renderPlayersList();
+
+                        // Refresh player selector
+                        playerSelect.innerHTML = '<option value="">Ajouter un joueur...</option>';
+                        const availablePlayers = dataCache.allPlayers.filter(p => p.teamId !== teamId);
+                        availablePlayers.sort((a, b) => a.name.localeCompare(b.name));
+                        availablePlayers.forEach(p => {
+                            const opt = document.createElement('option');
+                            opt.value = p.id;
+                            opt.textContent = `${p.name} (${p.pos || 'N/A'})`;
+                            playerSelect.appendChild(opt);
+                        });
+
+                        showAlert('Joueur ajouté avec succès !', 'success');
+                    } catch (e) {
+                        console.error(e);
+                        showAlert('Erreur : ' + e.message, 'error');
+                    }
+                };
+            }
+        });
+
+        setupDeleteButton('.delete-team', 'teams', () => loadTeams());
+    } catch (e) {
+        console.error("Error loading teams:", e);
+        list.innerHTML = `<p style="color:red">Erreur lors du chargement des équipes: ${e.message}</p>`;
+    }
+}
+
 // --- PLAYERS LOGIC ---
 const playerModal = document.getElementById('player-modal');
 const openPlayerModalBtn = document.getElementById('open-player-modal');
-if (openPlayerModalBtn) openPlayerModalBtn.addEventListener('click', () => {
+const openPlayerModalDirBtn = document.getElementById('open-player-modal-directory');
+
+async function populateTeamSelect(selectedId = null) {
+    const sel = document.getElementById('player-team');
+    if (!sel) return;
+
+    // ensure teams loaded
+    if (!dataCache.teams || Object.keys(dataCache.teams).length === 0) {
+        const snap = await getDocs(collection(db, "teams"));
+        dataCache.teams = {};
+        snap.forEach(d => dataCache.teams[d.id] = d.data());
+    }
+
+    sel.innerHTML = '<option value="">-- Aucune --</option>';
+    const items = [];
+    Object.keys(dataCache.teams).forEach(key => {
+        items.push({ id: key, ...dataCache.teams[key] });
+    });
+    items.sort((a, b) => a.name.localeCompare(b.name));
+
+    items.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        if (t.id === selectedId) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+async function openPlayerModal() {
     document.getElementById('player-form').reset();
     document.getElementById('player-id').value = '';
-    setLoading(document.getElementById('player-form'), false);
-    playerModal.classList.add('active');
-});
+    document.getElementById('player-image-preview').innerHTML = '';
+
+    await populateTeamSelect();
+
+    const form = document.getElementById('player-form');
+    if (form) setLoading(form, false);
+
+    const modal = document.getElementById('player-modal');
+    if (modal) modal.classList.add('active');
+}
+
+if (openPlayerModalBtn) openPlayerModalBtn.addEventListener('click', openPlayerModal);
+if (openPlayerModalDirBtn) openPlayerModalDirBtn.addEventListener('click', openPlayerModal);
+
+
 if (playerModal) playerModal.querySelector('.close-modal').addEventListener('click', () => playerModal.classList.remove('active'));
+
+setupImagePreview('player-image', 'player-image-preview');
+
 
 document.getElementById('player-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -544,16 +1095,22 @@ document.getElementById('player-form')?.addEventListener('submit', async (e) => 
 
     try {
         const id = document.getElementById('player-id').value;
+        const file = document.getElementById('player-image').files[0];
+
+        if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
+
         const data = {
             name: document.getElementById('player-name').value,
             year: parseInt(document.getElementById('player-year').value),
             skill: parseInt(document.getElementById('player-skill').value),
-            pos: document.getElementById('player-pos').value
+            pos: document.getElementById('player-pos').value,
+            teamId: document.getElementById('player-team').value
         };
-        await uploadAndSave('players', id, data, null);
+        await uploadAndSave('players', id, data, file);
 
         playerModal.classList.remove('active');
-        loadPlayers();
+        loadPlayers(); // Refresh Teams View
+        loadPlayersDirectory(); // Refresh Directory View
         updateStats();
     } catch (err) {
         console.error(err);
@@ -589,27 +1146,140 @@ async function loadPlayers() {
         dataCache.players[doc.id] = data;
 
         const subtitle = `Niveau: ${data.skill} | ${data.pos}`;
-        const card = createCard(null, data.name, subtitle, doc.id, 'edit-player', 'delete-player', 'fa-user-graduate');
+
+        const card = createCard(data.imageUrl, data.name, subtitle, doc.id, 'edit-player', 'delete-player', 'fa-user-graduate');
         card.setAttribute('data-id', doc.id);
         card.classList.add('player-card');
         targetList.appendChild(card);
     });
 
-    setupClickableCard('.player-card', 'players', 'player-modal', 'player-id', (data) => {
+    setupClickableCard('.player-card', 'players', 'player-modal', 'player-id', async (data) => {
         document.getElementById('player-name').value = data.name;
         document.getElementById('player-year').value = data.year;
         document.getElementById('player-skill').value = data.skill;
         document.getElementById('player-pos').value = data.pos;
+        await populateTeamSelect(data.teamId);
+        setExistingPreview('player-image-preview', data.imageUrl);
     });
     setupDeleteButton('.delete-player', 'players', () => { loadPlayers(); updateStats(); });
+}
+
+async function loadPlayersDirectory() {
+    const list = document.getElementById('players-directory-list');
+    if (!list) return;
+
+    if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
+    list.innerHTML = '<p>Chargement...</p>';
+
+    const snapshot = await getDocs(collection(db, "players"));
+    list.innerHTML = '';
+    dataCache.players = {};
+
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        dataCache.players[doc.id] = data;
+        const subtitle = `Niveau: ${data.skill} | ${data.pos} | ${data.year}`;
+        const card = createCard(data.imageUrl, data.name, subtitle, doc.id, 'edit-player-dir', 'delete-player-dir', 'fa-user');
+        card.setAttribute('data-id', doc.id);
+        card.classList.add('player-dir-card');
+        list.appendChild(card);
+    });
+
+    setupClickableCard('.player-dir-card', 'players', 'player-modal', 'player-id', async (data) => {
+        document.getElementById('player-name').value = data.name;
+        document.getElementById('player-year').value = data.year;
+        document.getElementById('player-skill').value = data.skill;
+        document.getElementById('player-pos').value = data.pos;
+        await populateTeamSelect(data.teamId);
+        setExistingPreview('player-image-preview', data.imageUrl);
+    });
+    setupDeleteButton('.delete-player-dir', 'players', () => { loadPlayersDirectory(); updateStats(); });
 }
 
 // --- INVENTORY LOGIC ---
 const inventoryModal = document.getElementById('inventory-modal');
 const openInvModalBtn = document.getElementById('open-inventory-modal');
+const assignTypeSelect = document.getElementById('inv-assign-type');
+const assignTargetContainer = document.getElementById('inv-assign-target-container');
+const assignTargetSelect = document.getElementById('inv-assign-target');
+const assignSearchInput = document.getElementById('inv-assign-search');
+
+async function ensurePeopleData() {
+    if (!dataCache.players || Object.keys(dataCache.players).length === 0) {
+        const pSnap = await getDocs(collection(db, "players"));
+        dataCache.players = {};
+        pSnap.forEach(doc => dataCache.players[doc.id] = doc.data());
+    }
+    if (!dataCache.coaches || Object.keys(dataCache.coaches).length === 0) {
+        const cSnap = await getDocs(collection(db, "coaches"));
+        dataCache.coaches = {};
+        cSnap.forEach(doc => dataCache.coaches[doc.id] = doc.data());
+    }
+}
+
+async function populateAssignmentSelect(type, selectedId = null) {
+    if (!assignTargetSelect) return;
+    assignTargetSelect.innerHTML = '<option value="">Chargement...</option>';
+    await ensurePeopleData();
+    assignTargetSelect.innerHTML = '<option value="">Sélectionner...</option>';
+
+    let source = {};
+    if (type === 'player') source = dataCache.players;
+    else if (type === 'coach') source = dataCache.coaches;
+
+    const items = [];
+    Object.keys(source).forEach(key => {
+        items.push({ id: key, name: source[key].name });
+    });
+
+    items.sort((a, b) => a.name.localeCompare(b.name));
+
+    items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.name;
+        if (selectedId === item.id) opt.selected = true;
+        assignTargetSelect.appendChild(opt);
+    });
+}
+
+if (assignTypeSelect) {
+    assignTypeSelect.addEventListener('change', () => {
+        const type = assignTypeSelect.value;
+        if (type === 'none') {
+            assignTargetContainer.style.display = 'none';
+            assignTargetSelect.value = '';
+        } else {
+            assignTargetContainer.style.display = 'block';
+            populateAssignmentSelect(type);
+        }
+    });
+}
+
+if (assignSearchInput) {
+    assignSearchInput.addEventListener('keyup', (e) => {
+        const term = e.target.value.toLowerCase();
+        Array.from(assignTargetSelect.options).forEach(opt => {
+            if (opt.value === "") return;
+            const text = opt.textContent.toLowerCase();
+            if (text.includes(term)) {
+                opt.style.display = '';
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+    });
+}
+
 if (openInvModalBtn) openInvModalBtn.addEventListener('click', () => {
     document.getElementById('inventory-form').reset();
     document.getElementById('inv-id').value = '';
+
+    // Reset Assignment UI
+    if (assignTypeSelect) assignTypeSelect.value = 'none';
+    if (assignTargetContainer) assignTargetContainer.style.display = 'none';
+    if (assignTargetSelect) assignTargetSelect.innerHTML = '<option value="">Sélectionner...</option>';
+
     setLoading(document.getElementById('inventory-form'), false);
     inventoryModal.classList.add('active');
 });
@@ -622,12 +1292,18 @@ document.getElementById('inventory-form')?.addEventListener('submit', async (e) 
 
     try {
         const id = document.getElementById('inv-id').value;
+        const assignType = document.getElementById('inv-assign-type').value;
+        const assignTo = document.getElementById('inv-assign-target').value;
+
         const data = {
             name: document.getElementById('inv-name').value,
             category: document.getElementById('inv-cat').value,
             quantity: parseInt(document.getElementById('inv-qty').value),
-            status: document.getElementById('inv-status').value
+            status: document.getElementById('inv-status').value,
+            assignedType: assignType,
+            assignedTo: (assignType !== 'none' && assignTo) ? assignTo : null
         };
+
         await uploadAndSave('inventory', id, data, null);
 
         inventoryModal.classList.remove('active');
@@ -656,6 +1332,8 @@ async function loadInventory() {
     if (!targetList) return;
 
     targetList.innerHTML = '<p>Chargement...</p>';
+    await ensurePeopleData(); // Ensure names are available
+
     const snapshot = await getDocs(collection(db, "inventory"));
     targetList.innerHTML = '';
     dataCache.inventory = {};
@@ -663,18 +1341,42 @@ async function loadInventory() {
     snapshot.forEach(doc => {
         const data = doc.data();
         dataCache.inventory[doc.id] = data;
-        const subtitle = `${data.category} | Qty: ${data.quantity} | ${data.status}`;
+
+        let subtitle = `${data.category} | Qty: ${data.quantity} | ${data.status}`;
+        if (data.assignedType && data.assignedTo && data.assignedType !== 'none') {
+            let assigneeName = 'Inconnu';
+            if (data.assignedType === 'player' && dataCache.players[data.assignedTo]) {
+                assigneeName = dataCache.players[data.assignedTo].name;
+            } else if (data.assignedType === 'coach' && dataCache.coaches[data.assignedTo]) {
+                assigneeName = dataCache.coaches[data.assignedTo].name;
+            }
+            subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-user-tag"></i> ${assigneeName}</span>`;
+        }
+
         const card = createCard(null, data.name, subtitle, doc.id, 'edit-inv', 'delete-inv', 'fa-box');
         card.setAttribute('data-id', doc.id);
         card.classList.add('inv-card');
         targetList.appendChild(card);
     });
 
-    setupClickableCard('.inv-card', 'inventory', 'inventory-modal', 'inv-id', (data) => {
+    setupClickableCard('.inv-card', 'inventory', 'inventory-modal', 'inv-id', async (data) => {
         document.getElementById('inv-name').value = data.name;
         document.getElementById('inv-cat').value = data.category;
         document.getElementById('inv-qty').value = data.quantity;
         document.getElementById('inv-status').value = data.status;
+
+        // Populate Assignment
+        const typeSelect = document.getElementById('inv-assign-type');
+        const targetContainer = document.getElementById('inv-assign-target-container');
+
+        if (data.assignedType && data.assignedType !== 'none') {
+            typeSelect.value = data.assignedType;
+            targetContainer.style.display = 'block';
+            await populateAssignmentSelect(data.assignedType, data.assignedTo);
+        } else {
+            typeSelect.value = 'none';
+            targetContainer.style.display = 'none';
+        }
     });
     setupDeleteButton('.delete-inv', 'inventory', () => { loadInventory(); updateStats(); });
 }
@@ -767,23 +1469,27 @@ async function loadRegistrations() {
 
 // --- HELPERS ---
 
-function createCard(imageUrl, title, subtitle, id, editClass, deleteClass, defaultIcon = 'fa-cube') {
+function createCard(imageUrl, title, subtitle, id, editClass, deleteClass, defaultIcon = 'fa-cube', isLogo = false) {
     const card = document.createElement('div');
     card.className = 'product-card-admin';
     card.style.textAlign = 'center';
     card.style.cursor = 'pointer';
 
+    const imgStyle = isLogo
+        ? `width:100%;height:100px;object-fit:contain;margin:0 auto 10px;`
+        : `width:80px;height:80px;border-radius:50%;margin:0 auto 10px;object-fit:cover;`;
+
     const imgHtml = imageUrl
-        ? `<img src="${imageUrl}" style="width:80px;height:80px;border-radius:50%;margin:0 auto 10px;object-fit:cover;">`
-        : `<div style="width:80px;height:80px;background:#eee;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;color:#888"><i class="fas ${defaultIcon} fa-2x"></i></div>`;
+        ? `<img src="${imageUrl}" style="${imgStyle}">`
+        : `<div style="${imgStyle}background:#eee;${isLogo ? '' : 'border-radius:50%;'}display:flex;align-items:center;justify-content:center;color:#888"><i class="fas ${defaultIcon} fa-2x"></i></div>`;
 
     card.innerHTML = `
         ${imgHtml}
         <h4>${title}</h4>
         <p>${subtitle}</p>
         <div class="product-actions" style="justify-content:center; gap: 10px;">
-            <button class="btn-action ${editClass}" data-id="${id}">Éditer</button>
-            <button class="btn-action ${deleteClass}" data-id="${id}" style="background:var(--danger)">Supprimer</button>
+            <button class="btn-icon ${editClass}" data-id="${id}" style="color:var(--primary)"><i class="fas fa-pen"></i></button>
+            <button class="btn-icon ${deleteClass}" data-id="${id}" style="color:var(--danger)"><i class="fas fa-trash"></i></button>
         </div>
     `;
     return card;
@@ -1065,7 +1771,12 @@ if (openCoachModalBtn) openCoachModalBtn.addEventListener('click', () => {
     coachModal.classList.add('active');
 });
 
-if (coachModal) coachModal.querySelector('.close-modal').addEventListener('click', () => coachModal.classList.remove('active'));
+if (coachModal) {
+    coachModal.querySelector('.close-modal').addEventListener('click', () => coachModal.classList.remove('active'));
+    // New Close Button
+    const closeBtn = document.getElementById('close-coach-modal-btn');
+    if (closeBtn) closeBtn.addEventListener('click', () => coachModal.classList.remove('active'));
+}
 
 // Setup Preview
 setupImagePreview('coach-image', 'coach-image-preview');
@@ -1079,11 +1790,12 @@ document.getElementById('coach-form')?.addEventListener('submit', async (e) => {
         const id = document.getElementById('coach-id').value;
         const name = document.getElementById('coach-name').value;
         const policeExpiry = document.getElementById('coach-police-expiry').value;
+        const visible = document.getElementById('coach-visible').checked;
         const file = document.getElementById('coach-image').files[0];
 
         if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
 
-        const data = { name, policeExpiry };
+        const data = { name, policeExpiry, visible };
         await uploadAndSave('coaches', id, data, file);
 
         coachModal.classList.remove('active');
@@ -1103,16 +1815,39 @@ async function loadCoaches() {
     list.innerHTML = '<p>Chargement...</p>';
     if (!list.classList.contains('view-grid')) list.classList.add('view-grid');
 
-    const q = query(collection(db, "coaches"), orderBy("name", "asc"));
+    const q = query(collection(db, "coaches"));
     const snapshot = await getDocs(q);
     list.innerHTML = '';
     dataCache.coaches = {};
 
+    const coachesList = [];
     snapshot.forEach(doc => {
-        const data = doc.data();
-        dataCache.coaches[doc.id] = data;
+        coachesList.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Custom Sort: Active first, then Empty policeExpiry first, then chronological
+    coachesList.sort((a, b) => {
+        const visA = a.visible !== false;
+        const visB = b.visible !== false;
+        if (visA !== visB) return visA ? -1 : 1;
+
+        const noDateA = !a.policeExpiry;
+        const noDateB = !b.policeExpiry;
+
+        if (noDateA && noDateB) return a.name.localeCompare(b.name);
+        if (noDateA) return -1;
+        if (noDateB) return 1;
+
+        return new Date(a.policeExpiry) - new Date(b.policeExpiry);
+    });
+
+    coachesList.forEach(data => {
+        dataCache.coaches[data.id] = data;
 
         let subtitle = '';
+        const isInactive = data.visible === false;
+        const displayName = isInactive ? `${data.name} <small style="color:red">(Inactif)</small>` : data.name;
+
         if (data.policeExpiry) {
             const date = new Date(data.policeExpiry);
             const today = new Date();
@@ -1122,16 +1857,74 @@ async function loadCoaches() {
             subtitle = `<span style="color:red">Vérification police requise</span>`;
         }
 
-        const card = createCard(data.imageUrl, data.name, subtitle, doc.id, 'edit-coach', 'delete-coach', 'fa-whistle');
-        card.setAttribute('data-id', doc.id);
+        const card = createCard(data.imageUrl, displayName, subtitle, data.id, 'edit-coach', 'delete-coach', 'fa-whistle');
+        card.setAttribute('data-id', data.id);
         card.classList.add('coach-card');
+        if (isInactive) card.style.opacity = '0.5';
         list.appendChild(card);
     });
 
-    setupClickableCard('.coach-card', 'coaches', 'coach-modal', 'coach-id', (data) => {
+    setupClickableCard('.coach-card', 'coaches', 'coach-modal', 'coach-id', async (data) => {
         document.getElementById('coach-name').value = data.name;
         document.getElementById('coach-police-expiry').value = data.policeExpiry || '';
+        document.getElementById('coach-visible').checked = data.visible !== false;
         setExistingPreview('coach-image-preview', data.imageUrl);
+
+        // Load Assigned Inventory
+        const invList = document.getElementById('coach-inventory-list');
+        invList.innerHTML = '<p style="color:#666;">Chargement...</p>';
+        try {
+            const q = query(collection(db, "inventory"), where("assignedType", "==", "coach"), where("assignedTo", "==", data.id));
+            const snap = await getDocs(q);
+            invList.innerHTML = '';
+            if (snap.empty) {
+                invList.innerHTML = '<p style="color: #888; font-style: italic;">Aucun matériel assigné.</p>';
+            } else {
+                snap.forEach(doc => {
+                    const item = doc.data();
+                    const div = document.createElement('div');
+                    div.style.padding = '8px';
+                    div.style.borderBottom = '1px solid #eee';
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.innerHTML = `
+                        <div>
+                            <strong>${item.name}</strong><br>
+                            <span style="font-size:0.8rem; color:#666;">${item.category} (Qty: ${item.quantity})</span>
+                        </div>
+                        <div style="font-size:0.8rem; color:${item.status === 'Neuf' ? 'green' : 'orange'}">${item.status}</div>
+                    `;
+                    invList.appendChild(div);
+                });
+            }
+        } catch (e) {
+            console.error(e);
+            invList.innerHTML = '<p style="color:red;">Erreur de chargement de l\'inventaire.</p>';
+        }
+
+        // Teams
+        const teamList = document.getElementById('coach-teams-list');
+        teamList.innerHTML = '<p style="color:#666;">Chargement...</p>';
+        try {
+            const q = query(collection(db, "teams"), where("coachId", "==", data.id));
+            const snap = await getDocs(q);
+            teamList.innerHTML = '';
+            if (snap.empty) {
+                teamList.innerHTML = '<p style="color: #888; font-style: italic;">Aucune équipe assignée.</p>';
+            } else {
+                snap.forEach(doc => {
+                    const team = doc.data();
+                    const div = document.createElement('div');
+                    div.style.padding = '8px';
+                    div.style.borderBottom = '1px solid #eee';
+                    div.innerHTML = `<strong>${team.name}</strong> <span style="color:#666;">(${team.category})</span>`;
+                    teamList.appendChild(div);
+                });
+            }
+        } catch (e) {
+            console.error(e);
+            teamList.innerHTML = '<p style="color:red;">Erreur.</p>';
+        }
     });
     setupDeleteButton('.delete-coach', 'coaches', () => loadCoaches());
 }
@@ -1556,4 +2349,87 @@ async function loadMatches() {
     });
 
     setupDeleteButton('.delete-match', 'matches', () => loadMatches());
+}
+
+// --- SPONSORS LOGIC ---
+const sponsorModal = document.getElementById('sponsor-modal');
+const openSponsorModalBtn = document.getElementById('open-sponsor-modal');
+if (openSponsorModalBtn) openSponsorModalBtn.addEventListener('click', () => {
+    document.getElementById('sponsor-form').reset();
+    document.getElementById('sponsor-id').value = '';
+    document.getElementById('sponsor-image-preview').innerHTML = '';
+    setLoading(document.getElementById('sponsor-form'), false);
+    sponsorModal.classList.add('active');
+});
+if (sponsorModal) sponsorModal.querySelector('.close-modal').addEventListener('click', () => sponsorModal.classList.remove('active'));
+
+setupImagePreview('sponsor-image', 'sponsor-image-preview');
+
+document.getElementById('sponsor-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    setLoading(form, true);
+
+    try {
+        const id = document.getElementById('sponsor-id').value;
+        const file = document.getElementById('sponsor-image').files[0];
+
+        if (file && file.size > 2 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 2MB).");
+
+        const data = {
+            name: document.getElementById('sponsor-name').value,
+            url: document.getElementById('sponsor-url').value,
+            visible: document.getElementById('sponsor-visible').checked
+        };
+        await uploadAndSave('sponsors', id, data, file);
+
+        sponsorModal.classList.remove('active');
+        loadSponsors();
+    } catch (err) {
+        console.error(err);
+        alert("Erreur: " + (err.message || err));
+    } finally {
+        setLoading(form, false);
+    }
+});
+
+async function loadSponsors() {
+    const list = document.getElementById('sponsors-list');
+    if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
+    list.innerHTML = '<p>Chargement...</p>';
+
+    try {
+        const q = query(collection(db, "sponsors"), orderBy("name", "asc"));
+        const snapshot = await getDocs(q);
+        list.innerHTML = '';
+        dataCache.sponsors = {};
+
+        if (snapshot.empty) {
+            list.innerHTML = '<p>Aucun commanditaire.</p>';
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            dataCache.sponsors[doc.id] = data;
+
+            const subtitle = data.visible ? '<span style="color:green">Visible</span>' : '<span style="color:red">Caché</span>';
+            const card = createCard(data.imageUrl, data.name, subtitle, doc.id, 'edit-sponsor', 'delete-sponsor', 'fa-handshake', true);
+            card.classList.add('sponsor-card');
+            card.setAttribute('data-id', doc.id);
+            list.appendChild(card);
+        });
+
+        setupClickableCard('.sponsor-card', 'sponsors', 'sponsor-modal', 'sponsor-id', (data) => {
+            document.getElementById('sponsor-name').value = data.name;
+            document.getElementById('sponsor-url').value = data.url || '';
+            document.getElementById('sponsor-visible').checked = data.visible !== false;
+            setExistingPreview('sponsor-image-preview', data.imageUrl);
+        });
+        setupDeleteButton('.delete-sponsor', 'sponsors', () => loadSponsors());
+
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = '<p style="color:red">Erreur lors du chargement.</p>';
+    }
 }

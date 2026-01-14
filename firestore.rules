@@ -60,10 +60,22 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    
     // MATCHES
     match /matches/{matchId} {
         allow read: if true;
         allow write: if isAuthenticated();
+    }
+
+    // SPONSORS
+    match /sponsors/{sponsorId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // TEAMS
+    match /teams/{teamId} {
+      allow read, write: if isAuthenticated();
     }
     
     // Default fallback: Deny everything else

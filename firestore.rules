@@ -83,6 +83,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated();
     }
+
+    // FIELDS (Terrains)
+    match /fields/{fieldId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
     
     // Default fallback: Deny everything else
     match /{document=**} {

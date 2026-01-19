@@ -39,6 +39,11 @@
     </script>
     <!-- FullCalendar -->
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+
+    <!-- Quill Rich Text Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
     <script>
         // French translation for FullCalendar
         document.addEventListener('DOMContentLoaded', function () {
@@ -100,24 +105,27 @@
                         Équipes</button>
                     <button class="nav-btn" data-target="view-players"><i class="fas fa-user-friends"></i>
                         Joueurs</button>
-                    <button class="nav-btn" data-target="view-boutique"><i class="fas fa-store"></i> Boutique</button>
+                    <button class="nav-btn" data-target="view-coaches"><i class="fas fa-stopwatch"></i> Coachs</button>
+                    <button class="nav-btn" data-target="view-referees"><i class="fas fa-gavel"></i> Arbitres</button>
+                    <button class="nav-btn" data-target="view-matches"><i class="fas fa-futbol"></i> Matchs</button>
+                    <button class="nav-btn" data-target="view-fields"><i class="fas fa-map-marker-alt"></i>
+                        Terrains</button>
                     <button class="nav-btn" data-target="view-inventory"><i class="fas fa-clipboard-list"></i>
                         Inventaire</button>
-                    <button class="nav-btn" data-target="view-board"><i class="fas fa-users-cog"></i> C.A.</button>
-                    <button class="nav-btn" data-target="view-referees"><i class="fas fa-gavel"></i> Arbitres</button>
-                    <button class="nav-btn" data-target="view-registrations"><i class="fas fa-file-signature"></i>
-                        Inscriptions</button>
-                    <button class="nav-btn" data-target="view-coaches"><i class="fas fa-stopwatch"></i> Coachs</button>
-                    <button class="nav-btn" data-target="view-matches"><i class="fas fa-futbol"></i> Matchs</button>
-                    <button class="nav-btn" data-target="view-sponsors"><i class="fas fa-handshake"></i>
-                        Sponsors</button>
+                    <button class="nav-btn" data-target="view-registrations"><i class="fas fa-file-signature"></i> Liste
+                        des inscrits</button>
                     <button class="nav-btn" data-target="view-seasons"><i class="fas fa-calendar-week"></i>
                         Saisons</button>
+                    <button class="nav-btn" data-target="view-sponsors"><i class="fas fa-handshake"></i>
+                        Commanditaires</button>
+                    <button class="nav-btn" data-target="view-board"><i class="fas fa-users-cog"></i> C.A.</button>
+                    <button class="nav-btn" data-target="view-boutique"><i class="fas fa-store"></i> Boutique</button>
+                    <button class="nav-btn" data-target="view-automations"><i class="fas fa-robot"></i>
+                        Automatisations</button>
                     <button class="nav-btn" data-target="view-settings"><i class="fas fa-cogs"></i>
                         Configuration</button>
                     <button class="nav-btn" data-target="view-admins" id="nav-admins-btn" style="display:none;"><i
-                            class="fas fa-users-cog"></i>
-                        Utilisateurs</button>
+                            class="fas fa-users-cog"></i> Utilisateurs</button>
                 </nav>
                 <div class="sidebar-footer">
                     <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> Déconnexion</button>
@@ -164,6 +172,73 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="dashboard-monitoring"
+                            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 30px;">
+                            <!-- Active Players List -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-user-check"></i> Joueurs de la saison</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Prénom</th>
+                                                    <th>Nom</th>
+                                                    <th>Équipe</th>
+                                                    <th>Naissance</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="dash-players-list">
+                                                <tr>
+                                                    <td colspan="4" style="text-align:center;">Chargement...</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Coach Alerts -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 style="color: #e67e22;"><i class="fas fa-exclamation-triangle"></i> Alertes
+                                        Coachs (Enquête)</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div id="dash-coach-alerts"
+                                        style="display: flex; flex-direction: column; gap: 10px;">
+                                        <p style="text-align:center;">Chargement des alertes...</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Referee Stats -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-whistle"></i> Activité des Arbitres</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-container">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Arbitre</th>
+                                                    <th>Matchs (Saison)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="dash-ref-stats">
+                                                <tr>
+                                                    <td colspan="2" style="text-align:center;">Chargement...</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Teams View -->
@@ -173,10 +248,11 @@
                             <div class="card-header">
                                 <h3>Gestion des Équipes</h3>
                                 <div class="header-actions-group">
-                                    <button class="view-toggle-btn active" data-view="grid" data-target="teams-list"><i
-                                            class="fas fa-th-large"></i></button>
-                                    <button class="view-toggle-btn" data-view="list" data-target="teams-list"><i
-                                            class="fas fa-list"></i></button>
+                                    <select id="team-filter-season"
+                                        style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; min-width: 150px;"></select>
+                                    <button class="btn-action" id="run-team-generator"
+                                        style="background:#8e44ad; color:white; border:none; padding: 6px 12px; border-radius: 8px; cursor:pointer;"><i
+                                            class="fas fa-magic"></i> Générer auto.</button>
                                     <button class="btn-action" id="open-team-modal"><i class="fas fa-plus"></i>
                                         Ajouter</button>
                                 </div>
@@ -188,34 +264,35 @@
                                 <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
                                 <details>
                                     <summary style="cursor:pointer; color:var(--primary); font-weight:500;">Générateur
-                                        d'Équipes (Experimental)</summary>
-                                    <div class="toolbar" style="margin-top:10px;">
+                                        d'Équipes</summary>
+                                    <div class="toolbar"
+                                        style="margin-top:10px; display: flex; gap: 10px; align-items: center;">
                                         <button class="btn-secondary" id="generate-teams-btn">Générer les
                                             équipes</button>
-                                        <select id="team-size-select">
+                                        <select id="team-size-select"
+                                            style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;">
                                             <option value="5">5 vs 5</option>
                                             <option value="7">7 vs 7</option>
                                             <option value="9">9 vs 9</option>
                                             <option value="11">11 vs 11</option>
                                         </select>
-                                    </div>
-                                    <div class="table-container">
-                                        <table id="players-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Nom</th>
-                                                    <th>Âge</th>
-                                                    <th>Niveau</th>
-                                                    <th>Position</th>
-                                                    <th>Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <!-- JS will populate -->
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <div id="generated-teams-result" class="teams-output"></div>
+                                        <div class="table-container">
+                                            <table id="players-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Nom</th>
+                                                        <th>Âge</th>
+                                                        <th>Niveau</th>
+                                                        <th>Position</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- JS will populate -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div id="generated-teams-result" class="teams-output"></div>
                                 </details>
                             </div>
                         </div>
@@ -229,6 +306,12 @@
                             <div class="card-header">
                                 <h3>Gestion des Joueurs</h3>
                                 <div class="header-actions-group">
+                                    <div class="search-box"
+                                        style="display: flex; align-items: center; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 4px 12px; margin-right: 15px;">
+                                        <i class="fas fa-search" style="color: #999; margin-right: 8px;"></i>
+                                        <input type="text" id="player-search" placeholder="Rechercher un joueur..."
+                                            style="border: none; outline: none; font-size: 0.9rem; width: 200px; padding: 4px 0;">
+                                    </div>
                                     <button class="view-toggle-btn active" data-view="grid"
                                         data-target="players-directory-list"><i class="fas fa-th-large"></i></button>
                                     <button class="view-toggle-btn" data-view="list"
@@ -238,8 +321,22 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div class="product-grid" id="players-directory-list">
-                                    <!-- JS will populate -->
+                                <div class="table-container">
+                                    <table id="players-directory-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Nom</th>
+                                                <th>Prénom</th>
+                                                <th>Équipe</th>
+                                                <th>Date Naissance</th>
+                                                <th>Parent</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="players-directory-tbody">
+                                            <!-- JS Will Populate -->
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -260,8 +357,53 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div class="product-grid" id="products-list">
-                                    <!-- JS will populate -->
+                                <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 20px;">
+                                    <div class="tab-link active" data-tab="tab-products"><i class="fas fa-tshirt"></i>
+                                        Produits</div>
+                                    <div class="tab-link" data-tab="tab-boutique-config"><i class="fas fa-cog"></i>
+                                        Configuration</div>
+                                </div>
+
+                                <div id="tab-products" class="tab-content active">
+                                    <div class="header-actions-group" style="margin-bottom:15px;">
+                                        <button class="view-toggle-btn active" data-view="grid"
+                                            data-target="products-list"><i class="fas fa-th-large"></i></button>
+                                        <button class="view-toggle-btn" data-view="list" data-target="products-list"><i
+                                                class="fas fa-list"></i></button>
+                                        <button class="btn-action" id="open-product-modal"><i class="fas fa-plus"></i>
+                                            Ajouter</button>
+                                    </div>
+                                    <div class="product-grid" id="products-list">
+                                        <!-- JS will populate -->
+                                    </div>
+                                </div>
+
+                                <div id="tab-boutique-config" class="tab-content">
+                                    <div class="form-group">
+                                        <label>Lien vers la boutique en ligne</label>
+                                        <div style="display:flex; gap:10px;">
+                                            <input type="url" id="boutique-link" class="form-control"
+                                                placeholder="https://..." style="width:100%;">
+                                            <button class="btn-save" id="save-boutique-btn"><i class="fas fa-save"></i>
+                                                Sauvegarder</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Texte descriptif (Page Boutique)</label>
+                                        <!-- Editor Toolbar -->
+                                        <div id="boutique-editor-toolbar">
+                                            <span class="ql-formats">
+                                                <button class="ql-bold"></button>
+                                                <button class="ql-italic"></button>
+                                                <button class="ql-underline"></button>
+                                            </span>
+                                            <span class="ql-formats">
+                                                <select class="ql-color"></select>
+                                                <button class="ql-list" value="bullet"></button>
+                                            </span>
+                                        </div>
+                                        <div id="boutique-editor" style="height: 250px; background: white;"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -354,8 +496,19 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Demandes d'inscription</h3>
-                                <button class="btn-action" id="open-registration-modal"><i class="fas fa-plus"></i>
-                                    Nouvelle Inscription</button>
+                                <div class="header-actions-group">
+                                    <div class="filter-group"
+                                        style="display:flex; gap:10px; align-items:center; margin-right:15px;">
+                                        <select id="reg-filter-team" class="form-control"
+                                            style="max-width:200px; padding:6px; border:1px solid #ddd; border-radius:4px;">
+                                            <option value="all">Toutes équipes</option>
+                                        </select>
+                                        <input type="text" id="reg-search" placeholder="Rechercher..."
+                                            style="padding:6px; border:1px solid #ddd; border-radius:4px;">
+                                    </div>
+                                    <button class="btn-action" id="open-registration-modal"><i class="fas fa-plus"></i>
+                                        Nouvelle</button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="table-container">
@@ -377,6 +530,8 @@
                             </div>
                         </div>
                     </div>
+
+
 
                     <!-- COACHS VIEW -->
                     <div id="view-coaches" class="view">
@@ -425,11 +580,27 @@
                         </div>
                     </div>
 
-                    <!-- SPONSORS VIEW -->
+                    <!-- FIELDS VIEW -->
+                    <div id="view-fields" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gestion des Terrains</h3>
+                                <button class="btn-action" id="open-field-modal"><i class="fas fa-plus"></i>
+                                    Ajouter</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="fields-list" class="view-grid">
+                                    <p>Chargement...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COMMANDITAIRES VIEW -->
                     <div id="view-sponsors" class="view">
                         <div class="card">
                             <div class="card-header">
-                                <h3>Gestion des Sponsors</h3>
+                                <h3>Gestion des Commanditaires</h3>
                                 <button class="btn-action" id="open-sponsor-modal"><i class="fas fa-plus"></i>
                                     Ajouter</button>
                             </div>
@@ -463,6 +634,115 @@
                         </div>
                     </div>
 
+                    <!-- BOUTIQUE VIEW -->
+                    <div id="view-boutique" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gestion de la Boutique</h3>
+                                <button class="btn-save" id="save-boutique-btn"><i class="fas fa-save"></i>
+                                    Sauvegarder</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 20px;">
+                                    <div class="tab-link active" data-tab="tab-products"><i class="fas fa-tshirt"></i>
+                                        Produits</div>
+                                    <div class="tab-link" data-tab="tab-boutique-config"><i class="fas fa-cog"></i>
+                                        Configuration</div>
+                                </div>
+
+                                <div id="tab-products" class="tab-content active">
+                                    <div class="header-actions-group" style="margin-bottom:15px;">
+                                        <button class="view-toggle-btn active" data-view="grid"
+                                            data-target="products-list"><i class="fas fa-th-large"></i></button>
+                                        <button class="view-toggle-btn" data-view="list" data-target="products-list"><i
+                                                class="fas fa-list"></i></button>
+                                        <button class="btn-action" id="open-product-modal"><i class="fas fa-plus"></i>
+                                            Ajouter</button>
+                                    </div>
+                                    <div class="product-grid" id="products-list">
+                                        <!-- JS will populate -->
+                                    </div>
+                                </div>
+
+                                <div id="tab-boutique-config" class="tab-content">
+                                    <div class="form-group">
+                                        <label>Lien vers la boutique en ligne</label>
+                                        <div style="display:flex; gap:10px;">
+                                            <input type="url" id="boutique-link" class="form-control"
+                                                placeholder="https://..." style="width:100%;">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Texte descriptif (Page Boutique)</label>
+                                        <div id="boutique-editor-toolbar">
+                                            <span class="ql-formats">
+                                                <button class="ql-bold"></button>
+                                                <button class="ql-italic"></button>
+                                                <button class="ql-underline"></button>
+                                            </span>
+                                            <span class="ql-formats">
+                                                <select class="ql-color"></select>
+                                                <button class="ql-list" value="bullet"></button>
+                                            </span>
+                                        </div>
+                                        <div id="boutique-editor" style="height: 250px; background: white;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AUTOMATIONS VIEW -->
+                    <div id="view-automations" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Automatisations & Communications</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 20px;">
+                                    <div class="tab-link active" data-tab="tab-auto-list"><i class="fas fa-robot"></i>
+                                        Automatisations</div>
+                                    <div class="tab-link" data-tab="tab-auto-email"><i
+                                            class="fas fa-envelope-open-text"></i> Courriels de masse</div>
+                                </div>
+
+                                <div id="tab-auto-list" class="tab-content active">
+                                    <div class="product-grid" id="automations-list">
+                                        <p style="color:#666; font-style:italic;">Aucune automatisation active pour la
+                                            saison.</p>
+                                    </div>
+                                </div>
+
+                                <div id="tab-auto-email" class="tab-content">
+                                    <div class="form-group">
+                                        <label>Cible</label>
+                                        <select id="auto-email-target" class="form-control"
+                                            style="width:100%; padding:8px; border-radius:4px; border:1px solid #ddd;">
+                                            <option value="all_active">Tous les joueurs actifs (Saison en cours)
+                                            </option>
+                                            <option value="all_coaches">Tous les coachs</option>
+                                            <option value="all_referees">Tous les arbitres</option>
+                                            <option value="board">Membres du C.A.</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Sujet</label>
+                                        <input type="text" id="auto-email-subject" class="form-control"
+                                            style="width:100%;" placeholder="Sujet du courriel...">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Message</label>
+                                        <textarea id="auto-email-body" rows="10" class="form-control"
+                                            style="width:100%; padding:10px; border-radius:4px; border:1px solid #ddd;"
+                                            placeholder="Rédigez votre message ici..."></textarea>
+                                    </div>
+                                    <button class="btn-save" id="send-bulk-email-btn"><i class="fas fa-paper-plane"></i>
+                                        Envoyer</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- SETTINGS VIEW (Configuration) -->
                     <div id="view-settings" class="view">
                         <div class="card">
@@ -475,21 +755,64 @@
                                 <!-- Status Section -->
                                 <div class="form-group"
                                     style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid var(--secondary);">
-                                    <label style="display:flex; align-items:center; cursor:pointer;">
+                                    <label
+                                        style="display:flex; align-items:center; cursor:pointer; margin-bottom:10px;">
                                         <input type="checkbox" id="reg-status-toggle"
                                             style="width:20px; height:20px; margin-right:10px;">
                                         <span style="font-weight:bold; font-size:1.1rem;">Ouvrir la période
                                             d'inscriptions</span>
                                     </label>
-                                    <p class="text-sm" style="margin-top:5px; color:#666;">Cocher pour rendre le
+                                    <div style="display:flex; gap:10px; margin-left:30px;">
+                                        <select id="reg-target-season" class="form-control"
+                                            style="width:120px; padding:5px; border-radius:4px; border:1px solid #ccc;">
+                                            <option value="Été">Été</option>
+                                            <option value="Hiver">Hiver</option>
+                                        </select>
+                                        <select id="reg-target-year" class="form-control"
+                                            style="width:100px; padding:5px; border-radius:4px; border:1px solid #ccc;">
+                                            <option value="2025">2025</option>
+                                            <option value="2026">2026</option>
+                                            <option value="2027">2027</option>
+                                            <option value="2028">2028</option>
+                                        </select>
+                                    </div>
+                                    <p class="text-sm" style="margin-top:10px; color:#666; margin-left:30px;">Cocher
+                                        pour
+                                        rendre le
                                         formulaire visible sur le site public.</p>
                                 </div>
 
                                 <!-- Text Section -->
                                 <div class="form-group">
                                     <label>Message d'accueil (Inscriptions)</label>
-                                    <textarea id="setting-welcome-msg" rows="8"
-                                        style="width:100%; border:1px solid #ddd; padding:10px; border-radius:4px;"></textarea>
+                                    <div id="editor-toolbar">
+                                        <span class="ql-formats">
+                                            <select class="ql-header">
+                                                <option value="1"></option>
+                                                <option value="2"></option>
+                                                <option selected></option>
+                                            </select>
+                                        </span>
+                                        <span class="ql-formats">
+                                            <button class="ql-bold"></button>
+                                            <button class="ql-italic"></button>
+                                            <button class="ql-underline"></button>
+                                        </span>
+                                        <span class="ql-formats">
+                                            <select class="ql-color"></select>
+                                            <select class="ql-background"></select>
+                                        </span>
+                                        <span class="ql-formats">
+                                            <button class="ql-list" value="ordered"></button>
+                                            <button class="ql-list" value="bullet"></button>
+                                        </span>
+                                        <span class="ql-formats">
+                                            <button class="ql-clean"></button>
+                                        </span>
+                                    </div>
+                                    <div id="setting-welcome-msg"
+                                        style="height: 200px; background: white; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;">
+                                    </div>
                                 </div>
 
                                 <!-- Global Discounts -->
@@ -560,6 +883,8 @@
                             </div>
                         </div>
                     </div>
+
+
 
                 </div>
             </main>
@@ -658,134 +983,135 @@
 
             <form id="inventory-form">
                 <input type="hidden" id="inv-id">
-
-                <!-- TAB: DETAILS -->
-                <div id="tab-inv-details" class="tab-content active">
-                    <div class="form-group">
-                        <label>Nom de l'article</label>
-                        <input type="text" id="inv-name" placeholder="Ex: Maillot Officiel" required>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label>Catégorie</label>
-                                <select id="inv-cat">
-                                    <option value="Ballons">Ballons</option>
-                                    <option value="Vêtements">Vêtements</option>
-                                    <option value="Entraînement">Matériel d'entraînement</option>
-                                    <option value="Terrain">Terrain (Filets, Drapeaux)</option>
-                                    <option value="Autre">Autre</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label>État</label>
-                                <select id="inv-status">
-                                    <option value="Neuf">Neuf</option>
-                                    <option value="Bon">Bon</option>
-                                    <option value="Usé">Usé</option>
-                                    <option value="À remplacer">À remplacer</option>
-                                </select>
-                            </div>
+                <div class="form-group">
+                    <label>Quantité</label>
+                    <input type="number" id="inv-qty" required>
+                </div>
+                <div class="form-group">
+                    <label>Image (Optionnel)</label>
+                    <input type="file" id="inv-image" accept="image/*">
+                    <div id="inv-image-preview" class="image-preview-container image-preview-mt"></div>
+                </div>
+                <!-- Row div closing tag here if it exists, otherwise standard structure -->
+                <div class="row">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Catégorie</label>
+                            <select id="inv-cat">
+                                <option value="Ballons">Ballons</option>
+                                <option value="Vêtements">Vêtements</option>
+                                <option value="Entraînement">Matériel d'entraînement</option>
+                                <option value="Terrain">Terrain (Filets, Drapeaux)</option>
+                                <option value="Autre">Autre</option>
+                            </select>
                         </div>
                     </div>
-
-                    <div class="form-group">
-                        <label>Modèle</label>
-                        <input type="text" id="inv-model" placeholder="Ex: Nike Vapor">
-                    </div>
-
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label>Taille</label>
-                                <select id="inv-size">
-                                    <option value="">-- Sélectionner Taille --</option>
-                                    <option value="Enfant Petit">Enfant Petit</option>
-                                    <option value="Enfant Moyen">Enfant Moyen</option>
-                                    <option value="Enfant Large">Enfant Large</option>
-                                    <option value="Adulte Petit">Adulte Petit</option>
-                                    <option value="Adulte Moyen">Adulte Moyen</option>
-                                    <option value="Adulte Large">Adulte Large</option>
-                                    <option value="Adulte X-Large">Adulte X-Large</option>
-                                    <option value="Adulte XX-Large">Adulte XX-Large</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label>Numéro (si applicable)</label>
-                                <input type="number" id="inv-number" placeholder="Ex: 10">
-                            </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>État</label>
+                            <select id="inv-status">
+                                <option value="Neuf">Neuf</option>
+                                <option value="Bon">Bon</option>
+                                <option value="Usé">Usé</option>
+                                <option value="À remplacer">À remplacer</option>
+                            </select>
                         </div>
                     </div>
                 </div>
 
-                <!-- TAB: STOCK -->
-                <div id="tab-inv-stock" class="tab-content">
-                    <div class="form-group">
-                        <label>Quantité Totale en Stock</label>
-                        <input type="number" id="inv-qty" required>
-                    </div>
+                <div class="form-group">
+                    <label>Modèle</label>
+                    <input type="text" id="inv-model" placeholder="Ex: Nike Vapor">
+                </div>
 
-                    <div class="form-group"
-                        style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-top: 20px; border: 1px solid #eee;">
-                        <label
-                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
-                            <span style="font-weight: 700; font-size: 1.1rem;"><i class="fas fa-hand-holding"></i>
-                                Distribution du Stock</span>
-                            <span id="inv-stock-remaining"
-                                style="font-size: 0.9em; background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-weight: 600;">Stock
-                                disponible: -</span>
-                        </label>
-
-                        <!-- Add Distribution Form -->
-                        <div id="inv-dist-helper-form"
-                            style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
-                            <div style="flex: 1; min-width: 120px;">
-                                <label style="font-size: 0.8rem; color: #666;">Type</label>
-                                <select id="dist-type" style="width: 100%;">
-                                    <option value="">Type...</option>
-                                    <option value="coach">Coach</option>
-                                    <option value="player">Joueur</option>
-                                </select>
-                            </div>
-                            <div style="flex: 2; min-width: 180px;">
-                                <label style="font-size: 0.8rem; color: #666;">Bénéficiaire</label>
-                                <select id="dist-target" style="width: 100%;" disabled>
-                                    <option value="">Sélectionner...</option>
-                                </select>
-                            </div>
-                            <div style="width: 80px;">
-                                <label style="font-size: 0.8rem; color: #666;">Qté</label>
-                                <input type="number" id="dist-qty" placeholder="Qté" min="1" style="width: 100%;">
-                            </div>
-                            <div style="display: flex; align-items: flex-end;">
-                                <button type="button" id="btn-add-dist" class="btn-save"
-                                    style="width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; padding: 0;">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Taille</label>
+                            <select id="inv-size">
+                                <option value="">-- Sélectionner Taille --</option>
+                                <option value="Enfant Petit">Enfant Petit</option>
+                                <option value="Enfant Moyen">Enfant Moyen</option>
+                                <option value="Enfant Large">Enfant Large</option>
+                                <option value="Adulte Petit">Adulte Petit</option>
+                                <option value="Adulte Moyen">Adulte Moyen</option>
+                                <option value="Adulte Large">Adulte Large</option>
+                                <option value="Adulte X-Large">Adulte X-Large</option>
+                                <option value="Adulte XX-Large">Adulte XX-Large</option>
+                            </select>
                         </div>
-
-                        <!-- Distributions List -->
-                        <label id="inv-dist-label"
-                            style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; display: block;">Membres
-                            ayant reçu cet article :</label>
-                        <div id="inv-distributions-list"
-                            style="max-height: 250px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px;">
-                            <p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution
-                                enregistrée.</p>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Numéro (si applicable)</label>
+                            <input type="number" id="inv-number" placeholder="Ex: 10">
                         </div>
                     </div>
                 </div>
+        </div>
 
-                <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-                    <button type="submit" class="btn-save">Enregistrer les informations</button>
-                    <button type="button" class="btn-close-custom"
-                        onclick="document.getElementById('inventory-modal').classList.remove('active')" style="
+        <!-- TAB: STOCK -->
+        <div id="tab-inv-stock" class="tab-content">
+            <div class="form-group">
+                <label>Quantité Totale en Stock</label>
+                <input type="number" id="inv-qty-stock" required>
+            </div>
+
+            <div class="form-group"
+                style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-top: 20px; border: 1px solid #eee;">
+                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                    <span style="font-weight: 700; font-size: 1.1rem;"><i class="fas fa-hand-holding"></i>
+                        Distribution du Stock</span>
+                    <span id="inv-stock-remaining"
+                        style="font-size: 0.9em; background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-weight: 600;">Stock
+                        disponible: -</span>
+                </label>
+
+                <!-- Add Distribution Form -->
+                <div id="inv-dist-helper-form"
+                    style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+                    <div style="flex: 1; min-width: 120px;">
+                        <label style="font-size: 0.8rem; color: #666;">Type</label>
+                        <select id="dist-type" style="width: 100%;">
+                            <option value="">Type...</option>
+                            <option value="coach">Coach</option>
+                            <option value="player">Joueur</option>
+                        </select>
+                    </div>
+                    <div style="flex: 2; min-width: 180px;">
+                        <label style="font-size: 0.8rem; color: #666;">Bénéficiaire</label>
+                        <select id="dist-target" style="width: 100%;" disabled>
+                            <option value="">Sélectionner...</option>
+                        </select>
+                    </div>
+                    <div style="width: 80px;">
+                        <label style="font-size: 0.8rem; color: #666;">Qté</label>
+                        <input type="number" id="dist-qty" placeholder="Qté" min="1" style="width: 100%;">
+                    </div>
+                    <div style="display: flex; align-items: flex-end;">
+                        <button type="button" id="btn-add-dist" class="btn-save"
+                            style="width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; padding: 0;">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Distributions List -->
+                <label id="inv-dist-label"
+                    style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; display: block;">Membres
+                    ayant reçu cet article :</label>
+                <div id="inv-distributions-list"
+                    style="max-height: 250px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px;">
+                    <p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution
+                        enregistrée.</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            <button type="submit" class="btn-save">Enregistrer les informations</button>
+            <button type="button" class="btn-close-custom"
+                onclick="document.getElementById('inventory-modal').classList.remove('active')" style="
                         width: 100%;
                         padding: 12px;
                         background: white;
@@ -798,9 +1124,9 @@
                         font-weight: 600;
                         transition: all 0.3s ease;
                     ">Fermer la fenêtre</button>
-                </div>
-            </form>
         </div>
+        </form>
+    </div>
     </div>
 
     <div id="inventory-batch-modal" class="modal">
@@ -1026,6 +1352,11 @@
                     <input type="text" id="board-role" required>
                 </div>
                 <div class="form-group">
+                    <label>Fin de mandat</label>
+                    <input type="date" id="board-mandate"
+                        style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px;">
+                </div>
+                <div class="form-group">
                     <label>Photo de profil</label>
                     <input type="file" id="board-image" accept="image/*">
                     <!-- PREVIEW CONTAINER Added -->
@@ -1085,6 +1416,12 @@
                             checked>
                         <span>Arbitre actif (Afficher sur le site)</span>
                     </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Indisponibilités (Dates YYYY-MM-DD, séparées par virgule)</label>
+                    <textarea id="ref-unavails" class="form-control" rows="3"
+                        placeholder="Ex: 2025-06-15, 2025-07-01"></textarea>
                 </div>
 
                 <div id="ref-matches-container"
@@ -1255,10 +1592,15 @@
                     <input type="text" id="coach-name" required>
                 </div>
 
-                <div class="form-group">
-                    <label>Expiration Filiation Policière</label>
-                    <input type="date" id="coach-police-expiry">
-                    <small>Date à laquelle la vérification expire.</small>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>Expiration Filiation Policière</label>
+                        <input type="date" id="coach-police-expiry">
+                    </div>
+                    <div class="form-group">
+                        <label>Formation Sport et Respect</label>
+                        <input type="date" id="coach-sport-respect-expiry">
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -1302,6 +1644,34 @@
         </div>
     </div>
 
+    <!-- Field Modal -->
+    <div class="modal" id="field-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Terrain</h2>
+            <form id="field-form">
+                <input type="hidden" id="field-id">
+                <div class="form-group">
+                    <label>Nom du Terrain</label>
+                    <input type="text" id="field-name" required placeholder="Ex: Terrain Principal (Nord)">
+                </div>
+                <div class="form-group">
+                    <label>Adresse / Localisation</label>
+                    <input type="text" id="field-location" placeholder="Ex: 123 Rue du Parc / Lien Google Maps">
+                </div>
+                <div class="form-group">
+                    <label>Type de surface</label>
+                    <select id="field-type">
+                        <option value="gazon">Gazon Naturel</option>
+                        <option value="synthetique">Synthétique</option>
+                        <option value="gymnase">Gymnase (Intérieur)</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Match Modal -->
     <div class="modal" id="match-modal">
         <div class="modal-content">
@@ -1339,7 +1709,9 @@
                 </div>
                 <div class="form-group">
                     <label>Terrain</label>
-                    <input type="text" id="match-field" value="Terrain Principal" required>
+                    <select id="match-field" required>
+                        <option value="">Sélectionner un terrain...</option>
+                    </select>
                 </div>
                 <hr style="margin: 15px 0;">
                 <h4>Assignation Arbitres</h4>
@@ -1371,7 +1743,7 @@
     <div class="modal" id="sponsor-modal">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
-            <h2>Sponsor</h2>
+            <h2>Commanditaire</h2>
             <form id="sponsor-form">
                 <input type="hidden" id="sponsor-id">
                 <div class="form-group">
@@ -1406,33 +1778,62 @@
             <h2>Détails Équipe</h2>
             <form id="team-form">
                 <input type="hidden" id="team-id">
-                <div class="form-group">
+                <div class="form-group" style="display:none;">
                     <label>Nom de l'équipe</label>
-                    <input type="text" id="team-name" placeholder="Ex: U10 Rouge" required>
+                    <input type="text" id="team-name" placeholder="Généré automatiquement">
                 </div>
-                <div class="form-group">
-                    <label>Catégorie</label>
-                    <select id="team-category">
-                        <option value="U4-U6">U4-U6 (Timbits)</option>
-                        <option value="U7-U8">U7-U8</option>
-                        <option value="U9-U10">U9-U10</option>
-                        <option value="U11-U12">U11-U12</option>
-                        <option value="U13-U15">U13-U15</option>
-                        <option value="U16-U18">U16-U18</option>
-                        <option value="Senior">Senior</option>
-                    </select>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>Catégorie</label>
+                        <select id="team-category">
+                            <option value="U4">U4</option>
+                            <option value="U5">U5</option>
+                            <option value="U6">U6</option>
+                            <option value="U7">U7</option>
+                            <option value="U8">U8</option>
+                            <option value="U9">U9</option>
+                            <option value="U10">U10</option>
+                            <option value="U11">U11</option>
+                            <option value="U12">U12</option>
+                            <option value="U13">U13</option>
+                            <option value="U14">U14</option>
+                            <option value="U15">U15</option>
+                            <option value="U16">U16</option>
+                            <option value="U17">U17</option>
+                            <option value="U18">U18</option>
+                            <option value="Senior">Senior</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Sexe</label>
+                        <select id="team-gender">
+                            <option value="Mixte">Mixte</option>
+                            <option value="Masculin">Masculin</option>
+                            <option value="Féminin">Féminin</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Entraîneur</label>
-                    <select id="team-coach">
-                        <option value="">-- Aucun --</option>
-                    </select>
-                </div>
+
                 <div class="form-group">
                     <label>Saison</label>
                     <select id="team-season" required>
                         <option value="">-- Choisir une saison --</option>
                     </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Assignation Entraîneurs</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <select id="team-coach-add-select" style="flex-grow: 1;">
+                            <option value="">Ajouter un entraîneur...</option>
+                        </select>
+                        <button type="button" class="btn-action" id="btn-add-team-coach"><i
+                                class="fas fa-plus"></i></button>
+                    </div>
+                    <div id="team-coaches-list"
+                        style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; padding: 10px; border: 1px dashed #ccc; border-radius: 6px;">
+                        <!-- JS Will Populate Tags -->
+                    </div>
                 </div>
 
                 <!-- Assigned Players -->
@@ -1494,7 +1895,7 @@
     </div>
 
     <!-- Main Logic -->
-    <script type="module" src="./js/app.js?v=1.6"></script>
+    <script type="module" src="./js/app.js?v=1.7"></script>
 </body>
 
 </html>

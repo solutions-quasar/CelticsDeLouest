@@ -43,7 +43,7 @@
                         <li><a href="#conseil" class="nav-link dropdown-link">Conseil d'administration</a></li>
                         <li><a href="#arbitres" class="nav-link dropdown-link">Nos Arbitres</a></li>
                         <li><a href="#coaches" class="nav-link dropdown-link">Nos Coachs</a></li>
-                        <li><a href="#sponsors" class="nav-link dropdown-link">Nos Sponsors</a></li>
+                        <li><a href="#sponsors" class="nav-link dropdown-link">Nos Commanditaires</a></li>
                     </ul>
                 </li>
                 <li><a href="boutique.html" class="nav-link">Boutique en ligne</a></li>
@@ -297,16 +297,17 @@
         </div>
     </section>
 
-    <!-- Nos Sponsors Section -->
+    <!-- Nos Commanditaires Section -->
     <section id="sponsors" class="section">
         <div class="container">
             <div class="section-title">
-                <h2>Nos Sponsors</h2>
+                <h2>Nos Commanditaires</h2>
                 <p>Merci à nos partenaires qui soutiennent le développement de nos jeunes athlètes.</p>
             </div>
             <div id="sponsors-container" class="spectator-code-grid">
                 <!-- JS Will Populate -->
-                <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement des sponsors...</div>
+                <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement des commanditaires...
+                </div>
             </div>
         </div>
     </section>
@@ -419,7 +420,7 @@
     <!-- Firebase & Dynamic Content Script -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
@@ -560,18 +561,24 @@
         // Load Sponsors
         async function loadSponsors() {
             const container = document.getElementById('sponsors-container');
+            const bannerTrack = document.getElementById('banner-track');
+            const sponsorBanner = document.getElementById('sponsor-banner');
+
             try {
                 const q = query(collection(db, "sponsors"), where("visible", "==", true));
                 const snapshot = await getDocs(q);
 
                 if (!snapshot.empty) {
                     container.innerHTML = '';
+                    bannerTrack.innerHTML = '';
+                    sponsorBanner.style.display = 'flex';
+
                     snapshot.forEach(doc => {
                         const data = doc.data();
-                        const card = document.createElement('div');
-                        card.className = 'referee-card'; // Reuse same card style
 
-                        // For sponsors, we prefer the logo style (contain)
+                        // 1. Fill Grid Section
+                        const card = document.createElement('div');
+                        card.className = 'referee-card';
                         let imgHtml = '';
                         if (data.imageUrl && data.imageUrl.length > 10) {
                             imgHtml = `<a href="${data.url || '#'}" target="_blank" style="display:block; width:100%; height:120px; display:flex; align-items:center; justify-content:center;">
@@ -580,15 +587,28 @@
                         } else {
                             imgHtml = `<div class="ref-img-empty" style="height:120px; border-radius:0;"><i class="fas fa-handshake fa-2x"></i></div>`;
                         }
-
-                        card.innerHTML = `
-                            ${imgHtml}
-                            <h3>${data.name}</h3>
-                        `;
+                        card.innerHTML = `${imgHtml}<h3>${data.name}</h3>`;
                         container.appendChild(card);
+
+                        // 2. Fill Floating Banner
+                        const bannerItem = document.createElement('a');
+                        bannerItem.href = data.url || '#';
+                        bannerItem.target = "_blank";
+                        bannerItem.className = 'banner-sponsor-item';
+
+                        let bannerImg = '';
+                        if (data.imageUrl && data.imageUrl.length > 10) {
+                            bannerImg = `<img src="${data.imageUrl}" alt="${data.name}">`;
+                        } else {
+                            bannerImg = `<i class="fas fa-handshake" style="color: var(--celtics-green);"></i>`;
+                        }
+
+                        bannerItem.innerHTML = `${bannerImg}`;
+                        bannerTrack.appendChild(bannerItem);
                     });
                 } else {
-                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Nos sponsors seront affichés prochainement.</p>';
+                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Nos commanditaires seront affichés prochainement.</p>';
+                    sponsorBanner.style.display = 'none';
                 }
             } catch (e) {
                 console.error("Sponsors load error", e);
@@ -602,6 +622,17 @@
             loadSponsors();
         });
     </script>
+    <!-- Floating Sponsor Banner -->
+    <div id="sponsor-banner" class="sponsor-banner-footer" style="display: none;">
+        <div class="banner-title">Merci à nos commanditaires</div>
+        <div id="banner-track" class="sponsor-track">
+            <!-- JS Will Populate -->
+        </div>
+        <div class="banner-close" onclick="document.getElementById('sponsor-banner').style.display = 'none';">
+            <i class="fas fa-times"></i>
+        </div>
+    </div>
+
 </body>
 
 </html>

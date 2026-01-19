@@ -400,7 +400,7 @@
                         // Show welcome message
                         if (settings.welcomeMessage) {
                             const msgDiv = document.getElementById('welcome-message-container');
-                            document.getElementById('welcome-text').innerText = settings.welcomeMessage;
+                            document.getElementById('welcome-text').innerHTML = settings.welcomeMessage;
                             msgDiv.style.display = 'block';
                         }
                     } else {

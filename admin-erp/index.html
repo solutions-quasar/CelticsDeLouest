@@ -24,6 +24,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="./style.css">
     <link rel="stylesheet" href="./style_calendar.css">
+    <link rel="stylesheet" href="./style_pulse.css">
 
     <!-- Firebase SDKs (Module) -->
     <script type="importmap">
@@ -55,8 +56,21 @@
 <body>
 
     <div id="app">
+        <!-- Initial Loading Screen -->
+        <div id="init-loader" class="screen active"
+            style="background:white; color:var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;">
+            <div style="text-align: center;">
+                <img src="../images/logo.png" alt="Celtics Logo"
+                    style="height: 120px; margin-bottom: 30px; animation: pulse 2s infinite;">
+                <div style="font-size: 3rem; margin-bottom: 20px;">
+                    <i class="fas fa-circle-notch fa-spin"></i>
+                </div>
+                <h2 style="font-weight: 500; font-size: 1.5rem; color: var(--text-dark);">Chargement...</h2>
+            </div>
+        </div>
+
         <!-- Auth Screen -->
-        <div id="auth-screen" class="screen active">
+        <div id="auth-screen" class="screen">
             <div class="login-box">
                 <div class="logo-area">
                     <img src="../images/logo.png" alt="Celtics Logo">
@@ -138,6 +152,16 @@
                         <button id="mobile-menu-btn"><i class="fas fa-bars"></i></button>
                         <h2 id="page-title">Tableau de bord</h2>
                     </div>
+
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="global-search-input" placeholder="Recherche globale...">
+                            <button id="clear-search" style="display:none;"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div id="global-search-results" class="search-results-overlay"></div>
+                    </div>
+
                     <div class="user-info">
                         <span id="user-email">admin@celtics.com</span>
                         <div class="avatar"><i class="fas fa-user"></i></div>
@@ -149,55 +173,20 @@
 
                     <!-- Dashboard Home -->
                     <div id="view-dashboard" class="view active">
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <div class="icon bg-blue"><i class="fas fa-tshirt"></i></div>
-                                <div class="info">
-                                    <h3>Produits</h3>
-                                    <p id="stat-products">0</p>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="icon bg-green"><i class="fas fa-users"></i></div>
-                                <div class="info">
-                                    <h3>Joueurs</h3>
-                                    <p id="stat-players">0</p>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="icon bg-orange"><i class="fas fa-boxes"></i></div>
-                                <div class="info">
-                                    <h3>Inventaire</h3>
-                                    <p id="stat-inventory">0</p>
-                                </div>
-                            </div>
-                        </div>
+
 
                         <div class="dashboard-monitoring"
                             style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 30px;">
-                            <!-- Active Players List -->
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3><i class="fas fa-user-check"></i> Joueurs de la saison</h3>
-                                </div>
-                                <div class="card-body">
-                                    <div class="table-container" style="max-height: 400px; overflow-y: auto;">
-                                        <table>
-                                            <thead>
-                                                <tr>
-                                                    <th>Prénom</th>
-                                                    <th>Nom</th>
-                                                    <th>Équipe</th>
-                                                    <th>Naissance</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="dash-players-list">
-                                                <tr>
-                                                    <td colspan="4" style="text-align:center;">Chargement...</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                            <!-- Active Players List Button -->
+                            <div class="card dashboard-btn-card" id="dashboard-players-card"
+                                style="cursor: pointer; display: flex; align-items: center; justify-content: center; min-height: 200px; background: linear-gradient(135deg, var(--white) 0%, #f9fafb 100%); transition: transform 0.3s ease, box-shadow 0.3s ease;">
+                                <div class="card-body" style="text-align: center;">
+                                    <div class="dash-icon-wrapper"
+                                        style="width: 60px; height: 60px; background: #e8f5e9; color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 1.5rem;">
+                                        <i class="fas fa-user-friends"></i>
                                     </div>
+                                    <h3 style="margin-bottom: 5px;">Joueurs de la saison</h3>
+                                    <p id="dash-players-count" style="color: #666; font-size: 0.9rem;">Chargement...</p>
                                 </div>
                             </div>
 
@@ -250,9 +239,11 @@
                                 <div class="header-actions-group">
                                     <select id="team-filter-season"
                                         style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; min-width: 150px;"></select>
-                                    <button class="btn-action" id="run-team-generator"
-                                        style="background:#8e44ad; color:white; border:none; padding: 6px 12px; border-radius: 8px; cursor:pointer;"><i
-                                            class="fas fa-magic"></i> Générer auto.</button>
+                                    <button class="view-toggle-btn active" data-view="grid" data-target="teams-list"><i
+                                            class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list" data-target="teams-list"><i
+                                            class="fas fa-list"></i></button>
+
                                     <button class="btn-action" id="open-team-modal"><i class="fas fa-plus"></i>
                                         Ajouter</button>
                                 </div>
@@ -261,39 +252,7 @@
                                 <div class="product-grid" id="teams-list">
                                     <p>Chargement...</p>
                                 </div>
-                                <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
-                                <details>
-                                    <summary style="cursor:pointer; color:var(--primary); font-weight:500;">Générateur
-                                        d'Équipes</summary>
-                                    <div class="toolbar"
-                                        style="margin-top:10px; display: flex; gap: 10px; align-items: center;">
-                                        <button class="btn-secondary" id="generate-teams-btn">Générer les
-                                            équipes</button>
-                                        <select id="team-size-select"
-                                            style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;">
-                                            <option value="5">5 vs 5</option>
-                                            <option value="7">7 vs 7</option>
-                                            <option value="9">9 vs 9</option>
-                                            <option value="11">11 vs 11</option>
-                                        </select>
-                                        <div class="table-container">
-                                            <table id="players-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Nom</th>
-                                                        <th>Âge</th>
-                                                        <th>Niveau</th>
-                                                        <th>Position</th>
-                                                        <th>Actions</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <!-- JS will populate -->
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        <div id="generated-teams-result" class="teams-output"></div>
-                                </details>
+
                             </div>
                         </div>
                     </div>
@@ -538,8 +497,14 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Gestion des Entraîneurs</h3>
-                                <button class="btn-action" id="open-coach-modal"><i class="fas fa-plus"></i> Ajouter
-                                    Coach</button>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="grid"
+                                        data-target="coaches-list"><i class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list" data-target="coaches-list"><i
+                                            class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-coach-modal"><i class="fas fa-plus"></i> Ajouter
+                                        Coach</button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div id="coaches-list" class="grid-container">
@@ -585,8 +550,14 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Gestion des Terrains</h3>
-                                <button class="btn-action" id="open-field-modal"><i class="fas fa-plus"></i>
-                                    Ajouter</button>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="grid" data-target="fields-list"><i
+                                            class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list" data-target="fields-list"><i
+                                            class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-field-modal"><i class="fas fa-plus"></i>
+                                        Ajouter</button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div id="fields-list" class="view-grid">
@@ -601,8 +572,14 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Gestion des Commanditaires</h3>
-                                <button class="btn-action" id="open-sponsor-modal"><i class="fas fa-plus"></i>
-                                    Ajouter</button>
+                                <div class="header-actions-group">
+                                    <button class="view-toggle-btn active" data-view="grid"
+                                        data-target="sponsors-list"><i class="fas fa-th-large"></i></button>
+                                    <button class="view-toggle-btn" data-view="list" data-target="sponsors-list"><i
+                                            class="fas fa-list"></i></button>
+                                    <button class="btn-action" id="open-sponsor-modal"><i class="fas fa-plus"></i>
+                                        Ajouter</button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div id="sponsors-list" class="view-grid">
@@ -917,6 +894,20 @@
                     <textarea id="prod-desc" rows="3"></textarea>
                 </div>
                 <button type="submit" class="btn-save">Enregistrer</button>
+                <button type="button" class="btn-close-custom"
+                    onclick="document.getElementById('product-modal').classList.remove('active')" style="
+                    width: 100%;
+                    padding: 12px;
+                    background: white;
+                    color: var(--primary);
+                    border: 2px solid var(--primary);
+                    border-radius: 6px;
+                    font-size: 1rem;
+                    cursor: pointer;
+                    margin-top: 10px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                ">Fermer</button>
             </form>
         </div>
     </div>
@@ -983,135 +974,141 @@
 
             <form id="inventory-form">
                 <input type="hidden" id="inv-id">
-                <div class="form-group">
-                    <label>Quantité</label>
-                    <input type="number" id="inv-qty" required>
-                </div>
-                <div class="form-group">
-                    <label>Image (Optionnel)</label>
-                    <input type="file" id="inv-image" accept="image/*">
-                    <div id="inv-image-preview" class="image-preview-container image-preview-mt"></div>
-                </div>
-                <!-- Row div closing tag here if it exists, otherwise standard structure -->
-                <div class="row">
-                    <div class="col-6">
-                        <div class="form-group">
-                            <label>Catégorie</label>
-                            <select id="inv-cat">
-                                <option value="Ballons">Ballons</option>
-                                <option value="Vêtements">Vêtements</option>
-                                <option value="Entraînement">Matériel d'entraînement</option>
-                                <option value="Terrain">Terrain (Filets, Drapeaux)</option>
-                                <option value="Autre">Autre</option>
-                            </select>
+                <div class="tab-content active" id="tab-inv-details">
+                    <div class="form-group">
+                        <label>Nom de l'article</label>
+                        <input type="text" id="inv-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantité</label>
+                        <input type="number" id="inv-qty" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Image (Optionnel)</label>
+                        <input type="file" id="inv-image" accept="image/*">
+                        <div id="inv-image-preview" class="image-preview-container image-preview-mt"></div>
+                    </div>
+                    <!-- Row div closing tag here if it exists, otherwise standard structure -->
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label>Catégorie</label>
+                                <select id="inv-cat">
+                                    <option value="Ballons">Ballons</option>
+                                    <option value="Vêtements">Vêtements</option>
+                                    <option value="Entraînement">Matériel d'entraînement</option>
+                                    <option value="Terrain">Terrain (Filets, Drapeaux)</option>
+                                    <option value="Autre">Autre</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label>État</label>
+                                <select id="inv-status">
+                                    <option value="Neuf">Neuf</option>
+                                    <option value="Bon">Bon</option>
+                                    <option value="Usé">Usé</option>
+                                    <option value="À remplacer">À remplacer</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-6">
-                        <div class="form-group">
-                            <label>État</label>
-                            <select id="inv-status">
-                                <option value="Neuf">Neuf</option>
-                                <option value="Bon">Bon</option>
-                                <option value="Usé">Usé</option>
-                                <option value="À remplacer">À remplacer</option>
-                            </select>
+
+                    <div class="form-group">
+                        <label>Modèle</label>
+                        <input type="text" id="inv-model" placeholder="Ex: Nike Vapor">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label>Taille</label>
+                                <select id="inv-size">
+                                    <option value="">-- Sélectionner Taille --</option>
+                                    <option value="Enfant Petit">Enfant Petit</option>
+                                    <option value="Enfant Moyen">Enfant Moyen</option>
+                                    <option value="Enfant Large">Enfant Large</option>
+                                    <option value="Adulte Petit">Adulte Petit</option>
+                                    <option value="Adulte Moyen">Adulte Moyen</option>
+                                    <option value="Adulte Large">Adulte Large</option>
+                                    <option value="Adulte X-Large">Adulte X-Large</option>
+                                    <option value="Adulte XX-Large">Adulte XX-Large</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label>Numéro (si applicable)</label>
+                                <input type="number" id="inv-number" placeholder="Ex: 10">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Modèle</label>
-                    <input type="text" id="inv-model" placeholder="Ex: Nike Vapor">
-                </div>
+                <!-- TAB: STOCK -->
+                <div id="tab-inv-stock" class="tab-content">
+                    <div class="form-group">
+                        <label>Quantité Totale en Stock</label>
+                        <input type="number" id="inv-qty-stock" required>
+                    </div>
 
-                <div class="row">
-                    <div class="col-6">
-                        <div class="form-group">
-                            <label>Taille</label>
-                            <select id="inv-size">
-                                <option value="">-- Sélectionner Taille --</option>
-                                <option value="Enfant Petit">Enfant Petit</option>
-                                <option value="Enfant Moyen">Enfant Moyen</option>
-                                <option value="Enfant Large">Enfant Large</option>
-                                <option value="Adulte Petit">Adulte Petit</option>
-                                <option value="Adulte Moyen">Adulte Moyen</option>
-                                <option value="Adulte Large">Adulte Large</option>
-                                <option value="Adulte X-Large">Adulte X-Large</option>
-                                <option value="Adulte XX-Large">Adulte XX-Large</option>
-                            </select>
+                    <div class="form-group"
+                        style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-top: 20px; border: 1px solid #eee;">
+                        <label
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                            <span style="font-weight: 700; font-size: 1.1rem;"><i class="fas fa-hand-holding"></i>
+                                Distribution du Stock</span>
+                            <span id="inv-stock-remaining"
+                                style="font-size: 0.9em; background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-weight: 600;">Stock
+                                disponible: -</span>
+                        </label>
+
+                        <!-- Add Distribution Form -->
+                        <div id="inv-dist-helper-form"
+                            style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+                            <div style="flex: 1; min-width: 120px;">
+                                <label style="font-size: 0.8rem; color: #666;">Type</label>
+                                <select id="dist-type" style="width: 100%;">
+                                    <option value="">Type...</option>
+                                    <option value="coach">Coach</option>
+                                    <option value="player">Joueur</option>
+                                </select>
+                            </div>
+                            <div style="flex: 2; min-width: 180px;">
+                                <label style="font-size: 0.8rem; color: #666;">Bénéficiaire</label>
+                                <select id="dist-target" style="width: 100%;" disabled>
+                                    <option value="">Sélectionner...</option>
+                                </select>
+                            </div>
+                            <div style="width: 80px;">
+                                <label style="font-size: 0.8rem; color: #666;">Qté</label>
+                                <input type="number" id="dist-qty" placeholder="Qté" min="1" style="width: 100%;">
+                            </div>
+                            <div style="display: flex; align-items: flex-end;">
+                                <button type="button" id="btn-add-dist" class="btn-save"
+                                    style="width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; padding: 0;">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Distributions List -->
+                        <label id="inv-dist-label"
+                            style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; display: block;">Membres
+                            ayant reçu cet article :</label>
+                        <div id="inv-distributions-list"
+                            style="max-height: 250px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px;">
+                            <p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution
+                                enregistrée.</p>
                         </div>
                     </div>
-                    <div class="col-6">
-                        <div class="form-group">
-                            <label>Numéro (si applicable)</label>
-                            <input type="number" id="inv-number" placeholder="Ex: 10">
-                        </div>
-                    </div>
-                </div>
-        </div>
-
-        <!-- TAB: STOCK -->
-        <div id="tab-inv-stock" class="tab-content">
-            <div class="form-group">
-                <label>Quantité Totale en Stock</label>
-                <input type="number" id="inv-qty-stock" required>
-            </div>
-
-            <div class="form-group"
-                style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-top: 20px; border: 1px solid #eee;">
-                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
-                    <span style="font-weight: 700; font-size: 1.1rem;"><i class="fas fa-hand-holding"></i>
-                        Distribution du Stock</span>
-                    <span id="inv-stock-remaining"
-                        style="font-size: 0.9em; background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-weight: 600;">Stock
-                        disponible: -</span>
-                </label>
-
-                <!-- Add Distribution Form -->
-                <div id="inv-dist-helper-form"
-                    style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
-                    <div style="flex: 1; min-width: 120px;">
-                        <label style="font-size: 0.8rem; color: #666;">Type</label>
-                        <select id="dist-type" style="width: 100%;">
-                            <option value="">Type...</option>
-                            <option value="coach">Coach</option>
-                            <option value="player">Joueur</option>
-                        </select>
-                    </div>
-                    <div style="flex: 2; min-width: 180px;">
-                        <label style="font-size: 0.8rem; color: #666;">Bénéficiaire</label>
-                        <select id="dist-target" style="width: 100%;" disabled>
-                            <option value="">Sélectionner...</option>
-                        </select>
-                    </div>
-                    <div style="width: 80px;">
-                        <label style="font-size: 0.8rem; color: #666;">Qté</label>
-                        <input type="number" id="dist-qty" placeholder="Qté" min="1" style="width: 100%;">
-                    </div>
-                    <div style="display: flex; align-items: flex-end;">
-                        <button type="button" id="btn-add-dist" class="btn-save"
-                            style="width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; padding: 0;">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </div>
                 </div>
 
-                <!-- Distributions List -->
-                <label id="inv-dist-label"
-                    style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; display: block;">Membres
-                    ayant reçu cet article :</label>
-                <div id="inv-distributions-list"
-                    style="max-height: 250px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px;">
-                    <p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution
-                        enregistrée.</p>
-                </div>
-            </div>
-        </div>
-
-        <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-            <button type="submit" class="btn-save">Enregistrer les informations</button>
-            <button type="button" class="btn-close-custom"
-                onclick="document.getElementById('inventory-modal').classList.remove('active')" style="
+                <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+                    <button type="submit" class="btn-save">Enregistrer les informations</button>
+                    <button type="button" class="btn-close-custom"
+                        onclick="document.getElementById('inventory-modal').classList.remove('active')" style="
                         width: 100%;
                         padding: 12px;
                         background: white;
@@ -1124,9 +1121,9 @@
                         font-weight: 600;
                         transition: all 0.3s ease;
                     ">Fermer la fenêtre</button>
+                </div>
+            </form>
         </div>
-        </form>
-    </div>
     </div>
 
     <div id="inventory-batch-modal" class="modal">
@@ -1668,6 +1665,20 @@
                     </select>
                 </div>
                 <button type="submit" class="btn-save">Enregistrer</button>
+                <button type="button" class="btn-close-custom"
+                    onclick="document.getElementById('field-modal').classList.remove('active')" style="
+                    width: 100%;
+                    padding: 12px;
+                    background: white;
+                    color: var(--primary);
+                    border: 2px solid var(--primary);
+                    border-radius: 6px;
+                    font-size: 1rem;
+                    cursor: pointer;
+                    margin-top: 10px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                ">Fermer</button>
             </form>
         </div>
     </div>
@@ -1708,10 +1719,18 @@
                     <input type="text" id="match-opponent" placeholder="Ex: CS Dieppe, Codiac..." required>
                 </div>
                 <div class="form-group">
-                    <label>Terrain</label>
-                    <select id="match-field" required>
-                        <option value="">Sélectionner un terrain...</option>
-                    </select>
+                    <label>Terrains</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <select id="match-field-add-select" style="flex-grow: 1;">
+                            <option value="">Ajouter un terrain...</option>
+                        </select>
+                        <button type="button" class="btn-action" id="btn-add-match-field"><i
+                                class="fas fa-plus"></i></button>
+                    </div>
+                    <div id="match-fields-list"
+                        style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; padding: 10px; border: 1px dashed #ccc; border-radius: 6px;">
+                        <!-- JS Will Populate Tags -->
+                    </div>
                 </div>
                 <hr style="margin: 15px 0;">
                 <h4>Assignation Arbitres</h4>
@@ -1734,7 +1753,28 @@
                     </select>
                 </div>
 
+                <div class="form-group" style="background:#f9f9f9; padding:10px; border-radius:6px; margin-top:10px;">
+                    <label style="display:flex; align-items:center; cursor:pointer; margin-bottom:0;">
+                        <input type="checkbox" id="match-played" style="width:20px; height:20px; margin-right:10px;">
+                        <span>Match Joué</span>
+                    </label>
+                </div>
+
                 <button type="submit" class="btn-save">Enregistrer</button>
+                <button type="button" class="btn-close-custom"
+                    onclick="document.getElementById('match-modal').classList.remove('active')" style="
+                    width: 100%;
+                    padding: 12px;
+                    background: white;
+                    color: var(--primary);
+                    border: 2px solid var(--primary);
+                    border-radius: 6px;
+                    font-size: 1rem;
+                    cursor: pointer;
+                    margin-top: 10px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                ">Fermer</button>
             </form>
         </div>
     </div>
@@ -1894,8 +1934,36 @@
         </div>
     </div>
 
+    <!-- Players List Modal -->
+    <div class="modal" id="players-list-modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close-modal">&times;</span>
+            <h2>Joueurs de la saison</h2>
+            <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+                <table id="modal-players-table">
+                    <thead>
+                        <tr>
+                            <th>Prénom</th>
+                            <th>Nom</th>
+                            <th>Équipe</th>
+                            <th>Naissance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-players-list">
+                        <tr>
+                            <td colspan="4" style="text-align:center;">Chargement...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="btn-secondary close-modal-btn">Fermer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Logic -->
-    <script type="module" src="./js/app.js?v=1.7"></script>
+    <script type="module" src="./js/app.js?v=2.3"></script>
 </body>
 
 </html>

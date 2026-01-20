@@ -40,6 +40,9 @@ const dataCache = {
     currentSeason: null
 };
 
+// Make dataCache globally accessible for search
+window.dataCache = dataCache;
+
 // --- Rich Text Editors ---
 let quillWelcome;
 const welcomeMsgEl = document.getElementById('setting-welcome-msg');
@@ -4370,6 +4373,7 @@ if (dashboardPlayersCard && playersListModal) {
         btn.addEventListener('click', () => playersListModal.classList.remove('active'));
     });
 
+
     // Close on click outside
     window.addEventListener('click', (e) => {
         if (e.target === playersListModal) {
@@ -4377,3 +4381,23 @@ if (dashboardPlayersCard && playersListModal) {
         }
     });
 }
+
+// --- VIEW TOGGLE FUNCTIONALITY ---
+document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const targetId = btn.dataset.target;
+        const viewType = btn.dataset.view;
+        const targetElement = document.getElementById(targetId);
+
+        if (!targetElement) return;
+
+        // Toggle active state on buttons
+        const siblingBtns = btn.parentElement.querySelectorAll('.view-toggle-btn');
+        siblingBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Toggle view classes
+        targetElement.classList.remove('view-grid', 'view-list');
+        targetElement.classList.add(`view-${viewType}`);
+    });
+});

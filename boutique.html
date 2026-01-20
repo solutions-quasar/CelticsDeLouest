@@ -60,24 +60,7 @@
     </header>
 
     <!-- Boutique Content -->
-    <section class="section">
-        <div class="container">
-            <div class="section-title">
-                <h2>Catalogue</h2>
-                <p>Découvrez notre collection de vêtements et accessoires officiels.</p>
-            </div>
 
-            <!-- Products Grid -->
-            <div id="shop-container" class="product-grid"
-                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 30px;">
-                <!-- JavaScript will populate this -->
-                <div style="text-align: center; width: 100%; grid-column: 1/-1; padding: 50px;">
-                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--celtics-green);"></i>
-                    <p>Chargement du catalogue...</p>
-                </div>
-            </div>
-        </div>
-    </section>
 
     <!-- Footer -->
     <footer>
@@ -124,48 +107,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        async function loadShop() {
-            const container = document.getElementById('shop-container');
 
-            try {
-                const querySnapshot = await getDocs(collection(db, "products"));
-
-                if (querySnapshot.empty) {
-                    container.innerHTML = `
-                        <div style="text-align: center; width: 100%; grid-column: 1/-1; padding: 50px; background: #f9f9f9; border-radius: 10px;">
-                            <i class="fas fa-box-open" style="font-size: 3rem; color: #ccc; margin-bottom: 20px;"></i>
-                            <h3>Aucun produit pour le moment</h3>
-                        </div>`;
-                    return;
-                }
-
-                container.innerHTML = ''; // Clear loader
-
-                querySnapshot.forEach((doc) => {
-                    const product = doc.data();
-                    const card = document.createElement('div');
-                    card.className = 'doc-box'; // Reusing existing card style
-                    card.style.padding = '15px';
-                    card.style.textAlign = 'center';
-
-                    card.innerHTML = `
-                        <div style="height: 200px; overflow: hidden; border-radius: 8px; margin-bottom: 15px;">
-                            <img src="${product.imageUrl}" alt="${product.name}" style="width: 100%; height: 100%; object-fit: cover;">
-                        </div>
-                        <h3 style="font-size: 1.2rem; margin-bottom: 5px;">${product.name}</h3>
-                        <p style="font-weight: 700; color: var(--celtics-green); font-size: 1.1rem; margin-bottom: 10px;">$${product.price.toFixed(2)}</p>
-                        <p style="font-size: 0.9rem; color: #666; margin-bottom: 15px;">${product.desc || ''}</p>
-                        <button class="btn btn-primary" style="font-size: 0.9rem; padding: 8px 20px;">Ajouter au panier</button>
-                    `;
-                    container.appendChild(card);
-                });
-            } catch (error) {
-                console.error("Error loading products:", error);
-                container.innerHTML = '<p style="color: red; text-align: center; grid-column: 1/-1;">Erreur lors du chargement de la boutique.</p>';
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', loadShop);
     </script>
 </body>
 

@@ -645,13 +645,13 @@ th {
     height: 100vh !important;
     border-radius: 0;
     margin: 0;
-    padding: 50px;
+    padding: 30px;
     display: flex;
     flex-direction: column;
 }
 
 .modal-full form {
-    max-width: 800px;
+    max-width: 1200px;
     margin: 0 auto;
     width: 100%;
 }
@@ -1029,4 +1029,91 @@ th {
 .stats-grid,
 .stats-reorder-group {
     margin-top: 100px !important;
+}
+
+/* Players Grid View Improvements */
+#players-directory-list.view-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 25px;
+}
+
+#players-directory-list .product-card-admin {
+    padding: 20px;
+    min-height: 280px;
+}
+
+#players-directory-list .product-card-admin h4 {
+    font-size: 1.1rem !important;
+    margin: 12px 0 8px 0 !important;
+    font-weight: 600;
+}
+
+#players-directory-list .product-card-admin p {
+    font-size: 0.9rem !important;
+    line-height: 1.8 !important;
+}
+
+/* Fix list view action buttons visibility */
+.actions-cell .btn-action {
+    color: var(--primary) !important;
+    background: transparent !important;
+    padding: 0 5px;
+}
+
+.actions-cell .btn-action:hover {
+    color: var(--secondary) !important;
+    background: transparent !important;
+    transform: scale(1.1);
+}
+
+.actions-cell .btn-danger {
+    color: var(--danger) !important;
+    background: transparent !important;
+}
+
+.actions-cell .btn-danger:hover {
+    color: #b91c1c !important;
+    /* darker red */
+    transform: scale(1.1);
+}
+
+/* Fix Grid View Buttons Consistency */
+.product-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.product-actions .btn-action,
+.product-actions .btn-danger {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: 0.2s;
+    color: white !important;
+}
+
+.product-actions .btn-action {
+    background-color: var(--secondary) !important;
+}
+
+.product-actions .btn-danger {
+    background-color: var(--danger) !important;
+}
+
+.product-actions .btn-action:hover {
+    background-color: var(--primary) !important;
+    transform: translateY(-2px);
+}
+
+.product-actions .btn-danger:hover {
+    background-color: #d32f2f !important;
+    transform: translateY(-2px);
 }

@@ -11,7 +11,7 @@
             window.location.replace(window.location.pathname + '/');
         }
     </script>
-    <link rel="icon" type="image/png" href="../images/favicon.png">
+    <link rel="icon" type="image/png" href="images/favicon.png">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,7 +59,7 @@
         <div id="init-loader" class="screen active"
             style="background:white; color:var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;">
             <div style="text-align: center;">
-                <img src="../images/logo.png" alt="Celtics Logo"
+                <img src="images/logo.png" alt="Celtics Logo"
                     style="height: 120px; margin-bottom: 30px; animation: pulse 2s infinite;">
                 <div style="font-size: 3rem; margin-bottom: 20px;">
                     <i class="fas fa-circle-notch fa-spin"></i>
@@ -72,7 +72,7 @@
         <div id="auth-screen" class="screen">
             <div class="login-box">
                 <div class="logo-area">
-                    <img src="../images/logo.png" alt="Celtics Logo">
+                    <img src="images/logo.png" alt="Celtics Logo">
                     <h1>Celtics ERP</h1>
                 </div>
                 <form id="login-form">
@@ -108,7 +108,7 @@
         <div id="dashboard-screen" class="screen">
             <aside class="sidebar">
                 <div class="sidebar-header">
-                    <img src="../images/logo.png" alt="Logo">
+                    <img src="images/logo.png" alt="Logo">
                     <span>Admin</span>
                 </div>
                 <nav class="sidebar-nav">
@@ -279,7 +279,13 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div class="table-container">
+                                <!-- Grid/List Container -->
+                                <div id="players-directory-list" class="view-grid">
+                                    <!-- JS Will Populate Cards or Table -->
+                                </div>
+
+                                <!-- Table View (hidden by default, shown when list view is active) -->
+                                <div class="table-container" id="players-table-view" style="display: none;">
                                     <table id="players-directory-table">
                                         <thead>
                                             <tr>
@@ -912,49 +918,7 @@
     </div>
 
     <!-- Player Modal -->
-    <div id="player-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>Joueur</h2>
-            <form id="player-form">
-                <input type="hidden" id="player-id">
-                <div class="form-group">
-                    <label>Nom Complet</label>
-                    <input type="text" id="player-name" required>
-                </div>
-                <div class="form-group">
-                    <label>Année de Naissance</label>
-                    <input type="number" id="player-year" required>
-                </div>
-                <div class="form-group">
-                    <label>Niveau (1: Débutant - 10: Expert)</label>
-                    <input type="number" id="player-skill" min="1" max="10" value="5" required>
-                </div>
-                <div class="form-group">
-                    <label>Position Préférée</label>
-                    <select id="player-pos">
-                        <option value="Attaquant">Attaquant</option>
-                        <option value="Milieu">Milieu</option>
-                        <option value="Défenseur">Défenseur</option>
-                        <option value="Gardien">Gardien</option>
-                        <option value="Polyvalent">Polyvalent</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Équipe</label>
-                    <select id="player-team">
-                        <option value="">-- Aucune --</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Photo (Optionnel)</label>
-                    <input type="file" id="player-image" accept="image/*">
-                    <div id="player-image-preview" class="image-preview-container image-preview-mt"></div>
-                </div>
-                <button type="submit" class="btn-save">Enregistrer</button>
-            </form>
-        </div>
-    </div>
+
 
     <!-- Inventory Modal -->
     <div id="inventory-modal" class="modal modal-full">
@@ -971,144 +935,153 @@
                 <div class="tab-link" data-tab="tab-inv-stock"><i class="fas fa-boxes"></i> Stock & Distributions</div>
             </div>
 
-            <form id="inventory-form">
+            <form id="inventory-form"
+                style="display: flex; flex-direction: column; flex: 1; overflow: hidden; margin: 0 auto; max-width: 1200px; width: 100%;">
                 <input type="hidden" id="inv-id">
-                <div class="tab-content active" id="tab-inv-details">
-                    <div class="form-group">
-                        <label>Nom de l'article</label>
-                        <input type="text" id="inv-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Quantité</label>
-                        <input type="number" id="inv-qty" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Image (Optionnel)</label>
-                        <input type="file" id="inv-image" accept="image/*">
-                        <div id="inv-image-preview" class="image-preview-container image-preview-mt"></div>
-                    </div>
-                    <!-- Row div closing tag here if it exists, otherwise standard structure -->
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label>Catégorie</label>
-                                <select id="inv-cat">
-                                    <option value="Ballons">Ballons</option>
-                                    <option value="Vêtements">Vêtements</option>
-                                    <option value="Entraînement">Matériel d'entraînement</option>
-                                    <option value="Terrain">Terrain (Filets, Drapeaux)</option>
-                                    <option value="Autre">Autre</option>
-                                </select>
-                            </div>
+                <div class="inventory-modal-body" style="flex: 1; overflow-y: auto; padding-right: 10px;">
+                    <div class="tab-content active" id="tab-inv-details">
+                        <div class="form-group">
+                            <label>Nom de l'article</label>
+                            <input type="text" id="inv-name" required>
                         </div>
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label>État</label>
-                                <select id="inv-status">
-                                    <option value="Neuf">Neuf</option>
-                                    <option value="Bon">Bon</option>
-                                    <option value="Usé">Usé</option>
-                                    <option value="À remplacer">À remplacer</option>
-                                </select>
-                            </div>
+                        <div class="form-group">
+                            <label>Quantité</label>
+                            <input type="number" id="inv-qty" required>
                         </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Modèle</label>
-                        <input type="text" id="inv-model" placeholder="Ex: Nike Vapor">
-                    </div>
-
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label>Taille</label>
-                                <select id="inv-size">
-                                    <option value="">-- Sélectionner Taille --</option>
-                                    <option value="Enfant Petit">Enfant Petit</option>
-                                    <option value="Enfant Moyen">Enfant Moyen</option>
-                                    <option value="Enfant Large">Enfant Large</option>
-                                    <option value="Adulte Petit">Adulte Petit</option>
-                                    <option value="Adulte Moyen">Adulte Moyen</option>
-                                    <option value="Adulte Large">Adulte Large</option>
-                                    <option value="Adulte X-Large">Adulte X-Large</option>
-                                    <option value="Adulte XX-Large">Adulte XX-Large</option>
-                                </select>
-                            </div>
+                        <div class="form-group">
+                            <label>Image (Optionnel)</label>
+                            <input type="file" id="inv-image" accept="image/*">
+                            <div id="inv-image-preview" class="image-preview-container image-preview-mt"></div>
                         </div>
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label>Numéro (si applicable)</label>
-                                <input type="number" id="inv-number" placeholder="Ex: 10">
+                        <!-- Row div closing tag here if it exists, otherwise standard structure -->
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="form-group">
+                                    <label>Catégorie</label>
+                                    <select id="inv-cat">
+                                        <option value="Ballons">Ballons</option>
+                                        <option value="Vêtements">Vêtements</option>
+                                        <option value="Entraînement">Matériel d'entraînement</option>
+                                        <option value="Terrain">Terrain (Filets, Drapeaux)</option>
+                                        <option value="Autre">Autre</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB: STOCK -->
-                <div id="tab-inv-stock" class="tab-content">
-                    <div class="form-group">
-                        <label>Quantité Totale en Stock</label>
-                        <input type="number" id="inv-qty-stock" required>
-                    </div>
-
-                    <div class="form-group"
-                        style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-top: 20px; border: 1px solid #eee;">
-                        <label
-                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
-                            <span style="font-weight: 700; font-size: 1.1rem;"><i class="fas fa-hand-holding"></i>
-                                Distribution du Stock</span>
-                            <span id="inv-stock-remaining"
-                                style="font-size: 0.9em; background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-weight: 600;">Stock
-                                disponible: -</span>
-                        </label>
-
-                        <!-- Add Distribution Form -->
-                        <div id="inv-dist-helper-form"
-                            style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
-                            <div style="flex: 1; min-width: 120px;">
-                                <label style="font-size: 0.8rem; color: #666;">Type</label>
-                                <select id="dist-type" style="width: 100%;">
-                                    <option value="">Type...</option>
-                                    <option value="coach">Coach</option>
-                                    <option value="player">Joueur</option>
-                                </select>
-                            </div>
-                            <div style="flex: 2; min-width: 180px;">
-                                <label style="font-size: 0.8rem; color: #666;">Bénéficiaire</label>
-                                <select id="dist-target" style="width: 100%;" disabled>
-                                    <option value="">Sélectionner...</option>
-                                </select>
-                            </div>
-                            <div style="width: 80px;">
-                                <label style="font-size: 0.8rem; color: #666;">Qté</label>
-                                <input type="number" id="dist-qty" placeholder="Qté" min="1" style="width: 100%;">
-                            </div>
-                            <div style="display: flex; align-items: flex-end;">
-                                <button type="button" id="btn-add-dist" class="btn-save"
-                                    style="width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; padding: 0;">
-                                    <i class="fas fa-plus"></i>
-                                </button>
+                            <div class="col-6">
+                                <div class="form-group">
+                                    <label>État</label>
+                                    <select id="inv-status">
+                                        <option value="Neuf">Neuf</option>
+                                        <option value="Bon">Bon</option>
+                                        <option value="Usé">Usé</option>
+                                        <option value="À remplacer">À remplacer</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Distributions List -->
-                        <label id="inv-dist-label"
-                            style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; display: block;">Membres
-                            ayant reçu cet article :</label>
-                        <div id="inv-distributions-list"
-                            style="max-height: 250px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px;">
-                            <p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution
-                                enregistrée.</p>
+                        <div class="form-group">
+                            <label>Modèle</label>
+                            <input type="text" id="inv-model" placeholder="Ex: Nike Vapor">
+                        </div>
+
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="form-group">
+                                    <label>Taille</label>
+                                    <select id="inv-size">
+                                        <option value="">-- Sélectionner Taille --</option>
+                                        <option value="Enfant Petit">Enfant Petit</option>
+                                        <option value="Enfant Moyen">Enfant Moyen</option>
+                                        <option value="Enfant Large">Enfant Large</option>
+                                        <option value="Adulte Petit">Adulte Petit</option>
+                                        <option value="Adulte Moyen">Adulte Moyen</option>
+                                        <option value="Adulte Large">Adulte Large</option>
+                                        <option value="Adulte X-Large">Adulte X-Large</option>
+                                        <option value="Adulte XX-Large">Adulte XX-Large</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-group">
+                                    <label>Numéro (si applicable)</label>
+                                    <input type="text" id="inv-number" placeholder="Ex: 10">
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-                    <button type="submit" class="btn-save">Enregistrer les informations</button>
+                    <!-- TAB: STOCK -->
+                    <div id="tab-inv-stock" class="tab-content">
+                        <div class="form-group">
+                            <label>Quantité Totale en Stock</label>
+                            <input type="number" id="inv-qty-stock" required>
+                        </div>
+
+                        <div class="form-group"
+                            style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-top: 20px; border: 1px solid #eee;">
+                            <label
+                                style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                                <span style="font-weight: 700; font-size: 1.1rem;"><i class="fas fa-hand-holding"></i>
+                                    Distribution du Stock</span>
+                                <span id="inv-stock-remaining"
+                                    style="font-size: 0.9em; background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-weight: 600;">Stock
+                                    disponible: -</span>
+                            </label>
+
+                            <!-- Add Distribution Form -->
+                            <div id="inv-dist-helper-form"
+                                style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+                                <div style="flex: 1; min-width: 120px;">
+                                    <label style="font-size: 0.8rem; color: #666;">Type</label>
+                                    <select id="dist-type" style="width: 100%;">
+                                        <option value="">Type...</option>
+                                        <option value="coach">Coach</option>
+                                        <option value="player">Joueur</option>
+                                    </select>
+                                </div>
+                                <div style="flex: 2; min-width: 180px;">
+                                    <label style="font-size: 0.8rem; color: #666;">Bénéficiaire</label>
+                                    <select id="dist-target" style="width: 100%;" disabled>
+                                        <option value="">Sélectionner...</option>
+                                    </select>
+                                </div>
+                                <div style="width: 80px;">
+                                    <label style="font-size: 0.8rem; color: #666;">Qté</label>
+                                    <input type="number" id="dist-qty" placeholder="Qté" min="1" style="width: 100%;">
+                                </div>
+                                <div style="display: flex; align-items: flex-end;">
+                                    <button type="button" id="btn-add-dist" class="btn-save"
+                                        style="width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; padding: 0;">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Distributions List -->
+                            <label id="inv-dist-label"
+                                style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; display: block;">Membres
+                                ayant reçu cet article :</label>
+                            <div id="inv-distributions-list"
+                                style="flex: 1; min-height: 300px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px;">
+                                <p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution
+                                    enregistrée.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div> <!-- End of inventory-modal-body -->
+
+                <div class="inventory-modal-footer"
+                    style="border-top: 1px solid #eee; padding-top: 20px; display: flex; gap: 15px; background: white; z-index: 100;">
+                    <button type="submit" class="btn-save" style="flex: 2; margin: 0;">Enregistrer les
+                        informations</button>
+                    <button type="button" id="btn-delete-batch" class="btn-save"
+                        style="background-color: var(--danger); display: none; flex: 1; margin: 0;">Supprimer tout le
+                        lot</button>
                     <button type="button" class="btn-close-custom"
                         onclick="document.getElementById('inventory-modal').classList.remove('active')" style="
-                        width: 100%;
+                        flex: 1;
                         padding: 12px;
                         background: white;
                         color: var(--primary);
@@ -1116,9 +1089,12 @@
                         border-radius: 6px;
                         font-size: 1rem;
                         cursor: pointer;
-                        margin-top: 10px;
                         font-weight: 600;
-                        transition: all 0.3s ease;
+                        transition: 0.3s;
+                        margin: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
                     ">Fermer la fenêtre</button>
                 </div>
             </form>
@@ -1168,6 +1144,11 @@
                             <input type="number" id="batch-num-end" placeholder="Ex: 10" required>
                         </div>
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Numéros à exclure (séparés par des virgules)</label>
+                    <input type="text" id="batch-inv-exclusions" placeholder="Ex: 3, 8, 12">
                 </div>
 
                 <div class="form-group">
@@ -1961,9 +1942,75 @@
         </div>
     </div>
 
+    <!-- Edit/Add Player Modal -->
+    <div class="modal" id="player-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2 id="player-modal-title">Joueur</h2>
+            <form id="player-form">
+                <input type="hidden" id="player-id">
+
+                <div class="form-row" style="display: flex; gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Prénom</label>
+                        <input type="text" id="player-first-name" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Nom</label>
+                        <input type="text" id="player-last-name" required>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: flex; gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Date de Naissance</label>
+                        <input type="date" id="player-birth-date">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Équipe</label>
+                        <select id="player-team">
+                            <option value="">Non assigné</option>
+                            <!-- JS Will Populate -->
+                        </select>
+                    </div>
+                </div>
+
+                <h4 style="margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Parent / Tuteur</h4>
+
+                <div class="form-row" style="display: flex; gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Prénom</label>
+                        <input type="text" id="player-parent-first-name">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Nom</label>
+                        <input type="text" id="player-parent-last-name">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Courriel</label>
+                    <input type="email" id="player-parent-email">
+                </div>
+
+                <div class="form-group">
+                    <label>Téléphone</label>
+                    <input type="tel" id="player-parent-phone">
+                </div>
+
+                <div class="form-actions" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn-save" style="width: 100%; padding: 12px;">Enregistrer</button>
+                    <button type="button" class="btn-secondary close-modal-btn btn-close-custom"
+                        style="width: 100%; padding: 12px; border: 2px solid var(--primary); background: white; color: var(--primary); font-weight: 600; border-radius: 6px;">Fermer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Main Logic -->
-    <script type="module" src="./js/app.js?v=2.3"></script>
+    <script type="module" src="./js/app.js?v=2.5"></script>
     <script src="./js/search.js?v=1.0"></script>
+    <script src="./js/players.js?v=1.10"></script>
 </body>
 
 </html>

@@ -43,6 +43,16 @@ const dataCache = {
 // Make dataCache globally accessible for search
 window.dataCache = dataCache;
 
+// Make Firebase functions globally accessible for other scripts
+window.db = db;
+window.getDocs = getDocs;
+window.collection = collection;
+window.deleteDoc = deleteDoc;
+window.doc = doc;
+window.addDoc = addDoc;
+window.updateDoc = updateDoc;
+window.serverTimestamp = serverTimestamp;
+
 // --- Rich Text Editors ---
 let quillWelcome;
 const welcomeMsgEl = document.getElementById('setting-welcome-msg');
@@ -1658,6 +1668,7 @@ if (playerModal) playerModal.querySelector('.close-modal').addEventListener('cli
 setupImagePreview('player-image', 'player-image-preview');
 
 
+/* 
 document.getElementById('player-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     console.log("Submitting player form...");
@@ -1693,6 +1704,7 @@ document.getElementById('player-form')?.addEventListener('submit', async (e) => 
         setLoading(form, false);
     }
 });
+*/
 
 async function loadPlayers() {
     let targetList = document.getElementById('players-table-container');
@@ -1819,6 +1831,10 @@ if (openInvModalBtn) openInvModalBtn.addEventListener('click', () => {
     document.getElementById('inv-dist-helper-form').style.display = 'flex';
     document.getElementById('inv-dist-label').style.display = 'block';
 
+    // Hide batch delete button for new items
+    const delBatchBtn = document.getElementById('btn-delete-batch');
+    if (delBatchBtn) delBatchBtn.style.display = 'none';
+
     resetInventoryModalTabs();
     setLoading(document.getElementById('inventory-form'), false);
     inventoryModal.classList.add('active');
@@ -1846,19 +1862,34 @@ document.getElementById('inventory-batch-form')?.addEventListener('submit', asyn
     const startNum = parseInt(document.getElementById('batch-num-start').value);
     const endNum = parseInt(document.getElementById('batch-num-end').value);
     const category = document.getElementById('batch-inv-cat').value;
+    const exclusionsStr = document.getElementById('batch-inv-exclusions').value;
+
+    // Parse exclusions
+    const exclusions = exclusionsStr.split(',')
+        .map(s => parseInt(s.trim()))
+        .filter(n => !isNaN(n));
+
+    if (isNaN(startNum) || isNaN(endNum)) {
+        return showAlert('Veuillez entrer des numéros valides.', 'error');
+    }
 
     if (startNum > endNum) {
         return showAlert('Le numéro de début doit être inférieur au numéro de fin.', 'error');
     }
 
-    const count = endNum - startNum + 1;
-    if (!confirm(`Vous allez créer ${count} articles. Continuer ?`)) return;
+    let actualCount = 0;
+    const totalCount = endNum - startNum + 1;
+
+    if (!confirm(`Vous allez créer environ ${totalCount} articles (moins les exclusions éventuelles). Continuer ?`)) return;
 
     const batchId = 'batch_' + Date.now();
     setLoading(form, true);
 
     try {
         for (let i = startNum; i <= endNum; i++) {
+            if (exclusions.includes(i)) continue;
+
+            actualCount++;
             const data = {
                 name: `${baseName} #${i}`,
                 model: model,
@@ -1875,7 +1906,7 @@ document.getElementById('inventory-batch-form')?.addEventListener('submit', asyn
         }
 
         inventoryBatchModal.classList.remove('active');
-        showAlert(`${count} articles ont été créés avec succès !`, 'success');
+        showAlert(`${actualCount} articles ont été créés avec succès !`, 'success');
         loadInventory();
         updateStats();
     } catch (err) {
@@ -1981,10 +2012,70 @@ async function loadInventory() {
     // We group by CATEGORY now
     const categories = {};
 
+    // Helper to group by batch
+    const batchesMap = {};
+    const singles = [];
+
     items.forEach(item => {
+        if (item.batchId) {
+            if (!batchesMap[item.batchId]) batchesMap[item.batchId] = [];
+            batchesMap[item.batchId].push(item);
+        } else {
+            singles.push(item);
+        }
+    });
+
+    // Add Singles to Categories
+    singles.forEach(item => {
         const cat = item.category || 'Non classé';
         if (!categories[cat]) categories[cat] = [];
-        categories[cat].push(item);
+        categories[cat].push({ type: 'single', data: item });
+    });
+
+    // Add Batches to Categories
+    Object.keys(batchesMap).forEach(batchId => {
+        const batchItems = batchesMap[batchId];
+        if (batchItems.length === 0) return;
+
+        // Sort items in batch by number
+        batchItems.sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0));
+
+        const first = batchItems[0];
+        const last = batchItems[batchItems.length - 1];
+        const cat = first.category || 'Non classé';
+        if (!categories[cat]) categories[cat] = [];
+
+        // Aggregate Data
+        const totalQty = batchItems.reduce((sum, i) => sum + (parseInt(i.quantity) || 0), 0);
+
+        let distributedCount = 0;
+        batchItems.forEach(item => {
+            let distributions = item.distributions || [];
+            if ((!distributions || distributions.length === 0) && item.assignedType && item.assignedType !== 'none' && item.assignedTo) {
+                distributedCount += 1;
+            } else {
+                distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
+            }
+        });
+
+        // Construct a "Leader" object for display
+        // Name should be the base name, e.g. "Maillot" from "Maillot #1"
+        let baseName = first.name;
+        // Try to strip the # number content from the name for the group title
+        // Regex looks for " #123" at the end or mid string
+        baseName = baseName.replace(/ #\d+.*$/, '').trim();
+
+        const batchObj = {
+            type: 'batch',
+            id: batchId, // Use batchId as the ID for the card
+            data: first, // Keep ref to first item for metadata like image, model, etc.
+            batchItems: batchItems,
+            title: `${baseName} (Lot #${first.number} - #${last.number})`,
+            totalQty: totalQty,
+            distributedCount: distributedCount,
+            stockRemaining: totalQty - distributedCount
+        };
+        categories[cat].push(batchObj);
     });
 
     Object.keys(categories).sort().forEach(cat => {
@@ -1998,50 +2089,80 @@ async function loadInventory() {
         header.innerText = cat;
         targetList.appendChild(header);
 
-        // Sort items in category
-        // Sort by Size (if available) then Name
+        // Sort items in category (Batches and Singles mixed)
         categories[cat].sort((a, b) => {
-            if (a.size && b.size) {
-                // Try numerical sort if possible (imperfect but better than nothing) or custom order
-                const sizes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-                const idxA = sizes.indexOf(a.size.toUpperCase());
-                const idxB = sizes.indexOf(b.size.toUpperCase());
-                if (idxA > -1 && idxB > -1) return idxA - idxB;
-                return a.size.localeCompare(b.size);
-            }
-            return a.name.localeCompare(b.name);
+            const nameA = a.type === 'batch' ? a.title : a.data.name;
+            const nameB = b.type === 'batch' ? b.title : b.data.name;
+            return nameA.localeCompare(nameB);
         });
 
-        categories[cat].forEach(data => {
-            let distributedCount = 0;
-            let distributions = data.distributions || [];
+        categories[cat].forEach(itemObj => {
+            if (itemObj.type === 'single') {
+                const data = itemObj.data;
+                let distributedCount = 0;
+                let distributions = data.distributions || [];
 
-            if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
-                distributedCount = 1;
+                if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
+                    distributedCount = 1;
+                } else {
+                    distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
+                }
+
+                const stockRemaining = (parseInt(data.quantity) || 0) - distributedCount;
+
+                // Build Subtitle
+                let subtitle = '';
+                if (data.model) {
+                    subtitle += `<span style="color:#666; font-size:0.9rem;">Modèle: ${data.model}</span><br>`;
+                }
+                if (data.size) {
+                    subtitle += `<strong style="font-size:1.1em;">Taille: ${data.size}</strong><br>`;
+                }
+                subtitle += `<span style="${stockRemaining < 5 ? 'color:red;font-weight:bold;' : ''}">${stockRemaining} en stock</span> / ${data.quantity} total`;
+
+                if (distributedCount > 0) subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${distributedCount} distribué(s)</span>`;
+
+                const card = createCard(data.imageUrl, data.name, subtitle, data.id, 'edit-inv', 'delete-inv', 'fa-box');
+                card.setAttribute('data-id', data.id);
+                card.classList.add('inv-card');
+
+                // Add click handler for single item
+                card.addEventListener('click', (e) => {
+                    // Check if edit/delete was clicked (handled globally but let's be safe)
+                    if (e.target.closest('.btn-icon')) return;
+
+                    // Helper to open single modal
+                    openSingleInventoryModal(data);
+                });
+
+                targetList.appendChild(card);
             } else {
-                distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
+                // RENDER BATCH
+                const b = itemObj;
+                const data = b.data; // First item data for img/metadata
+
+                let subtitle = '';
+                if (data.model) {
+                    subtitle += `<span style="color:#666; font-size:0.9rem;">Modèle: ${data.model}</span><br>`;
+                }
+                if (data.size) {
+                    subtitle += `<strong style="font-size:1.1em;">Taille: ${data.size}</strong><br>`;
+                }
+                subtitle += `<span style="${b.stockRemaining < 5 ? 'color:red;font-weight:bold;' : ''}">${b.stockRemaining} en stock</span> / ${b.totalQty} total`;
+
+                if (b.distributedCount > 0) subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${b.distributedCount} distribué(s)</span>`;
+
+                // Use the batch title
+                const card = createCard(data.imageUrl, b.title, subtitle, b.id, 'edit-inv-batch', 'delete-inv-batch', 'fa-boxes');
+                card.setAttribute('data-id', b.id);
+                card.setAttribute('data-batch-id', b.id);
+                card.classList.add('inv-batch-card');
+
+                // Special Badge style for batch card
+                card.style.border = '2px solid var(--secondary)';
+
+                targetList.appendChild(card);
             }
-
-            const stockRemaining = (parseInt(data.quantity) || 0) - distributedCount;
-
-            // Build Subtitle
-            let subtitle = '';
-            if (data.size) {
-                subtitle += `<strong style="font-size:1.1em;">Taille: ${data.size}</strong><br>`;
-            }
-            subtitle += `<span style="${stockRemaining < 5 ? 'color:red;font-weight:bold;' : ''}">${stockRemaining} en stock</span> / ${data.quantity} total`;
-
-            if (distributedCount > 0) subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${distributedCount} distribué(s)</span>`;
-
-            // Handle Batch Label
-            let title = data.name;
-            if (data.batchId) title += ` (Lot #${data.number})`;
-
-            const card = createCard(data.imageUrl, title, subtitle, data.id, 'edit-inv', 'delete-inv', 'fa-box');
-            card.setAttribute('data-id', data.id);
-            card.setAttribute('data-batch-id', data.batchId || '');
-            card.classList.add('inv-card');
-            targetList.appendChild(card);
         });
     });
 
@@ -2071,11 +2192,18 @@ async function loadInventory() {
         });
     });
 
-    // Handle batch click
+    // Handle batch click - Open Modal with List
     document.querySelectorAll('.inv-batch-card').forEach(card => {
-        card.addEventListener('click', () => {
+        card.addEventListener('click', (e) => {
+            // Avoid triggers on delete buttons
+            if (e.target.closest('.btn-icon')) return;
+
             const batchId = card.getAttribute('data-batch-id');
-            const batchItems = items.filter(item => item.batchId === batchId);
+            const allItems = Object.values(dataCache.inventory);
+            const batchItems = allItems.filter(item => item.batchId === batchId);
+
+            if (batchItems.length === 0) return alert("Erreur: Lot vide.");
+
             batchItems.sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0));
             const first = batchItems[0];
 
@@ -2086,23 +2214,75 @@ async function loadInventory() {
             document.getElementById('inv-id').value = batchId;
             document.getElementById('inv-id').setAttribute('data-is-batch', 'true');
 
-            document.getElementById('inv-name').value = first.name.split(' #')[0];
+            // Fill Header info with first item data
+            document.getElementById('inv-name').value = first.name.replace(/ #\d+.*$/, '').trim();
             document.getElementById('inv-cat').value = first.category;
             document.getElementById('inv-qty').value = batchItems.length;
-            document.getElementById('inv-qty').disabled = true;
+            document.getElementById('inv-qty').disabled = true; // Cannot change total qty easily here
+
+            // Ensure Stock Display is coherent
+            if (document.getElementById('inv-qty-stock')) {
+                document.getElementById('inv-qty-stock').value = batchItems.length;
+                document.getElementById('inv-qty-stock').disabled = true;
+            }
+
             document.getElementById('inv-status').value = first.status;
             document.getElementById('inv-model').value = first.model || "";
             document.getElementById('inv-size').value = first.size || "";
-            document.getElementById('inv-number').value = "";
+            document.getElementById('inv-number').value = `${first.number} - ${batchItems[batchItems.length - 1].number}`;
             document.getElementById('inv-number').disabled = true;
 
+            // Hide single item distribution helper
             document.getElementById('inv-dist-helper-form').style.display = 'none';
             document.getElementById('inv-dist-label').style.display = 'none';
 
-            // Render batch stock management view
+            // Show Batch Delete Button
+            const delBatchBtn = document.getElementById('btn-delete-batch');
+            if (delBatchBtn) {
+                delBatchBtn.style.display = 'inline-block';
+                // Remove old listeners to avoid duplicates (naive approach: clone)
+                const newBtn = delBatchBtn.cloneNode(true);
+                delBatchBtn.parentNode.replaceChild(newBtn, delBatchBtn);
+
+                newBtn.addEventListener('click', async () => {
+                    if (confirm("Voulez-vous vraiment supprimer tout ce lot (" + batchItems.length + " articles) ? Cette action est irréversible.")) {
+                        try {
+                            setLoading(document.getElementById('inventory-form'), true);
+                            for (const item of batchItems) {
+                                await deleteDoc(doc(db, "inventory", item.id));
+                            }
+                            inventoryModal.classList.remove('active');
+                            showAlert("Lot supprimé avec succès.", "success");
+                            loadInventory();
+                            updateStats();
+                        } catch (err) {
+                            console.error("Error deleting batch:", err);
+                            showAlert("Erreur lors de la suppression du lot.", "error");
+                            setLoading(document.getElementById('inventory-form'), false);
+                        }
+                    }
+                });
+            }
+
+            // Render batch list view (Stock Tab most relevant)
+            switchToInventoryStockTab();
             renderBatchStockList(batchItems);
         });
     });
+
+    // Helper used by SINGLE items click
+    function openSingleInventoryModal(data) {
+        document.getElementById('inv-batch-badge').style.display = 'none';
+        document.getElementById('inv-id').value = data.id;
+        document.getElementById('inv-id').removeAttribute('data-is-batch');
+
+        // Hide batch delete button
+        const delBatchBtn = document.getElementById('btn-delete-batch');
+        if (delBatchBtn) delBatchBtn.style.display = 'none';
+
+        fillInventoryModal(data);
+        inventoryModal.classList.add('active');
+    }
 
     function renderBatchStockList(batchItems) {
         const listEl = document.getElementById('inv-distributions-list');
@@ -2139,19 +2319,20 @@ async function loadInventory() {
                         <div style="font-size: 0.85rem; color: #777;">${assignedTo}</div>
                     </div>
                 </div>
-                <button type="button" class="btn-manage-individual" style="background: ${isDist ? '#f1f3f5' : 'var(--primary)'}; color: ${isDist ? '#495057' : 'white'}; border: none; padding: 8px 15px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 600; transition: transform 0.2s;">
-                    ${isDist ? 'Gérer' : 'Associer'}
-                </button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" class="btn-manage-individual" style="background: ${isDist ? '#f1f3f5' : 'var(--primary)'}; color: ${isDist ? '#495057' : 'white'}; border: none; padding: 8px 15px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 600; transition: transform 0.2s;">
+                        ${isDist ? 'Gérer' : 'Associer'}
+                    </button>
+                    <button type="button" class="btn-delete-individual" style="background: white; color: var(--danger); border: 1px solid var(--danger); padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" title="Supprimer cet article">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
             `;
 
             grid.appendChild(card);
 
             card.querySelector('.btn-manage-individual').addEventListener('click', () => {
                 // To manage an individual item, we just re-open the modal as a single item
-                // This is a neat trick: we find the element that corresponds to the single item and click it
-                // OR we just manually trigger the single item fill logic.
-
-                // Let's use the manual approach to be safe
                 document.getElementById('inv-batch-badge').style.display = 'none';
                 document.getElementById('inv-id').value = item.id;
                 document.getElementById('inv-id').removeAttribute('data-is-batch');
@@ -2165,6 +2346,31 @@ async function loadInventory() {
                 // Ensure we stay on Stock tab
                 switchToInventoryStockTab();
             });
+
+            card.querySelector('.btn-delete-individual').addEventListener('click', async () => {
+                if (confirm(`Supprimer définitivement l'article n°${item.number} de ce lot ?`)) {
+                    try {
+                        const row = card.closest('.batch-item-row');
+                        row.style.opacity = '0.5';
+                        row.style.pointerEvents = 'none';
+
+                        await deleteDoc(doc(db, "inventory", item.id));
+                        showAlert(`Article n°${item.number} supprimé.`, "success");
+
+                        // Close modal and refresh or just refresh list? 
+                        // If we are in the batch modal, we should probably stay but update.
+                        // However, loadInventory() is global.
+
+                        // To keep it simple and clean, let's close and refresh
+                        inventoryModal.classList.remove('active');
+                        loadInventory();
+                        updateStats();
+                    } catch (err) {
+                        console.error(err);
+                        showAlert("Erreur lors de la suppression.", "error");
+                    }
+                }
+            });
         });
 
         stockEl.textContent = `Libres: ${libres} / ${batchItems.length}`;
@@ -2176,6 +2382,10 @@ async function loadInventory() {
         document.getElementById('inv-cat').value = data.category;
         document.getElementById('inv-qty').value = data.quantity;
         document.getElementById('inv-qty').disabled = false;
+        if (document.getElementById('inv-qty-stock')) {
+            document.getElementById('inv-qty-stock').value = data.quantity;
+            document.getElementById('inv-qty-stock').disabled = false;
+        }
         document.getElementById('inv-status').value = data.status;
         document.getElementById('inv-model').value = data.model || "";
         document.getElementById('inv-size').value = data.size || "";

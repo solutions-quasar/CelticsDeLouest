@@ -1518,6 +1518,8 @@ async function loadPlayersDirectory(searchTerm = '') {
         // Fetch all players to avoid index issues or missing fields
         const q = query(collection(db, "players"));
         const snapshot = await getDocs(q);
+        // Clear cache and repopulate to avoid stale/deleted players
+        dataCache.players = {};
         console.log("Fetched players count:", snapshot.size);
 
         tbody.innerHTML = '';
@@ -1543,7 +1545,7 @@ async function loadPlayersDirectory(searchTerm = '') {
         let count = 0;
         docs.forEach(doc => {
             const data = doc.data();
-            dataCache.players[doc.id] = data; // Cache player
+            dataCache.players[doc.id] = { id: doc.id, ...data }; // Cache player with ID
 
             // Filter client-side
             const fullName = (data.name || `${data.firstName || ''} ${data.lastName || ''}`).toLowerCase();
@@ -1800,7 +1802,7 @@ async function ensurePeopleData() {
     if (!dataCache.players || Object.keys(dataCache.players).length === 0) {
         const pSnap = await getDocs(collection(db, "players"));
         dataCache.players = {};
-        pSnap.forEach(doc => dataCache.players[doc.id] = doc.data());
+        pSnap.forEach(doc => dataCache.players[doc.id] = { id: doc.id, ...doc.data() });
     }
     if (!dataCache.coaches || Object.keys(dataCache.coaches).length === 0) {
         const cSnap = await getDocs(collection(db, "coaches"));
@@ -2148,9 +2150,10 @@ async function loadInventory() {
                 if (data.size) {
                     subtitle += `<strong style="font-size:1.1em;">Taille: ${data.size}</strong><br>`;
                 }
-                subtitle += `<span style="${b.stockRemaining < 5 ? 'color:red;font-weight:bold;' : ''}">${b.stockRemaining} en stock</span> / ${b.totalQty} total`;
+                // Subtitle: Quantities removed for numbered lots as requested
+                // b.stockRemaining and b.totalQty display removed
+                // b.distributedCount display removed
 
-                if (b.distributedCount > 0) subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${b.distributedCount} distribué(s)</span>`;
 
                 // Use the batch title
                 const card = createCard(data.imageUrl, b.title, subtitle, b.id, 'edit-inv-batch', 'delete-inv-batch', 'fa-boxes');
@@ -2484,26 +2487,73 @@ async function loadInventory() {
             }
         };
 
+        const distTeamContainer = document.getElementById('dist-team-container');
+        const distTeamFilter = document.getElementById('dist-team-filter');
+
         distTypeSel.value = '';
         distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
         distTargetSel.disabled = true;
         distQtyInput.value = '1';
+        if (distTeamContainer) distTeamContainer.style.display = 'none';
 
         distTypeSel.onchange = () => {
             const type = distTypeSel.value;
             distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
-            if (!type) { distTargetSel.disabled = true; return; }
+            if (distTeamFilter) distTeamFilter.innerHTML = '<option value="">Toutes les équipes</option>';
+
+            if (!type) {
+                distTargetSel.disabled = true;
+                if (distTeamContainer) distTeamContainer.style.display = 'none';
+                return;
+            }
+
             distTargetSel.disabled = false;
 
+            if (type === 'player' && distTeamContainer) {
+                distTeamContainer.style.display = 'block';
+                // Populate Teams Filter
+                const teams = Object.entries(dataCache.teams || {}).map(([id, t]) => ({ id, name: t.name }));
+                teams.sort((a, b) => a.name.localeCompare(b.name));
+                teams.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = t.name;
+                    distTeamFilter.appendChild(opt);
+                });
+            } else {
+                if (distTeamContainer) distTeamContainer.style.display = 'none';
+            }
+
+            populateBeneficiaries();
+        };
+
+        if (distTeamFilter) {
+            distTeamFilter.onchange = () => {
+                populateBeneficiaries();
+            };
+        }
+
+        function populateBeneficiaries() {
+            const type = distTypeSel.value;
+            const teamFilterId = distTeamFilter ? distTeamFilter.value : '';
+            distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
+
             let source = [];
-            if (type === 'coach') source = Object.keys(dataCache.coaches || {}).map(k => ({ id: k, ...dataCache.coaches[k] }));
-            else if (type === 'player') source = dataCache.allPlayers || Object.keys(dataCache.players || {}).map(k => ({ id: k, ...dataCache.players[k] }));
+            if (type === 'coach') {
+                source = Object.keys(dataCache.coaches || {}).map(k => ({ id: k, ...dataCache.coaches[k] }));
+            } else if (type === 'player') {
+                source = Object.values(dataCache.players || {});
+                if (teamFilterId) {
+                    source = source.filter(p => p.teamId === teamFilterId);
+                }
+            }
 
             source.forEach(item => {
                 if (!item.name) {
                     item.name = (item.firstName && item.lastName) ? `${item.firstName} ${item.lastName}` : (item.name || 'Sans Nom');
                 }
             });
+
             source.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
             source.forEach(item => {
                 const opt = document.createElement('option');
@@ -2511,7 +2561,7 @@ async function loadInventory() {
                 opt.textContent = item.name;
                 distTargetSel.appendChild(opt);
             });
-        };
+        }
 
         btnAddDist.onclick = async () => {
             const type = distTypeSel.value;
@@ -2533,212 +2583,17 @@ async function loadInventory() {
             renderDistributions();
             distQtyInput.value = '1';
         };
-
         renderDistributions();
     }
 
     setupClickableCard('.inv-card', 'inventory', 'inventory-modal', 'inv-id', async (data) => {
-        const currentInvId = document.getElementById('inv-id').value;
-
-        const nameInput = document.getElementById('inv-name');
-        if (nameInput) nameInput.value = data.name || "";
-
-        document.getElementById('inv-cat').value = data.category;
-        document.getElementById('inv-qty').value = data.quantity;
-        document.getElementById('inv-status').value = data.status;
-        const modelInput = document.getElementById('inv-model');
-        if (modelInput) modelInput.value = data.model || "";
-
-        const sizeInput = document.getElementById('inv-size');
-        if (sizeInput) sizeInput.value = data.size || "";
-
-        const numInput = document.getElementById('inv-number');
-        if (numInput) numInput.value = data.number || "";
-
-        // Only reset tabs if we are not explicitly staying on Stock tab
-        // However, usually we want to reset. But for batch click we want to skip.
-        // The most robust way is to check a global or pass it?
-        // Actually, renderBatchStockList calls switchToInventoryStockTab AFTER the click handler is done.
+        // Use unified modal filling logic
+        fillInventoryModal(data);
+        // Explicitly stay on/switch to Stock tab if preferred, or just let reset handle it
         resetInventoryModalTabs();
-
-        // --- DISTRIBUTION LOGIC ---
-
-        // 1. Prepare Distributions Data
-        let distributions = data.distributions || [];
-        // Migration logic for UI
-        if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
-            let name = "Inconnu";
-            if (data.assignedType === 'coach' && dataCache.coaches[data.assignedTo]) name = dataCache.coaches[data.assignedTo].name;
-            if (data.assignedType === 'player' && dataCache.players[data.assignedTo]) name = dataCache.players[data.assignedTo].name;
-            distributions = [{
-                type: data.assignedType,
-                id: data.assignedTo,
-                qty: 1,
-                name: name
-            }];
-        }
-
-        // 2. Elements
-        const distTypeSel = document.getElementById('dist-type');
-        const distTargetSel = document.getElementById('dist-target');
-        const distQtyInput = document.getElementById('dist-qty');
-        const btnAddDist = document.getElementById('btn-add-dist');
-        const listEl = document.getElementById('inv-distributions-list');
-        const stockEl = document.getElementById('inv-stock-remaining');
-
-        distQtyInput.value = '1';
-
-        // 3. Render Function
-        const renderDistributions = () => {
-            listEl.innerHTML = '';
-            let distributedCount = 0;
-            const totalQty = parseInt(document.getElementById('inv-qty').value) || 0;
-
-            if (!distributions || distributions.length === 0) {
-                listEl.innerHTML = '<p style="color: #888; font-style: italic; font-size: 0.9rem;">Aucune distribution.</p>';
-            } else {
-                distributions.forEach((d, index) => {
-                    distributedCount += (parseInt(d.qty) || 0);
-
-                    // Resolve Name if missing/stale
-                    let name = d.name || 'Inconnu';
-                    if (d.type === 'coach' && dataCache.coaches && dataCache.coaches[d.id]) name = dataCache.coaches[d.id].name;
-                    if (d.type === 'player' && dataCache.players && dataCache.players[d.id]) name = dataCache.players[d.id].name;
-
-                    const div = document.createElement('div');
-                    div.style.display = 'flex';
-                    div.style.justifyContent = 'space-between';
-                    div.style.alignItems = 'center';
-                    div.style.borderBottom = '1px solid #eee';
-                    div.style.padding = '4px 0';
-                    div.style.fontSize = '0.9rem';
-
-                    div.innerHTML = `
-                        <span>
-                            <span style="font-weight:600; color: var(--primary);">x${d.qty}</span> 
-                            ${name} <i style="font-size:0.8em; color:#888;">(${d.type === 'coach' ? 'Coach' : 'Joueur'})</i>
-                        </span>
-                        <button type="button" class="del-dist-btn" data-index="${index}" style="background:none; border:none; color:#dc3545; cursor:pointer;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                     `;
-                    listEl.appendChild(div);
-                });
-
-                // Attach delete handlers
-                listEl.querySelectorAll('.del-dist-btn').forEach(btn => {
-                    btn.addEventListener('click', async (e) => {
-                        if (!window.confirm('Annuler cette distribution ?')) return; // Could use showConfirm if available
-                        const idx = parseInt(btn.getAttribute('data-index'));
-                        distributions.splice(idx, 1);
-                        await saveDistributions();
-                        renderDistributions();
-                    });
-                });
-            }
-
-            const remaining = totalQty - distributedCount;
-            stockEl.textContent = `Stock: ${remaining}`;
-            stockEl.style.backgroundColor = remaining > 0 ? 'var(--primary)' : 'var(--danger)';
-
-            // Disable add button if no stock (optional, maybe allow negative for adjustments?) 
-            // Let's allow but warn or show negative stock.
-        };
-
-        // 4. Helper to Save
-        const saveDistributions = async () => {
-            try {
-                await updateDoc(doc(db, "inventory", currentInvId), {
-                    distributions: distributions,
-                    assignedType: 'mixed', // Legacy flag update
-                    assignedTo: 'mixed'
-                });
-                // Update Cache logic if needed
-            } catch (e) {
-                console.error(e);
-                alert('Erreur sauvegarde distribution: ' + e.message);
-            }
-        };
-
-        // 5. Populate Dropdowns on Type Change
-        distTypeSel.value = '';
-        distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
-        distTargetSel.disabled = true;
-        distQtyInput.value = '1';
-
-        distTypeSel.onchange = () => {
-            const type = distTypeSel.value;
-            distTargetSel.innerHTML = '<option value="">Sélectionner...</option>';
-            if (!type) {
-                distTargetSel.disabled = true;
-                return;
-            }
-            distTargetSel.disabled = false;
-
-            let source = [];
-            if (type === 'coach') {
-                source = Object.keys(dataCache.coaches || {}).map(k => ({ id: k, ...dataCache.coaches[k] }));
-            } else if (type === 'player') {
-                // If dataCache.allPlayers exists (from team modal logic), use it. Else fall back to cache.players
-                if (dataCache.allPlayers) source = dataCache.allPlayers;
-                else source = Object.keys(dataCache.players || {}).map(k => ({ id: k, ...dataCache.players[k] }));
-            }
-
-            source.forEach(item => {
-                if (!item.name) {
-                    item.name = (item.firstName && item.lastName) ? `${item.firstName} ${item.lastName}` : (item.name || 'Sans Nom');
-                }
-            });
-            source.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            source.forEach(item => {
-                const opt = document.createElement('option');
-                opt.value = item.id;
-                opt.textContent = item.name;
-                distTargetSel.appendChild(opt);
-            });
-        };
-
-        // 6. Add Button Logic
-        btnAddDist.onclick = async () => {
-            const type = distTypeSel.value;
-            const targetId = distTargetSel.value;
-            const qty = parseInt(distQtyInput.value);
-
-            if (!type || !targetId || !qty || qty <= 0) {
-                alert('Veuillez remplir tous les champs correctement.');
-                return;
-            }
-
-            // Check stock?
-            let currentDist = 0;
-            distributions.forEach(d => currentDist += (parseInt(d.qty) || 0));
-            const total = parseInt(document.getElementById('inv-qty').value) || 0;
-            if (currentDist + qty > total) {
-                if (!confirm(`Attention: Stock insuffisant (${total - currentDist} restants). Continuer quand même ?`)) return;
-            }
-
-            // Get Name
-            let name = distTargetSel.options[distTargetSel.selectedIndex].text;
-
-            distributions.push({
-                type: type,
-                id: targetId,
-                name: name,
-                qty: qty,
-                date: new Date().toISOString()
-            });
-
-            await saveDistributions();
-            renderDistributions();
-
-            // Reset fields
-            distQtyInput.value = '1';
-            // keep selection for fast input? maybe not
-        };
-
-        // Initial Render
-        renderDistributions();
+        renderSingleInventoryDistributions(data);
     });
+
 
     // Refresh stats when deleted
     setupDeleteButton('.delete-inv', 'inventory', () => { loadInventory(); updateStats(); });
@@ -2763,13 +2618,39 @@ document.getElementById('registration-form-admin')?.addEventListener('submit', a
     try {
         const id = document.getElementById('reg-id').value;
         const data = {
+            // Child
             childFirstName: document.getElementById('reg-child-first').value,
             childLastName: document.getElementById('reg-child-last').value,
-            parentFirstName: document.getElementById('reg-parent-first').value,
-            parentLastName: document.getElementById('reg-parent-last').value,
-            email: document.getElementById('reg-email').value,
+            dob: document.getElementById('reg-dob').value,
+            gender: document.getElementById('reg-gender').value,
+            medical: document.getElementById('reg-medical').value,
+
+            // Parents
+            parent1Name: document.getElementById('reg-parent1-name').value,
+            parent1Email: document.getElementById('reg-parent1-email').value,
+            parent2Name: document.getElementById('reg-parent2-name').value,
+            parent2Email: document.getElementById('reg-parent2-email').value,
+            phoneFamily: document.getElementById('reg-phone').value,
+
+            // Address
+            addressLine: document.getElementById('reg-address').value,
+            city: document.getElementById('reg-city').value,
+            postalCode: document.getElementById('reg-postal').value,
+
+            // Equipment & Other
+            jerseySize: document.getElementById('reg-jersey-size').value,
+            photoAuth: document.getElementById('reg-photo-auth').value,
+
+            // Legacy / List View Mapping
+            firstName: document.getElementById('reg-child-first').value,
+            lastName: document.getElementById('reg-child-last').value,
+            parentFirstName: document.getElementById('reg-parent1-name').value.split(' ')[0],
+            parentLastName: document.getElementById('reg-parent1-name').value.split(' ').slice(1).join(' '),
+            email: document.getElementById('reg-parent1-email').value,
             phone: document.getElementById('reg-phone').value,
+
             program: document.getElementById('reg-program').value,
+            finalPrice: document.getElementById('reg-price').value,
             status: document.getElementById('reg-status').value
         };
 
@@ -2861,14 +2742,36 @@ async function loadRegistrations() {
 
     // Add Click Listener
     setupClickableCard('.reg-row', 'registrations', 'registration-modal', 'reg-id', (data) => {
+        // Child
         document.getElementById('reg-child-first').value = data.childFirstName || '';
         document.getElementById('reg-child-last').value = data.childLastName || '';
-        document.getElementById('reg-parent-first').value = data.parentFirstName || '';
-        document.getElementById('reg-parent-last').value = data.parentLastName || '';
-        document.getElementById('reg-email').value = data.email || '';
-        document.getElementById('reg-phone').value = data.phone || '';
-        document.getElementById('reg-program').value = data.program || 'U4-U6';
+        document.getElementById('reg-dob').value = data.dob || '';
+        document.getElementById('reg-gender').value = data.gender || 'M';
+        document.getElementById('reg-medical').value = data.medical || '';
+
+        // Parents
+        document.getElementById('reg-parent1-name').value = data.parent1Name || `${data.parentFirstName || ''} ${data.parentLastName || ''}`.trim();
+        document.getElementById('reg-parent1-email').value = data.parent1Email || data.email || '';
+        document.getElementById('reg-parent2-name').value = data.parent2Name || '';
+        document.getElementById('reg-parent2-email').value = data.parent2Email || '';
+        document.getElementById('reg-phone').value = data.phoneFamily || data.phone || '';
+
+        // Address
+        document.getElementById('reg-address').value = data.addressLine || '';
+        document.getElementById('reg-city').value = data.city || '';
+        document.getElementById('reg-postal').value = data.postalCode || '';
+
+        // Equipment
+        document.getElementById('reg-jersey-size').value = data.jerseySize || '';
+        document.getElementById('reg-short-info').value = (data.shortOption || '') + ' ' + (data.shortSize || '');
+        document.getElementById('reg-socks-info').value = (data.socksOption || '') + ' ' + (data.socksSize || '') + (data.socksQuantity ? ' (Qté: ' + data.socksQuantity + ')' : '');
+
+        // Other
+        document.getElementById('reg-photo-auth').value = data.photoAuth || '';
+        document.getElementById('reg-program').value = data.programCat || data.program || '';
+        document.getElementById('reg-price').value = data.finalPrice || 0;
         document.getElementById('reg-status').value = data.status || 'New';
+        document.getElementById('reg-session-id').value = data.registrationSessionId || '';
     });
 
     setupDeleteButton('.delete-reg', 'registrations', () => loadRegistrations());
@@ -3493,6 +3396,9 @@ if (saveSettingsBtn) {
                 welcomeMessage: quillWelcome ? quillWelcome.root.innerHTML : '',
                 discount2nd: parseFloat(document.getElementById('setting-discount-2').value) || 0,
                 discount3rd: parseFloat(document.getElementById('setting-discount-3').value) || 0,
+                costShortBuy: parseFloat(document.getElementById('setting-cost-short-buy').value) || 0,
+                costShortRent: parseFloat(document.getElementById('setting-cost-short-rent').value) || 0,
+                costSocks: parseFloat(document.getElementById('setting-cost-socks').value) || 0,
                 pricingGrid: []
             };
 
@@ -3504,8 +3410,39 @@ if (saveSettingsBtn) {
                 });
             });
 
+            // Handle Size Guide File Upload
+            const sizeGuideFile = document.getElementById('setting-size-guide').files[0];
+            const statusEl = document.getElementById('size-guide-status');
+
+            if (sizeGuideFile) {
+                if (statusEl) statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi du fichier...';
+                try {
+                    const sanitizedName = sizeGuideFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                    const storageRef = ref(storage, `settings/size_guide_${Date.now()}_${sanitizedName}`);
+                    await uploadBytes(storageRef, sizeGuideFile);
+                    settings.sizeGuideUrl = await getDownloadURL(storageRef);
+                    if (statusEl) statusEl.innerHTML = '<span style="color:green"><i class="fas fa-check"></i> Fichier prêt</span>';
+                } catch (err) {
+                    console.error("Size Guide Upload Failed:", err);
+                    alert("Erreur lors de l'envoi du guide de tailles: " + err.message);
+                    if (statusEl) statusEl.innerHTML = '<span style="color:red">Échec de l\'envoi</span>';
+                    saveSettingsBtn.disabled = false;
+                    saveSettingsBtn.innerHTML = '<i class="fas fa-save"></i> Sauvegarder Tout';
+                    return; // Stop here if upload fails
+                }
+            } else {
+                // Keep existing URL if no new file selected
+                const existingPreview = document.querySelector('#size-guide-preview-admin a');
+                if (existingPreview) settings.sizeGuideUrl = existingPreview.href;
+            }
+
             // Use a fixed ID 'current_season' for easy retrieval
             await setDoc(doc(db, "settings", "current_season"), settings);
+
+            // Clear file input
+            document.getElementById('setting-size-guide').value = '';
+
+            await loadSettings(); // REFRESH UI
             alert("Configuration sauvegardée avec succès !");
 
         } catch (e) {
@@ -3535,12 +3472,33 @@ async function loadSettings() {
 
             document.getElementById('setting-discount-2').value = data.discount2nd || 15;
             document.getElementById('setting-discount-3').value = data.discount3rd || 20;
+            document.getElementById('setting-cost-short-buy').value = data.costShortBuy || 20;
+            document.getElementById('setting-cost-short-rent').value = data.costShortRent || 5;
+            document.getElementById('setting-cost-socks').value = data.costSocks || 10;
 
             const tbody = document.getElementById('pricing-tbody');
             tbody.innerHTML = '';
             if (data.pricingGrid && Array.isArray(data.pricingGrid)) {
                 // Sort by year desc (if numbers) or keep order
                 data.pricingGrid.forEach(item => addPriceRow(item));
+            }
+
+            // Display Size Guide Link
+            const sizePreview = document.getElementById('size-guide-preview-admin');
+            if (sizePreview) {
+                if (data.sizeGuideUrl) {
+                    sizePreview.innerHTML = `
+                        <div style="display:flex; align-items:center; gap:10px; background:white; padding:10px; border-radius:6px; border:1px solid #ccc;">
+                            <i class="fas fa-file-download" style="font-size:1.5rem; color:var(--primary);"></i>
+                            <div style="flex:1;">
+                                <div style="font-weight:600; font-size:0.9rem;">Guide actuel</div>
+                                <a href="${data.sizeGuideUrl}" target="_blank" style="font-size:0.8rem; color:var(--primary);">Voir / Télécharger</a>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    sizePreview.innerHTML = '<p style="font-size:0.85rem; color:#888; font-style:italic;">Aucun guide de tailles configuré.</p>';
+                }
             }
         } else {
             // Seed defaults with 2025 Rates provided by User
@@ -4611,3 +4569,28 @@ document.querySelectorAll('.view-toggle-btn').forEach(btn => {
         targetElement.classList.add(`view-${viewType}`);
     });
 });
+
+// --- CONFIGURATION SUB-TABS ---
+const configTabContainer = document.getElementById('config-tabs-container');
+if (configTabContainer) {
+    const tabs = configTabContainer.querySelectorAll('.tab-link');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.getAttribute('data-tab');
+
+            // Remove active class from all tabs and contents in this container
+            tabs.forEach(t => t.classList.remove('active'));
+            configTabContainer.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // Add active class to selected tab and content
+            tab.classList.add('active');
+            const targetEl = document.getElementById(target);
+            if (targetEl) targetEl.classList.add('active');
+
+            // Fix Quill editor if switching to Inscriptions tab
+            if (target === 'config-inscriptions' && typeof quillWelcome !== 'undefined' && quillWelcome) {
+                // Quill might need a focus/update if it was hidden
+            }
+        });
+    });
+}

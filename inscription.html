@@ -18,6 +18,9 @@
     <!-- CSS -->
     <link rel="stylesheet" href="style.css">
 
+    <!-- Quill Snow Styles for welcome message formatting -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
     <style>
         .form-section {
             background-color: white;
@@ -25,6 +28,12 @@
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
             margin-bottom: 20px;
+        }
+
+        /* Enforce consistent width for Navbar, Form, and Footer on this page */
+        .container {
+            max-width: 1200px !important;
+            margin: 0 auto;
         }
 
         .form-section h3 {
@@ -127,6 +136,350 @@
         .radio-option input {
             width: auto;
         }
+
+        /* Quill Formatting Overrides for public view */
+        #welcome-text.ql-editor {
+            padding: 0;
+            height: auto;
+            overflow: visible;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            color: #333;
+        }
+
+        #welcome-text.ql-editor p {
+            margin-bottom: 10px;
+        }
+
+        /* Fix button visibility on hover on light backgrounds */
+        .btn-primary:hover {
+            background-color: var(--celtics-dark) !important;
+            border-color: var(--celtics-dark) !important;
+            color: white !important;
+        }
+
+        /* Secondary Button (Grey) */
+        .btn-secondary {
+            background-color: #7f8c8d;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border: 2px solid #7f8c8d;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .btn-secondary:hover {
+            background-color: transparent;
+            color: #7f8c8d;
+        }
+
+        /* Confirmation Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            /* Higher than tracker */
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            width: 100%;
+            max-width: 800px;
+            max-height: 90vh;
+            border-radius: 12px;
+            overflow-y: auto;
+            position: relative;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            border-bottom: 2px solid var(--celtics-green);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .modal-child-card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .modal-child-header {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--celtics-green);
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        .modal-detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.95rem;
+        }
+
+        .modal-total-section {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 2px solid #333;
+            text-align: right;
+        }
+
+        .modal-footer {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+        }
+
+        /* Tracker Bar Styles */
+        .registration-tracker-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            width: 95%;
+            max-width: 600px;
+            background: rgba(0, 128, 64, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1001;
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .registration-tracker-bar.active {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .registration-tracker-bar:hover {
+            background: var(--celtics-dark);
+        }
+
+        .tracker-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .tracker-badge {
+            background: var(--accent-gold);
+            color: var(--text-dark);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .tracker-price {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--accent-gold);
+        }
+
+        /* Detail Drawer */
+        .tracker-drawer {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            width: 90%;
+            max-width: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            animation: slideUpDrawer 0.3s ease-out;
+        }
+
+        .tracker-drawer.active {
+            display: flex;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .drawer-header {
+            padding: 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .drawer-list {
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+
+        .drawer-item {
+            padding: 10px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .drawer-item:last-child {
+            border-bottom: none;
+        }
+
+        @keyframes slideUpDrawer {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        /* Success Pop Animation */
+        @keyframes popSuccess {
+            0% {
+                transform: translateX(-50%) scale(1);
+            }
+
+            50% {
+                transform: translateX(-50%) scale(1.05);
+            }
+
+            100% {
+                transform: translateX(-50%) scale(1);
+            }
+        }
+
+        .pop-animation {
+            animation: popSuccess 0.4s ease-out;
+        }
+
+        @media(max-width: 600px) {
+            .registration-tracker-bar {
+                width: 92%;
+                bottom: 15px;
+                padding: 10px 15px;
+            }
+
+            .tracker-price {
+                font-size: 1rem;
+            }
+
+            .modal-footer {
+                flex-direction: column;
+            }
+
+            .modal-content {
+                padding: 20px;
+            }
+        }
+
+        /* Size Guide Responsive Styles */
+        .size-guide-card {
+            background: white;
+            border: 2px dashed var(--celtics-green);
+            padding: 20px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 4px 12px rgba(0, 135, 68, 0.1);
+        }
+
+        .size-guide-icon {
+            width: 60px;
+            height: 60px;
+            background: #e8f5e9;
+            color: var(--celtics-green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .size-guide-content {
+            flex: 1;
+        }
+
+        .size-guide-content h4 {
+            margin: 0 0 5px 0;
+            color: var(--celtics-green);
+            font-weight: 700;
+        }
+
+        .size-guide-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        .size-guide-btn {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        @media(max-width: 768px) {
+            .size-guide-card {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+
+            .size-guide-content {
+                width: 100%;
+            }
+
+            .size-guide-btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 
@@ -151,7 +504,7 @@
     <!-- Hero -->
     <section class="hero" style="height: 40vh; min-height: 300px; padding-top: 80px;">
         <div class="hero-content">
-            <h1>Inscription Saison 2025</h1>
+            <h1>Inscription Saison <span id="season-year-display">2026</span></h1>
             <p>Rejoignez les Celtics de l'Ouest de Portneuf !</p>
         </div>
     </section>
@@ -168,8 +521,23 @@
         <div class="container">
 
             <div id="welcome-message-container"
-                style="margin-bottom: 20px; background: #e9ecef; padding: 20px; border-radius: 8px; display:none;">
-                <p id="welcome-text" style="font-style:italic; text-align:center; margin:0;"></p>
+                style="margin-bottom: 25px; background: #f8f9fa; padding: 25px; border-radius: 12px; border: 1px solid #e9ecef; display:none;">
+                <div id="welcome-text" class="ql-snow ql-editor"></div>
+            </div>
+
+            <div id="size-guide-container" style="display:none; margin-bottom: 25px;">
+                <div class="size-guide-card">
+                    <div class="size-guide-icon">
+                        <i class="fas fa-ruler-combined"></i>
+                    </div>
+                    <div class="size-guide-content">
+                        <h4>Besoin d'aide pour les tailles ?</h4>
+                        <p>Consultez notre guide des tailles officiel avant de choisir l'équipement de votre enfant.</p>
+                    </div>
+                    <a id="size-guide-download-link" href="#" target="_blank" class="btn btn-primary size-guide-btn">
+                        <i class="fas fa-download"></i> Télécharger le Guide
+                    </a>
+                </div>
             </div>
 
             <div id="success-message" class="success-message">
@@ -201,7 +569,6 @@
                         <div class="form-group">
                             <label>Date de Naissance (Obligatoire)</label>
                             <input type="date" id="dob-input" name="dob" required>
-                            <small style="color:#666;">Le coût est calculé selon l'année de naissance.</small>
                         </div>
                         <div class="form-group">
                             <label>Prénom</label>
@@ -293,22 +660,123 @@
 
                     <p style="font-size:0.9rem; color:#666; margin-top:10px;">
                         <i class="fas fa-info-circle"></i> Si vous êtes en situation de faible revenu, le programme
-                        d’Accès-loisirs peut surement vous aider.
+                        d’Accès-loisirs peut vous aider.
                     </p>
+                </div>
+
+                <!-- UNIFORMES -->
+                <div class="form-section">
+                    <h3><i class="fas fa-tshirt"></i> Uniformes</h3>
+                    <p style="font-size:0.95rem; color:#555; margin-bottom: 20px; line-height: 1.6;">
+                        Depuis 2025, le club prête le chandail seulement. Le short vert et les bas blancs sont la
+                        responsabilité
+                        du joueur.
+                        Ils peuvent être achetés auprès du club et les shorts sont proposés à la location.
+                    </p>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Taille du Chandail (Prêté par le club)</label>
+                            <select name="jerseySize" required>
+                                <option value="">Choisir une taille...</option>
+                                <option value="YXS">YXS (Jeune Très Petit)</option>
+                                <option value="YS">YS (Jeune Petit)</option>
+                                <option value="YM">YM (Jeune Moyen)</option>
+                                <option value="YL">YL (Jeune Large)</option>
+                                <option value="YXL">YXL (Jeune Très Large)</option>
+                                <option value="AS">AS (Adulte Petit)</option>
+                                <option value="AM">AM (Adulte Moyen)</option>
+                                <option value="AL">AL (Adulte Large)</option>
+                                <option value="AXL">AXL (Adulte Très Large)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Taille du Short</label>
+                            <select name="shortSize" required>
+                                <option value="">Choisir une taille...</option>
+                                <option value="YXS">YXS</option>
+                                <option value="YS">YS</option>
+                                <option value="YM">YM</option>
+                                <option value="YL">YL</option>
+                                <option value="YXL">YXL</option>
+                                <option value="AS">AS</option>
+                                <option value="AM">AM</option>
+                                <option value="AL">AL</option>
+                                <option value="AXL">AXL</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:15px;">
+                        <label>Option pour le Short (Obligatoire)</label>
+                        <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:5px;">
+                            <label class="radio-option" style="font-weight:normal;">
+                                <input type="radio" name="shortOption" value="achat" required class="cost-trigger">
+                                Achat de short vert (<span class="cost-val-short-buy">--</span>$)
+                            </label>
+                            <label class="radio-option" style="font-weight:normal;">
+                                <input type="radio" name="shortOption" value="pret" required class="cost-trigger">
+                                Prêt de short vert (<span class="cost-val-short-rent">--</span>$)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:15px;">
+                        <label>Achat de bas blancs (<span class="cost-val-socks">--</span>$)</label>
+                        <div style="display:flex; gap:20px; margin-top:5px;">
+                            <label class="radio-option" style="font-weight:normal;">
+                                <input type="radio" name="socksOption" value="Oui" required class="cost-trigger"> Oui
+                            </label>
+                            <label class="radio-option" style="font-weight:normal;">
+                                <input type="radio" name="socksOption" value="Non" required class="cost-trigger"> Non
+                            </label>
+                        </div>
+                        <!-- Sock Size Dropdown (Visible only if Yes) -->
+                        <div id="socks-size-container"
+                            style="display:none; margin-top:15px; border-left: 3px solid var(--celtics-green); padding-left: 15px; animation: fadeIn 0.3s ease;">
+                            <label style="font-size: 0.9rem; font-weight: 600;">Taille des bas</label>
+                            <select name="socksSize" id="socks-size-select" style="margin-top:5px;">
+                                <option value="">Choisir une taille...</option>
+                                <option value="Très Petit">Très Petit (chaussure enfant 9 à 13)</option>
+                                <option value="Petit">Petit (chaussure 1 à 4)</option>
+                                <option value="Moyen">Moyen (chaussure 5 à 8)</option>
+                                <option value="Large">Large (chaussure 9 à 13)</option>
+                            </select>
+                        </div>
+                        <div id="socks-qty-container"
+                            style="display:none; margin-top:15px; border-left: 3px solid var(--celtics-green); padding-left: 15px;">
+                            <label style="font-size: 0.9rem; font-weight: 600;">Quantité</label>
+                            <input type="number" name="socksQuantity" id="socks-qty-input" value="1" min="1" max="10"
+                                style="width: 80px; margin-top:5px;">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- TARIFICATION -->
                 <div class="form-section">
                     <h3><i class="fas fa-tag"></i> Tarification</h3>
+                    <p
+                        style="font-size:0.95rem; color:#555; margin-bottom: 20px; font-style: italic; line-height: 1.5;">
+                        <i class="fas fa-info-circle" style="color:var(--celtics-green);"></i> Vous bénéficiez d’une
+                        remise pour l’inscription de plusieurs enfants qui habitent dans le même foyer. Pour cela, il
+                        est important de procéder à toutes les inscriptions en une seule fois.
+                    </p>
 
-                    <div class="form-group checkbox-group" id="discount-section">
-                        <label style="font-weight:normal; cursor:pointer;">
-                            <input type="checkbox" id="is-second-child"> Appliquer rabais 2ème enfant (-15$)
-                        </label>
-                        <label style="font-weight:normal; cursor:pointer; margin-left:20px;">
-                            <input type="checkbox" id="is-third-child"> Appliquer rabais 3ème enfant+ (-20$)
-                        </label>
+                    <div id="discounts-info-display"
+                        style="display:none; margin-bottom: 20px; background: #f0f7f3; padding: 15px; border-radius: 8px; border: 1px solid #d1e7dd;">
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                            <div style="font-weight: 500; color: #0f5132;">
+                                <i class="fas fa-minus-circle"></i> Rabais 2ème enfant : <strong
+                                    id="val-discount-2">--</strong>$
+                            </div>
+                            <div style="font-weight: 500; color: #0f5132;">
+                                <i class="fas fa-minus-circle"></i> Rabais 3ème enfant+ : <strong
+                                    id="val-discount-3">--</strong>$
+                            </div>
+                        </div>
                     </div>
+
+
 
                     <div id="calc-result" class="price-display">
                         <div id="base-price-display">Année de naissance requise...</div>
@@ -318,9 +786,50 @@
                     </div>
                 </div>
 
-                <div style="text-align: center;">
-                    <button type="submit" class="btn btn-primary" style="padding: 15px 40px; font-size: 1.2rem;">
-                        <i class="fas fa-paper-plane"></i> Envoyer l'inscription
+                <!-- VALIDATION ET PAIEMENT -->
+                <div class="form-section" id="validation-section">
+                    <h3><i class="fas fa-check-double"></i> Validation et paiement</h3>
+
+                    <div id="multi-child-prompt"
+                        style="margin-bottom: 25px; padding: 20px; background: #fff8e1; border-radius: 12px; border: 1px solid #ffe082;">
+                        <p style="font-weight: 600; font-size: 1.1rem; color: #856404; margin-bottom: 15px;">
+                            <i class="fas fa-users"></i> Souhaitez-vous inscrire un autre enfant afin de bénéficier de
+                            la
+                            réduction famille ?
+                        </p>
+                        <div style="display:flex; gap:30px;">
+                            <label class="radio-option" style="font-weight:700; font-size: 1.1rem;">
+                                <input type="radio" name="addAnotherChild" value="Oui"> Oui
+                            </label>
+                            <label class="radio-option" style="font-weight:700; font-size: 1.1rem;">
+                                <input type="radio" name="addAnotherChild" value="Non" checked> Non
+                            </label>
+                        </div>
+                        <p style="font-size: 0.85rem; color: #856404; margin-top: 10px; font-style: italic;">
+                            Note: Jusqu'à 15$ de rabais pour le 2ème enfant et 20$ pour le 3ème+.
+                        </p>
+                    </div>
+
+                    <div id="registration-summary"
+                        style="display:none; margin-top: 25px; border-top: 2px solid #eee; padding-top: 25px;">
+                        <h4 style="margin-bottom: 15px;"><i class="fas fa-list-ul"></i> Récapitulatif de votre commande
+                        </h4>
+                        <div id="summary-list"
+                            style="background: #f8f9fa; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
+                            <!-- JS Populated -->
+                        </div>
+                        <div style="text-align: right; padding: 15px; background: #e8f5e9; border-radius: 8px;">
+                            <span style="font-size: 1.1rem; font-weight: 600;">Grand Total à payer : </span>
+                            <span id="grand-total-display"
+                                style="font-size: 1.5rem; font-weight: 700; color: var(--celtics-green);">0 $</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 30px;">
+                    <button type="submit" id="submit-btn" class="btn btn-primary"
+                        style="padding: 15px 45px; font-size: 1.25rem;">
+                        <i class="fas fa-paper-plane"></i> <span id="submit-btn-text">Envoyer l'inscription</span>
                     </button>
                 </div>
 
@@ -374,14 +883,20 @@
 
         // State
         let settings = null;
+        let registeredChildren = [];
+        let currentChildData = null;
 
         // Elements
+        const form = document.getElementById('registration-form');
         const formContainer = document.getElementById('form-container');
         const closedMessage = document.getElementById('closed-message');
         const dobInput = document.getElementById('dob-input');
-
-        const isSecondChild = document.getElementById('is-second-child');
-        const isThirdChild = document.getElementById('is-third-child');
+        const submitBtn = document.getElementById('submit-btn');
+        const submitBtnText = document.getElementById('submit-btn-text');
+        const addAnotherChoices = document.querySelectorAll('input[name="addAnotherChild"]');
+        const summaryDiv = document.getElementById('registration-summary');
+        const summaryList = document.getElementById('summary-list');
+        const grandTotalDisplay = document.getElementById('grand-total-display');
 
         // Load Settings
         async function init() {
@@ -403,6 +918,40 @@
                             document.getElementById('welcome-text').innerHTML = settings.welcomeMessage;
                             msgDiv.style.display = 'block';
                         }
+
+                        // Show size guide if exists
+                        if (settings.sizeGuideUrl) {
+                            const guideDiv = document.getElementById('size-guide-container');
+                            const guideLink = document.getElementById('size-guide-download-link');
+                            guideLink.href = settings.sizeGuideUrl;
+                            guideDiv.style.display = 'block';
+                        }
+
+                        // Update Discounts Display
+                        const discDiv = document.getElementById('discounts-info-display');
+                        if (discDiv && (settings.discount2nd || settings.discount3rd)) {
+                            document.getElementById('val-discount-2').innerText = settings.discount2nd || 0;
+                            document.getElementById('val-discount-3').innerText = settings.discount3rd || 0;
+                            discDiv.style.display = 'block';
+                        }
+
+                        // Update Equipment Costs in UI
+                        if (settings.costShortBuy) document.querySelectorAll('.cost-val-short-buy').forEach(el => el.innerText = settings.costShortBuy);
+                        if (settings.costShortRent) document.querySelectorAll('.cost-val-short-rent').forEach(el => el.innerText = settings.costShortRent);
+                        if (settings.costSocks) document.querySelectorAll('.cost-val-socks').forEach(el => el.innerText = settings.costSocks);
+
+                        // Update Season Year in Title
+                        if (settings.seasonYear) {
+                            let titleText = settings.seasonYear;
+                            if (settings.seasonType) {
+                                titleText = `${settings.seasonType} ${titleText}`;
+                            }
+                            document.getElementById('season-year-display').innerText = titleText;
+                        } else {
+                            // Fallback to current year if not set
+                            document.getElementById('season-year-display').innerText = new Date().getFullYear();
+                        }
+
                     } else {
                         formContainer.style.display = 'none';
                         closedMessage.style.display = 'block';
@@ -419,6 +968,7 @@
                 formContainer.style.display = 'none';
                 closedMessage.style.display = 'block';
             }
+            updateRegistrationTracker(); // Initialize tracker state
         }
 
         // Logic Price Calculation
@@ -457,19 +1007,38 @@
 
             if (match) {
                 let price = match.price;
-                let discount = 0;
 
-                if (isSecondChild.checked) {
-                    discount = settings.discount2nd || 15;
-                    // Reset third
-                    isThirdChild.checked = false;
-                } else if (isThirdChild.checked) {
-                    discount = settings.discount3rd || 20;
+                // Add Equipment Costs
+                let equipPrice = 0;
+                const shortChoice = document.querySelector('input[name="shortOption"]:checked');
+                const socksChoice = document.querySelector('input[name="socksOption"]:checked');
+
+                if (shortChoice) {
+                    if (shortChoice.value === 'achat') equipPrice += (settings.costShortBuy || 0);
+                    else if (shortChoice.value === 'pret') equipPrice += (settings.costShortRent || 0);
                 }
 
-                const final = Math.max(0, price - discount);
+                if (socksChoice && socksChoice.value === 'Oui') {
+                    const socksQty = parseInt(document.getElementById('socks-qty-input').value) || 1;
+                    equipPrice += (settings.costSocks || 0) * socksQty;
+                }
 
-                document.getElementById('base-price-display').innerText = `Catégorie: ${match.category} (Base: ${match.price}$)`;
+                // Family Discount (Auto based on children already in list)
+                let familyDiscount = 0;
+                const childCount = registeredChildren.length;
+                if (childCount === 1) {
+                    familyDiscount = settings.discount2nd || 15;
+                } else if (childCount >= 2) {
+                    familyDiscount = settings.discount3rd || 20;
+                }
+
+                const final = Math.max(0, price + equipPrice - familyDiscount);
+
+                let baseText = `Catégorie: ${match.category} (${price}$)`;
+                if (equipPrice > 0) baseText += ` + Équipement: ${equipPrice}$`;
+                if (familyDiscount > 0) baseText += ` - Rabais Famille: ${familyDiscount}$`;
+
+                document.getElementById('base-price-display').innerText = baseText;
                 document.getElementById('final-price-display').innerText = `${final} $`;
 
                 // Form Hidden Inputs
@@ -479,48 +1048,474 @@
                 document.getElementById('base-price-display').innerText = `Aucun tarif trouvé pour ${year}`;
                 document.getElementById('final-price-display').innerText = "-- $";
             }
+            updateRegistrationTracker();
         }
 
         // Listeners
         dobInput.addEventListener('change', updatePrice);
-        isSecondChild.addEventListener('change', () => {
-            if (isSecondChild.checked) isThirdChild.checked = false;
-            updatePrice();
+        document.querySelectorAll('.cost-trigger').forEach(el => {
+            el.addEventListener('change', updatePrice);
         });
-        isThirdChild.addEventListener('change', () => {
-            if (isThirdChild.checked) isSecondChild.checked = false;
-            updatePrice();
+        document.getElementById('socks-qty-input').addEventListener('input', updatePrice);
+
+        // Handle Add Another Choice
+        addAnotherChoices.forEach(choice => {
+            choice.addEventListener('change', () => {
+                if (choice.value === 'Non') {
+                    updateFinalSummary();
+                    summaryDiv.style.display = 'block';
+                    submitBtnText.innerText = "Envoyer toutes les inscriptions";
+                } else {
+                    summaryDiv.style.display = 'none';
+                    submitBtnText.innerText = "Ajouter cet enfant et continuer";
+                }
+            });
         });
 
-        // Submit Logic
-        document.getElementById('registration-form').addEventListener('submit', async (e) => {
+        function updateFinalSummary() {
+            // Include current form data in a temporary way
+            const formData = new FormData(form);
+            const currentData = Object.fromEntries(formData.entries());
+            const all = [...registeredChildren, currentData];
+
+            summaryList.innerHTML = '';
+            let total = 0;
+
+            all.forEach((child, idx) => {
+                const childPrice = parseFloat(child.finalPrice) || 0;
+                total += childPrice;
+
+                const item = document.createElement('div');
+                item.style.padding = '12px 15px';
+                item.style.borderBottom = (idx < all.length - 1) ? '1px solid #eee' : 'none';
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.innerHTML = `
+                    <div>
+                        <div style="font-weight:600;">${idx + 1}. ${child.childFirstName} ${child.childLastName}</div>
+                        <div style="font-size:0.85rem; color:#666;">Catégorie: ${child.programCat} | Équipement: ${child.shortOption}${child.socksOption === 'Oui' ? ' + Bas' : ''}</div>
+                    </div>
+                    <div style="font-weight:700;">${childPrice} $</div>
+                `;
+                summaryList.appendChild(item);
+            });
+
+            grandTotalDisplay.innerText = `${total} $`;
+        }
+
+        // --- Registration Tracker Logic ---
+        const trackerBar = document.getElementById('registration-tracker');
+        const trackerDrawer = document.getElementById('registration-drawer');
+        const trackerChildCount = document.getElementById('tracker-child-count');
+        const trackerLabel = document.getElementById('tracker-label');
+        const trackerTotalPrice = document.getElementById('tracker-total-price');
+        const drawerChildList = document.getElementById('drawer-child-list');
+        const closeDrawer = document.getElementById('close-drawer');
+
+        function updateRegistrationTracker() {
+            const formData = new FormData(form);
+            const currentData = Object.fromEntries(formData.entries());
+            const all = [...registeredChildren, currentData];
+
+            // Should tracker be visible? We show it if at least one child is registered OR if currently editing name
+            const hasStartedSth = currentData.childFirstName || currentData.childLastName;
+            const showTracker = registeredChildren.length > 0 || (hasStartedSth && hasStartedSth.length > 1);
+
+            if (showTracker) {
+                trackerBar.classList.add('active');
+            } else {
+                trackerBar.classList.remove('active');
+            }
+
+            const count = all.length;
+            trackerChildCount.innerText = count;
+            trackerLabel.innerText = count > 1 ? 'enfants inscrits' : 'enfant inscrit';
+
+            let total = 0;
+            drawerChildList.innerHTML = '';
+
+            all.forEach((child, idx) => {
+                const price = parseFloat(child.finalPrice) || 0;
+                total += price;
+
+                // Add to drawer list
+                const item = document.createElement('div');
+                item.className = 'drawer-item';
+                const name = (child.childFirstName || child.childLastName) ? `${child.childFirstName} ${child.childLastName}` : `Enfant ${idx + 1}`;
+                item.innerHTML = `
+                    <span style="font-size:0.9rem;">${name}</span>
+                    <span style="font-weight:700;">${price} $</span>
+                `;
+                drawerChildList.appendChild(item);
+            });
+
+            trackerTotalPrice.innerText = `${total} $`;
+        }
+
+        // Listeners for tracker visibility
+        document.querySelectorAll('input[name="childFirstName"], input[name="childLastName"]').forEach(input => {
+            input.addEventListener('input', updateRegistrationTracker);
+        });
+
+        trackerBar.onclick = (e) => {
+            if (e.target.id === 'close-drawer') return;
+            trackerDrawer.classList.toggle('active');
+            document.getElementById('tracker-chevron').classList.toggle('fa-chevron-down');
+            document.getElementById('tracker-chevron').classList.toggle('fa-chevron-up');
+        };
+
+        closeDrawer.onclick = (e) => {
+            e.stopPropagation();
+            trackerDrawer.classList.remove('active');
+            document.getElementById('tracker-chevron').classList.remove('fa-chevron-down');
+            document.getElementById('tracker-chevron').classList.add('fa-chevron-up');
+        };
+
+        // Toggle Sock Size Visibility
+        const socksOptions = document.querySelectorAll('input[name="socksOption"]');
+        const socksSizeContainer = document.getElementById('socks-size-container');
+        const socksQtyContainer = document.getElementById('socks-qty-container');
+        const socksSizeSelect = document.getElementById('socks-size-select');
+        const socksQtyInput = document.getElementById('socks-qty-input');
+
+        socksOptions.forEach(opt => {
+            opt.addEventListener('change', () => {
+                if (opt.checked && opt.value === 'Oui') {
+                    socksSizeContainer.style.display = 'block';
+                    socksQtyContainer.style.display = 'block';
+                    socksSizeSelect.required = true;
+                    socksQtyInput.value = 1;
+                } else if (opt.checked) {
+                    socksSizeContainer.style.display = 'none';
+                    socksQtyContainer.style.display = 'none';
+                    socksSizeSelect.required = false;
+                    socksSizeSelect.value = '';
+                }
+            });
+        });
+
+        // --- Confirmation Modal Logic ---
+        const confirmModal = document.getElementById('confirm-registration-modal');
+        const modalChildrenList = document.getElementById('modal-children-list');
+        const modalGrandTotal = document.getElementById('modal-grand-total');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const finalConfirmBtn = document.getElementById('final-confirm-btn');
+
+        function openConfirmationModal() {
+            const formData = new FormData(form);
+            const currentData = Object.fromEntries(formData.entries());
+            const all = [...registeredChildren, currentData];
+
+            modalChildrenList.innerHTML = '';
+            let total = 0;
+
+            all.forEach((child, idx) => {
+                const childPrice = parseFloat(child.finalPrice) || 0;
+                total += childPrice;
+
+                const card = document.createElement('div');
+                card.className = 'modal-child-card';
+
+                // Helper for equipment text
+                let shortDetails = child.shortOption === 'achat' ? 'Achat' : 'Prêt (Location)';
+                let socksDetails = child.socksOption === 'Oui' ? `${child.socksQuantity} x ${child.socksSize}` : 'Non';
+
+                const shortCost = child.shortOption === 'achat' ? (settings.costShortBuy || 0) : (settings.costShortRent || 0);
+                const socksCost = child.socksOption === 'Oui' ? (settings.costSocks || 0) * (parseInt(child.socksQuantity) || 1) : 0;
+                const regCost = childPrice - shortCost - socksCost;
+
+                card.innerHTML = `
+                    <div class="modal-child-header">Enfant ${idx + 1} : ${child.childFirstName} ${child.childLastName} (${child.dob})</div >
+                    <div class="modal-detail-row">
+                        <span>Catégorie (${child.programCat})</span>
+                        <span>${regCost} $</span>
+                    </div>
+                    <div class="modal-detail-row">
+                        <span>Short (${child.shortSize}) - ${shortDetails}</span>
+                        <span>${shortCost} $</span>
+                    </div>
+                    <div class="modal-detail-row">
+                        <span>Bas - ${socksDetails}</span>
+                        <span>${socksCost} $</span>
+                    </div>
+                    <div class="modal-detail-row" style="margin-top:10px; font-weight:700; border-top:1px dashed #ccc; padding-top:5px;">
+                        <span>Total pour cet enfant</span>
+                        <span>${childPrice} $</span>
+                    </div>
+            `;
+                modalChildrenList.appendChild(card);
+            });
+
+            modalGrandTotal.innerText = `${total} $`;
+            confirmModal.classList.add('active');
+        }
+
+        closeModalBtn.onclick = () => confirmModal.classList.remove('active');
+
+        // Step 1: Proceed to Payment Modal from Confirmation
+        document.getElementById('proceed-payment-btn').onclick = () => {
+            const totalText = modalGrandTotal.innerText; // e.g. "260 $"
+            document.getElementById('payment-amount-display').innerText = totalText;
+            document.getElementById('stripe-payment-modal').classList.add('active');
+        };
+
+        // Step 2: Handle Fake Payment Submit
+        document.getElementById('payment-form').onsubmit = (e) => {
             e.preventDefault();
-            const btn = e.target.querySelector('button[type="submit"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
-            btn.disabled = true;
+            const payBtn = document.getElementById('pay-button');
+            const originalText = payBtn.innerText;
 
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
-            data.timestamp = serverTimestamp();
-            data.status = 'New';
-            data.yearOfBirth = new Date(data.dob).getFullYear(); // Store year easily
+            payBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Traitement...';
+            payBtn.disabled = true;
 
-            // Handle checkbox boolean
-            data.discountApplied = isSecondChild.checked ? '2nd Child' : (isThirdChild.checked ? '3rd+ Child' : 'None');
+            // Simulate stripe delay
+            setTimeout(() => {
+                document.getElementById('stripe-payment-modal').classList.remove('active');
+                payBtn.innerHTML = originalText;
+                payBtn.disabled = false;
+
+                // Final Submission
+                submitAllRegistrations();
+            }, 1500);
+        };
+
+        // Send Email via Resend
+        async function sendConfirmationEmail(allChildren, parentEmail, totalDisplay) {
+            const RESEND_KEY = 're_VWwsQhz5_K5rYSgrfjhysuiEQTvWqjTw4';
+
+            const childrenListItems = allChildren.map(c => `
+                <li style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee;">
+                    <div style="font-size: 1.1em; font-weight: bold; color: #007A33;">${c.childFirstName} ${c.childLastName}</div>
+                    <div style="color: #666;">Né(e) le : ${c.dob}</div>
+                    <div style="color: #666;">Catégorie : ${c.programCat || 'N/A'}</div>
+                    <div style="margin-top: 4px;">
+                        <span style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em;">Chandail: ${c.jerseySize}</span>
+                        ${c.shortOption ? `<span style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; margin-left: 5px;">Short: ${c.shortSize}</span>` : ''}
+                        ${c.socksOption ? `<span style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; margin-left: 5px;">Bas: ${c.socksSize}</span>` : ''}
+                    </div>
+                </li>
+            `).join('');
+
+            const emailHtml = `
+                <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+                    <div style="background-color: #007A33; padding: 25px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Confirmation d'Inscription</h1>
+                        <p style="color: #e0e0e0; margin-top: 5px;">Celtics de l'Ouest</p>
+                    </div>
+                    
+                    <div style="padding: 25px; background-color: #ffffff;">
+                        <p style="font-size: 16px; color: #333;">Bonjour,</p>
+                        <p style="font-size: 16px; color: #333; line-height: 1.5;">
+                            Nous avons bien reçu votre inscription pour la saison à venir. Merci de faire partie de l'équipe !
+                        </p>
+                        
+                        <h3 style="color: #007A33; border-bottom: 2px solid #007A33; padding-bottom: 8px; margin-top: 25px;">Détails de l'inscription</h3>
+                        <ul style="list-style: none; padding: 0;">
+                            ${childrenListItems}
+                        </ul>
+
+                        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 6px; margin-top: 25px; text-align: right;">
+                            <span style="font-size: 14px; color: #666; margin-right: 10px;">Total Payé :</span>
+                            <span style="font-size: 20px; font-weight: bold; color: #333;">${totalDisplay}</span>
+                        </div>
+
+                        <p style="font-size: 14px; color: #666; margin-top: 30px; text-align: center;">
+                            Si vous avez des questions, n'hésitez pas à répondre à ce courriel.
+                        </p>
+                    </div>
+                    
+                    <div style="background-color: #f0f0f0; padding: 15px; text-align: center; font-size: 12px; color: #888;">
+                        &copy; ${new Date().getFullYear()} Celtics de l'Ouest. Tous droits réservés.
+                    </div>
+                </div>
+            `;
 
             try {
-                await addDoc(collection(db, "registrations"), data);
-                document.getElementById('registration-form').style.display = 'none';
-                document.getElementById('success-message').style.display = 'block';
+                await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${RESEND_KEY}`
+                    },
+                    body: JSON.stringify({
+                        from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+                        to: parentEmail,
+                        subject: "Confirmation d'inscription - Celtics de l'Ouest",
+                        html: emailHtml
+                    })
+                });
+                console.log("Courriel de confirmation envoyé.");
+            } catch (error) {
+                console.error("Erreur lors de l'envoi du courriel:", error);
+                // We proceed anyway to show the success screen
+            }
+        }
+
+        async function submitAllRegistrations() {
+            // We can show a global loading state here if needed, but the modals are closed now or transitioning.
+            // Let's use the 'success-message' logic container logic as before.
+
+            try {
+                const formData = new FormData(form);
+                const lastChildData = Object.fromEntries(formData.entries());
+                const allChildren = [...registeredChildren, lastChildData];
+                const sessionId = `${lastChildData.parent1Email}_${Date.now()} `;
+
+                for (let i = 0; i < allChildren.length; i++) {
+                    const child = allChildren[i];
+                    child.timestamp = serverTimestamp();
+                    child.status = 'New';
+                    child.yearOfBirth = new Date(child.dob).getFullYear();
+                    child.registrationSessionId = sessionId;
+                    child.childIndex = i + 1;
+                    child.totalChildrenInSession = allChildren.length;
+
+                    // MAPPING FOR ADMIN / PLAYERS COLLECTION
+                    // Map child names to standard firstName/lastName
+                    child.firstName = child.childFirstName;
+                    child.lastName = child.childLastName;
+
+                    // Map Parent Info
+                    if (child.parent1Name) {
+                        const parts = child.parent1Name.trim().split(' ');
+                        child.parentFirstName = parts[0];
+                        child.parentLastName = parts.slice(1).join(' ') || '';
+                    } else {
+                        child.parentFirstName = '';
+                        child.parentLastName = '';
+                    }
+
+                    child.parentEmail = child.parent1Email;
+                    child.parentPhone = child.phoneFamily;
+
+                    if (i === 1) child.discountApplied = '2nd Child';
+                    else if (i >= 2) child.discountApplied = '3rd+ Child';
+                    else child.discountApplied = 'None'; // Final Save
+                    await addDoc(collection(db, "registrations"), child);
+                }
+
+                // Get Total Amount for Email
+                const totalDisplay = document.getElementById('modal-grand-total').innerText;
+
+                // Send Confirmation Email
+                // Using last child's email as the parent email
+                await sendConfirmationEmail(allChildren, lastChildData.parent1Email, totalDisplay);
+
+                confirmModal.classList.remove('active');
+                form.style.display = 'none';
+
+                // Hide Tracker and Size Guide
+                document.getElementById('registration-tracker').style.display = 'none';
+                document.getElementById('size-guide-container').style.display = 'none';
+
+                // Update success message with email and style
+                const successMsg = document.getElementById('success-message');
+                successMsg.querySelector('p').innerHTML = `Nous avons bien reçu votre demande. Merci de faire partie de l'équipe !<br><strong>Un courriel de confirmation a été envoyé à ${lastChildData.parent1Email}.</strong>`;
+                successMsg.querySelector('p').style.color = 'var(--celtics-green)'; // Make text green/visible
+                successMsg.querySelector('p').style.fontWeight = '500';
+                successMsg.style.display = 'block';
+
+                // Fully Reset State for "Inscrire un autre enfant" (Start fresh)
+                registeredChildren = [];
+                document.getElementById('tracker-child-count').innerText = '0';
+                document.getElementById('tracker-total-price').innerText = '0 $';
+                document.getElementById('drawer-child-list').innerHTML = '';
+                form.reset();
+
+                // Reset Price Displays
+                document.getElementById('base-price-display').innerText = "Année de naissance requise...";
+                document.getElementById('final-price-display').innerText = "-- $";
+                document.getElementById('socks-size-container').style.display = 'none';
+                document.getElementById('socks-qty-container').style.display = 'none';
+
                 document.getElementById('welcome-message-container').style.display = 'none';
                 window.scrollTo(0, 0);
             } catch (error) {
                 console.error("Error:", error);
-                alert("Une erreur est survenue: " + error.message);
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                alert("Une erreur est survenue lors de l'envoi : " + error.message);
             }
+        }
+
+        // Submit Logic (Now opens modal if last child)
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Trigger browser validation to show specific missing fields
+            if (!form.reportValidity()) {
+                return;
+            }
+
+            const isAddingMore = document.querySelector('input[name="addAnotherChild"]:checked').value === 'Oui';
+
+            if (isAddingMore) {
+                // Save current child and reset form
+                const formData = new FormData(form);
+                const data = Object.fromEntries(formData.entries());
+
+                registeredChildren.push(data);
+
+                // Reset child-specific fields
+                // We keep parent info: parentName, email, phone, address, city, postcode
+                // We reset: sex, dob, firstName, lastName, photoAuth, jerseySize, shortSize, shortOption, socksOption, socksSize, socksQuantity
+
+                // Helper to reset by name
+                const toReset = ['childFirstName', 'childLastName', 'dob', 'gender', 'medical', 'photoAuth', 'jerseySize', 'shortSize', 'shortOption', 'socksOption', 'socksSize', 'socksQuantity', 'finalPrice', 'programCat'];
+                toReset.forEach(name => {
+                    const el = form.elements[name];
+                    if (!el) return;
+
+                    // Robust check for Radio Groups (NodeList)
+                    if (el instanceof RadioNodeList || (el.length > 0 && el[0].type === 'radio')) {
+                        el.forEach(r => r.checked = false);
+                    } else if (el.type === 'radio' || el.type === 'checkbox') {
+                        el.checked = false;
+                    } else if (el.tagName === 'SELECT') {
+                        el.value = '';
+                    } else if (name === 'socksQuantity') {
+                        el.value = 1;
+                    } else {
+                        el.value = '';
+                    }
+                });
+
+                // Clear price displays
+                document.getElementById('base-price-display').innerText = "Année de naissance requise...";
+                document.getElementById('final-price-display').innerText = "-- $";
+
+                // Special resets for UI containers
+                document.getElementById('socks-size-container').style.display = 'none';
+                document.getElementById('socks-qty-container').style.display = 'none';
+                document.getElementById('is-second-child')?.remove(); // Cleanup old logic if still there
+                document.getElementById('is-third-child')?.remove();
+
+                // Re-init price display
+                updatePrice();
+                updateRegistrationTracker();
+
+                // Show success feedback on the tracker
+                const tracker = document.getElementById('registration-tracker');
+                if (tracker) {
+                    tracker.classList.add('pop-animation');
+                    setTimeout(() => tracker.classList.remove('pop-animation'), 400);
+                }
+
+                // Scroll to top of child section or top of form
+                document.getElementById('welcome-message-container').scrollIntoView({ behavior: 'smooth' });
+
+                // Reset the "Add another" choice to "Non" for next cycle
+                document.querySelector('input[name="addAnotherChild"][value="Non"]').checked = true;
+                summaryDiv.style.display = 'none';
+                submitBtnText.innerText = "Envoyer l'inscription"; // Will be updated back if needed
+
+                // Show Custom Success Modal
+                document.getElementById('child-added-modal-message').innerText = `Enfant ${registeredChildren.length} ajouté avec succès. Veuillez remplir les informations pour le prochain enfant.`;
+                document.getElementById('child-added-modal').classList.add('active');
+                return;
+            }
+
+            // If not adding more, OPEN CONFIRMATION MODAL
+            openConfirmationModal();
         });
 
         // Toggle Mobile Menu
@@ -544,6 +1539,143 @@
         init();
 
     </script>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-registration-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-check"></i> Confirmation de votre inscription</h2>
+                <p>Veuillez vérifier les informations ci-dessous avant de procéder au paiement.</p>
+            </div>
+
+            <div id="modal-children-list">
+                <!-- Populated by JS -->
+            </div>
+
+            <div class="modal-total-section">
+                <div style="font-size:1.1rem; color:#666;">Total à payer (sans taxes)</div>
+                <div style="font-size:2rem; font-weight:800; color:var(--celtics-green);" id="modal-grand-total">0 $
+                </div>
+                <p style="font-size:0.85rem; color:#888; margin-top:5px; font-style:italic;">
+                    <!-- Note: Le paiement s'effectue par virement Interac ou argent comptant lors de la première séance. -->
+                </p>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="close-modal-btn">
+                    <i class="fas fa-edit"></i> Modifier
+                </button>
+                <button type="button" class="btn btn-primary" id="proceed-payment-btn" style="padding: 12px 30px;">
+                    <i class="fas fa-credit-card"></i> Payer par Carte
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stripe Payment Mockup Modal -->
+    <div id="stripe-payment-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+                <h3 style="margin:0; color:#333;"><i class="fas fa-lock" style="color:var(--celtics-green);"></i>
+                    Paiement Sécurisé</h3>
+                <div style="font-size: 2.5rem; font-weight: 800; color: #333; margin: 15px 0;"
+                    id="payment-amount-display">0 $</div>
+                <div style="display:flex; gap:10px; color:#555; font-size:1.5rem;">
+                    <i class="fab fa-cc-visa"></i>
+                    <i class="fab fa-cc-mastercard"></i>
+                    <i class="fab fa-cc-amex"></i>
+                </div>
+            </div>
+
+            <form id="payment-form" style="margin-top: 20px;">
+                <div class="form-group">
+                    <label style="font-size:0.9rem; color:#666;">Titulaire de la carte</label>
+                    <input type="text" placeholder="Nom complet"
+                        style="width:100%; padding:10px; border:1px solid #ddd; border-radius:5px;" required>
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.9rem; color:#666;">Numéro de carte</label>
+                    <div style="position:relative;">
+                        <input type="text" placeholder="0000 0000 0000 0000"
+                            style="width:100%; padding:10px 10px 10px 40px; border:1px solid #ddd; border-radius:5px;"
+                            required>
+                        <i class="far fa-credit-card" style="position:absolute; left:12px; top:12px; color:#999;"></i>
+                    </div>
+                </div>
+                <div style="display:flex; gap:15px;">
+                    <div class="form-group" style="flex:1;">
+                        <label style="font-size:0.9rem; color:#666;">Expiration</label>
+                        <input type="text" placeholder="MM / AA"
+                            style="width:100%; padding:10px; border:1px solid #ddd; border-radius:5px;" required>
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label style="font-size:0.9rem; color:#666;">CVC</label>
+                        <input type="text" placeholder="123"
+                            style="width:100%; padding:10px; border:1px solid #ddd; border-radius:5px;" required>
+                    </div>
+                </div>
+
+                <div style="margin-top:25px;">
+                    <button type="submit" class="btn btn-primary" style="width:100%; padding:12px;" id="pay-button">
+                        Payer Maintenant
+                    </button>
+                    <button type="button" class="btn-secondary"
+                        onclick="document.getElementById('stripe-payment-modal').classList.remove('active')"
+                        style="width:100%; margin-top:10px; background:transparent; color:#666; border:none;">
+                        Annuler
+                    </button>
+                </div>
+            </form>
+            <div style="text-align:center; margin-top:15px; font-size:0.8rem; color:#999;">
+                <i class="fas fa-shield-alt"></i> Vos informations sont chiffrées et sécurisées.
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Child Added Success Modal -->
+    <div id="child-added-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px; text-align: center;">
+            <div style="margin-bottom: 20px;">
+                <i class="fas fa-check-circle" style="font-size: 4rem; color: var(--celtics-green);"></i>
+            </div>
+            <h2 style="color: var(--celtics-green); margin-bottom: 15px;">Succès !</h2>
+            <p id="child-added-modal-message" style="font-size: 1.1rem; color: #555; margin-bottom: 30px;"></p>
+            <button type="button" class="btn btn-primary"
+                onclick="document.getElementById('child-added-modal').classList.remove('active')" style="width: 100%;">
+                Continuer
+            </button>
+        </div>
+    </div>
+
+    <!-- Floating Tracker Bar -->
+    <div id="registration-tracker" class="registration-tracker-bar">
+        <div class="tracker-info">
+            <div class="tracker-badge" id="tracker-child-count">0</div>
+            <div style="font-weight: 600; font-size: 0.95rem;">
+                <span id="tracker-label">enfant inscrit</span>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="tracker-price" id="tracker-total-price">0 $</div>
+            <i class="fas fa-chevron-up" id="tracker-chevron" style="font-size: 0.8rem; opacity: 0.8;"></i>
+        </div>
+    </div>
+
+    <!-- Registration Drawer (Details) -->
+    <div id="registration-drawer" class="tracker-drawer">
+        <div class="drawer-header">
+            <span>Détails des inscriptions</span>
+            <i class="fas fa-times" style="cursor:pointer; opacity: 0.5;" id="close-drawer"></i>
+        </div>
+        <div class="drawer-list" id="drawer-child-list">
+            <!-- Populated by JS -->
+        </div>
+        style="padding: 15px; background: #f8f9fa; border-top: 1px solid #eee; font-size: 0.85rem; color: #666;
+        text-align: center;">
+        <i class="fas fa-chevron-down"></i> Cliquez sur la barre verte pour masquer
+    </div>
+    </div>
 
 </body>
 

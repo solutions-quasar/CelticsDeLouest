@@ -41,8 +41,8 @@ async function loadPlayersDirectory(viewMode = 'grid') {
     try {
         const playersSnapshot = await window.getDocs(window.collection(window.db, "players"));
 
-        // Update Cache
-        if (!window.dataCache.players) window.dataCache.players = {};
+        // Refresh Cache - Clear old entries so deleted players don't persist
+        window.dataCache.players = {};
         playersSnapshot.forEach(doc => {
             window.dataCache.players[doc.id] = { id: doc.id, ...doc.data() };
         });

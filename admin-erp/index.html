@@ -137,8 +137,11 @@
                         Automatisations</button>
                     <button class="nav-btn" data-target="view-settings"><i class="fas fa-cogs"></i>
                         Configuration</button>
+                    <button class="nav-btn" data-target="view-email-campaigns"><i class="fas fa-bullhorn"></i>
+                        Campagnes</button>
                     <button class="nav-btn" data-target="view-admins" id="nav-admins-btn" style="display:none;"><i
                             class="fas fa-users-cog"></i> Utilisateurs</button>
+
                 </nav>
                 <div class="sidebar-footer">
                     <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> Déconnexion</button>
@@ -725,7 +728,164 @@
                         </div>
                     </div>
 
+
+                    <!-- EMAIL CAMPAIGNS VIEW -->
+                    <div id="view-email-campaigns" class="view">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gestion des Campagnes</h3>
+                                <div class="header-actions-group">
+                                    <button class="btn-action" id="btn-new-campaign"><i class="fas fa-plus"></i>
+                                        Nouvelle</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <!-- Top Tabs -->
+                                <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 20px;">
+                                    <div class="tab-link active" data-tab="tab-campaign-list"
+                                        onclick="loadCampaigns('all')"><i class="fas fa-list"></i> Liste</div>
+                                    <div class="tab-link" data-tab="tab-campaign-editor" style="display:none;"
+                                        id="tab-link-editor"><i class="fas fa-edit"></i> Éditeur</div>
+                                </div>
+
+                                <!-- TAB 1: LIST / DASHBOARD -->
+                                <div id="tab-campaign-list" class="tab-content active">
+                                    <div class="filter-group" style="margin-bottom:15px; display:flex; gap:10px;">
+                                        <button class="btn-filter active" data-filter="all">Tous</button>
+                                        <button class="btn-filter" data-filter="draft">Brouillons</button>
+                                        <button class="btn-filter" data-filter="scheduled">Programmés</button>
+                                        <button class="btn-filter" data-filter="sent">Envoyés</button>
+                                    </div>
+                                    <div id="campaigns-list-container" class="view-grid">
+                                        <p>Chargement des campagnes...</p>
+                                    </div>
+                                </div>
+
+                                <!-- TAB 2: EDITOR -->
+                                <div id="tab-campaign-editor" class="tab-content">
+                                    <input type="hidden" id="camp-id">
+                                    <input type="hidden" id="camp-status">
+
+                                    <div class="form-row" style="display:flex; gap:15px; margin-bottom:15px;">
+                                        <div class="form-group" style="flex:2;">
+                                            <label>Sujet</label>
+                                            <input type="text" id="camp-subject" class="form-control"
+                                                placeholder="Sujet du courriel...">
+                                        </div>
+                                        <div class="form-group" style="flex:1;">
+                                            <label>Catégorie</label>
+                                            <select id="camp-category" class="form-control">
+                                                <option value="info">Information</option>
+                                                <option value="alert">Alerte</option>
+                                                <option value="promo">Promotion</option>
+                                                <option value="news">Nouvelles</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group"
+                                        style="background:#f9f9f9; padding:15px; border-radius:6px; border:1px solid #eee;">
+                                        <label><i class="fas fa-users"></i> Audience</label>
+                                        <div style="display:flex; gap:15px; align-items:center;">
+                                            <select id="camp-audience-type" class="form-control"
+                                                style="max-width:250px;">
+                                                <option value="all_active">Tous les actifs (Saison courante)</option>
+                                                <option value="team">Par Équipe</option>
+                                                <option value="coaches">Tous les Coachs</option>
+                                                <option value="specific">Emails spécifiques (Test/Manuel)</option>
+                                            </select>
+
+                                            <div id="camp-audience-team-wrapper" style="display:none;">
+                                                <select id="camp-audience-team" class="form-control"></select>
+                                            </div>
+
+                                            <div id="camp-audience-estimate"
+                                                style="font-weight:bold; color:var(--primary); margin-left:auto;">
+                                                Estimation: -
+                                            </div>
+                                        </div>
+                                        <!-- Specific emails area -->
+                                        <div id="camp-audience-specific-wrapper" style="display:none; margin-top:10px;">
+                                            <textarea id="camp-specific-emails" class="form-control" rows="2"
+                                                placeholder="email1@test.com, email2@test.com..."></textarea>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>Contenu</label>
+                                        <!-- Quill Wrapper -->
+                                        <div id="camp-editor-toolbar">
+                                            <span class="ql-formats">
+                                                <select class="ql-header"></select>
+                                                <select class="ql-font"></select>
+                                            </span>
+                                            <span class="ql-formats">
+                                                <button class="ql-bold"></button>
+                                                <button class="ql-italic"></button>
+                                                <button class="ql-underline"></button>
+                                                <button class="ql-strike"></button>
+                                            </span>
+                                            <span class="ql-formats">
+                                                <select class="ql-color"></select>
+                                                <select class="ql-background"></select>
+                                            </span>
+                                            <span class="ql-formats">
+                                                <button class="ql-list" value="ordered"></button>
+                                                <button class="ql-list" value="bullet"></button>
+                                                <select class="ql-align"></select>
+                                            </span>
+                                            <span class="ql-formats">
+                                                <button class="ql-link"></button>
+                                                <button class="ql-image"></button>
+                                            </span>
+                                        </div>
+                                        <div id="camp-editor" style="height: 400px; background: white;"></div>
+                                    </div>
+
+                                    <!-- Scheduling & Actions -->
+                                    <div class="form-group"
+                                        style="background:#eef2f5; padding:15px; border-radius:6px; margin-top:20px;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                                            <div style="display:flex; gap:15px; align-items:center;">
+                                                <div>
+                                                    <label
+                                                        style="margin-bottom:4px; display:block; font-size:0.85rem;">Programmer
+                                                        (Optionnel)</label>
+                                                    <input type="datetime-local" id="camp-schedule-at"
+                                                        class="form-control">
+                                                </div>
+                                                <div>
+                                                    <label
+                                                        style="margin-bottom:4px; display:block; font-size:0.85rem;">Récurrence</label>
+                                                    <select id="camp-recurrence" class="form-control">
+                                                        <option value="">Aucune</option>
+                                                        <option value="weekly">Hebdomadaire (+7 jours)</option>
+                                                        <option value="monthly">Mensuelle (+1 mois)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div style="display:flex; gap:10px;">
+                                                <button class="btn-action" id="btn-test-campaign"
+                                                    style="background:#6c757d;"><i class="fas fa-vial"></i>
+                                                    Test</button>
+                                                <button class="btn-action" id="btn-save-draft"
+                                                    style="background:#f39c12;"><i class="fas fa-save"></i>
+                                                    Brouillon</button>
+                                                <button class="btn-action" id="btn-send-campaign"
+                                                    style="background:var(--primary);"><i
+                                                        class="fas fa-paper-plane"></i> Envoyer / Programmer</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- SETTINGS VIEW (Configuration) -->
+
                     <div id="view-settings" class="view">
                         <div class="card">
                             <div class="card-header">
@@ -2200,9 +2360,10 @@
     </div>
 
     <!-- Main Logic -->
-    <script type="module" src="./js/app.js?v=2.5"></script>
-    <script src="./js/search.js?v=1.0"></script>
-    <script src="./js/players.js?v=1.10"></script>
+    <script src="./js/players.js"></script>
+    <script src="./js/search.js"></script>
+    <script src="./js/email-campaigns.js"></script>
+    <script type="module" src="./js/app.js"></script>
 </body>
 
 </html>

@@ -554,8 +554,9 @@
             </div>
 
             <div id="success-message" class="success-message">
-                <i class="fas fa-check-circle" style="font-size: 3rem; margin-bottom: 20px;"></i>
-                <h2>Inscription Reçue !</h2>
+                <i class="fas fa-check-circle"
+                    style="font-size: 3rem; margin-bottom: 20px; color: var(--celtics-green);"></i>
+                <h2 style="color: var(--celtics-green);">Inscription Reçue !</h2>
                 <p>Nous avons bien reçu votre demande. Merci de faire partie de l'équipe !</p>
                 <div style="margin-top:20px;">
                     <button onclick="window.location.reload()" class="btn btn-secondary">Inscrire un autre
@@ -1346,20 +1347,21 @@
             `;
 
             try {
-                await fetch('https://api.resend.com/emails', {
+                // Call Firebase Cloud Function
+                // URL assumption based on standard Firebase structure. Ensure you deploy functions with `firebase deploy --only functions`
+                const functionUrl = 'https://us-central1-celticsdelouest.cloudfunctions.net/sendConfirmationEmail';
+
+                await fetch(functionUrl, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${RESEND_KEY}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
-                        to: parentEmail,
-                        subject: "Confirmation d'inscription - Celtics de l'Ouest",
-                        html: emailHtml
+                        parentEmail: parentEmail,
+                        emailHtml: emailHtml
                     })
                 });
-                console.log("Courriel de confirmation envoyé.");
+                console.log("Courriel de confirmation envoyé via Cloud Function.");
             } catch (error) {
                 console.error("Erreur lors de l'envoi du courriel:", error);
                 // We proceed anyway to show the success screen

@@ -89,6 +89,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated();
     }
+
+    // EMAIL CAMPAIGNS
+    match /campaigns/{campaignId} {
+        allow read, write: if isAuthenticated();
+    }
     
     // Default fallback: Deny everything else
     match /{document=**} {

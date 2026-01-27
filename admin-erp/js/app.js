@@ -1,7 +1,7 @@
 // Firebase Configuration
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -52,6 +52,11 @@ window.doc = doc;
 window.addDoc = addDoc;
 window.updateDoc = updateDoc;
 window.serverTimestamp = serverTimestamp;
+window.query = query;
+window.where = where;
+window.orderBy = orderBy;
+window.getCountFromServer = getCountFromServer;
+window.Timestamp = Timestamp;
 
 // --- Rich Text Editors ---
 let quillWelcome;
@@ -516,8 +521,15 @@ navBtns.forEach(btn => {
         if (targetId === 'view-fields') loadFields();
         if (targetId === 'view-sponsors') loadSponsors();
         if (targetId === 'view-seasons') loadSeasons();
+
+        // Init Email Campaigns
+        if (targetId === 'view-email-campaigns') {
+            if (typeof initCampaignModule === 'function') initCampaignModule();
+            if (typeof loadCampaigns === 'function') loadCampaigns('all');
+        }
     });
 });
+
 
 // --- View Toggle Logic ---
 document.querySelectorAll('.view-toggle-btn').forEach(btn => {
@@ -4459,22 +4471,46 @@ if (autoContainer) {
     });
 }
 
-document.getElementById('send-bulk-email-btn')?.addEventListener('click', async () => {
-    const target = document.getElementById('auto-email-target').value;
-    const subject = document.getElementById('auto-email-subject').value;
-    const body = document.getElementById('auto-email-body').value;
+// --- VIEW TOGGLE FUNCTIONALITY ---
+document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const targetId = btn.dataset.target;
+        const viewType = btn.dataset.view;
+        const targetElement = document.getElementById(targetId);
 
-    if (!subject || !body) return alert("Veuillez remplir le sujet et le message.");
+        if (!targetElement) return;
 
-    if (confirm(`Confirmez-vous l'envoi de ce courriel à la cible : ${target} ?`)) {
-        alert("Envoi en cours... (Simulation)");
-        // Simulate delay
-        setTimeout(() => {
-            alert("Courriels envoyés avec succès (Simulation) !");
-            document.getElementById('auto-email-subject').value = '';
-            document.getElementById('auto-email-body').value = '';
-        }, 1000);
-    }
+        // Toggle active state on buttons
+        const siblingBtns = btn.parentElement.querySelectorAll('.view-toggle-btn');
+        siblingBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Toggle view classes
+        targetElement.classList.remove('view-grid', 'view-list');
+        targetElement.classList.add(`view-${viewType}`);
+    });
+});
+
+// --- NAVIGATION HANDLER (Modified to init modules) ---
+document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Toggle active class
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Hide all views
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+
+        // Show target
+        const target = btn.dataset.target;
+        document.getElementById(target).classList.add('active');
+
+        // Init specific modules if needed
+        if (target === 'view-email-campaigns') {
+            if (typeof initCampaignModule === 'function') initCampaignModule();
+            if (typeof loadCampaigns === 'function') loadCampaigns('all');
+        }
+    });
 });
 
 

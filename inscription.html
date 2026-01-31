@@ -799,6 +799,18 @@
                         <input type="hidden" name="finalPrice" id="final-price-input">
                         <input type="hidden" name="programCat" id="program-cat-input">
                     </div>
+
+                    <div style="margin-top: 25px;">
+                        <p style="margin-bottom: 10px; font-weight: 500; font-style: italic; color: #555;">
+                            Votre enfant est placé automatiquement dans la catégorie correspondant à son âge. Indiquez
+                            ici
+                            si vous avez des demandes particulières à formuler. Ces demandes seront étudiées par le
+                            Conseil d’Administration.
+                        </p>
+                        <textarea name="specialRequests" rows="3" class="form-control"
+                            placeholder="Vos demandes particulières..."
+                            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;"></textarea>
+                    </div>
                 </div>
 
                 <!-- VALIDATION ET PAIEMENT -->
@@ -1309,6 +1321,7 @@
                         ${c.shortOption ? `<span style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; margin-left: 5px;">Short: ${c.shortSize}</span>` : ''}
                         ${c.socksOption ? `<span style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; margin-left: 5px;">Bas: ${c.socksSize}</span>` : ''}
                     </div>
+                    ${c.specialRequests ? `<div style="margin-top: 5px; color: #d35400; font-style: italic; font-size: 0.9em;">Demande spéciale: ${c.specialRequests}</div>` : ''}
                 </li>
             `).join('');
 

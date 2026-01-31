@@ -2162,9 +2162,10 @@ async function loadInventory() {
                 if (data.size) {
                     subtitle += `<strong style="font-size:1.1em;">Taille: ${data.size}</strong><br>`;
                 }
-                // Subtitle: Quantities removed for numbered lots as requested
-                // b.stockRemaining and b.totalQty display removed
-                // b.distributedCount display removed
+
+                subtitle += `<span style="${b.stockRemaining < 5 ? 'color:red;font-weight:bold;' : ''}">${b.stockRemaining} en stock</span> / ${b.totalQty} total`;
+
+                if (b.distributedCount > 0) subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${b.distributedCount} distribué(s)</span>`;
 
 
                 // Use the batch title

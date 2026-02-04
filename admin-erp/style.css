@@ -479,6 +479,13 @@ body {
     gap: 10px;
 }
 
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
 .header-actions-group {
     display: flex;
     align-items: center;

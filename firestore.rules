@@ -94,6 +94,16 @@ service cloud.firestore {
     match /campaigns/{campaignId} {
         allow read, write: if isAuthenticated();
     }
+
+    // INVOICES (Stripe Integration)
+    match /invoices/{invoiceId} {
+        allow read, write: if isAuthenticated();
+    }
+
+    // SCHEDULED PAYMENTS (Installments)
+    match /scheduled_payments/{paymentId} {
+        allow read, write: if isAuthenticated();
+    }
     
     // Default fallback: Deny everything else
     match /{document=**} {

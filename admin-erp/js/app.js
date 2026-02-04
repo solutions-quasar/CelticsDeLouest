@@ -4,6 +4,7 @@ import { getAnalytics } from "firebase/analytics";
 import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { loadBilling } from "./billing.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
@@ -521,6 +522,7 @@ navBtns.forEach(btn => {
         if (targetId === 'view-fields') loadFields();
         if (targetId === 'view-sponsors') loadSponsors();
         if (targetId === 'view-seasons') loadSeasons();
+        if (targetId === 'view-billing') loadBilling();
 
         // Init Email Campaigns
         if (targetId === 'view-email-campaigns') {

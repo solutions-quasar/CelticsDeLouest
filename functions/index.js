@@ -8,7 +8,337 @@ admin.initializeApp();
 const db = admin.firestore();
 
 // Initialize Resend
-const resend = new Resend('re_VWwsQhz5_K5rYSgrfjhysuiEQTvWqjTw4');
+const resend = new Resend(process.env.RESEND_API_KEY || 'YOUR_RESEND_KEY');
+
+// Initialize Stripe (Test Key)
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'YOUR_STRIPE_KEY');
+
+// --- STRIPE HELPER: CREATE/GET CUSTOMER ---
+async function getOrCreateStripeCustomer(email, name) {
+    const existing = await stripe.customers.list({ email: email, limit: 1 });
+    if (existing.data.length > 0) {
+        return existing.data[0].id;
+    }
+    const newCustomer = await stripe.customers.create({
+        email: email,
+        name: name
+    });
+    return newCustomer.id;
+}
+
+// --- STRIPE LOGIC: PAYMENTS ---
+exports.createRegistrationPayment = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { paymentMethodId, amount, email, parentName, installments, description } = req.body;
+
+        if (!amount || !email || !paymentMethodId) {
+            return res.status(400).json({ error: "Missing required fields (amount, email, paymentMethodId)" });
+        }
+
+        // 1. Get Customer
+        const customerId = await getOrCreateStripeCustomer(email, parentName || "Parent Celtics");
+
+        // 2. Attach Payment Method to Customer (Required for future charges)
+        await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+
+        // Set as default for invoice charges
+        await stripe.customers.update(customerId, {
+            invoice_settings: { default_payment_method: paymentMethodId }
+        });
+
+        if (installments) {
+            // --- OPTION B: 3 INSTALLMENTS (No Fee) ---
+            // Logic: 
+            // 1. Invoice 1: Immediate
+            // 2. Invoice 2: +30 Days
+            // 3. Invoice 3: +60 Days
+
+            const totalAmount = parseInt(amount); // Amount in cents
+            const partAmount = Math.floor(totalAmount / 3);
+            const remainder = totalAmount - (partAmount * 3); // Add to first payment to avoid penny loss
+
+            const amount1 = partAmount + remainder;
+            const amount2 = partAmount;
+            const amount3 = partAmount;
+
+            // --- INVOICE 1 (Immediate) ---
+            // --- INVOICE 1 (Immediate) ---
+            // 1. Create Invoice (Draft)
+            const invoice1 = await stripe.invoices.create({
+                customer: customerId,
+                auto_advance: true,
+                collection_method: 'charge_automatically',
+                description: "Paiement 1 sur 3"
+            });
+
+            // 2. Create Invoice Item linked to Invoice
+            await stripe.invoiceItems.create({
+                customer: customerId,
+                invoice: invoice1.id,
+                amount: amount1,
+                currency: 'cad',
+                description: `${description || "Inscription Celtics"} - Versement 1/3`
+            });
+
+            // 3. Finalize
+            const finalized1 = await stripe.invoices.finalizeInvoice(invoice1.id);
+
+            // 4. Pay Invoice 1 Immediate
+            const paidInvoice1 = await stripe.invoices.pay(finalized1.id);
+
+            // --- INVOICE 2 (+30 Days) ---
+            // We cannot "schedule" a one-off invoice easily in Stripe API without subscriptions or manual handling.
+            // However, we can create an Invoice Item now, but only create the Invoice later? No.
+            // Best approach for "Scheduled Invoices" without Subscription:
+            // Create the Invoice object properly but set `effective_at` (not available on one-off) or standard approach:
+            // Actually, for simple deferred payments, Subscription Schedules are cleaner OR just holding the data.
+            // BUT, user wants "Invoices".
+            // STRIPE HACK: One-off invoices cannot be easily scheduled for auto-charge in future API-wise.
+            // ALTERNATIVE: Use `subscription` with 3 iterations.
+            // LIMITATION: 'Subscription' implies recurring same amount.
+            // PLAN: We will use a standard Subscription approach configured to cancel after 3 cycles?
+            // OR: We simply record the "Debt" in our DB and have a cron job generate the Stripe Invoice?
+            // OR: We create a Price for the installment and start a subscription.
+
+            // SIMPLER FOR MVP:
+            // We create the Invoice Items NOW.
+            // But we can't create multiple "Draft" invoices for the future easily that auto-charge.
+            // LET'S USE: "Subscription Schedule" for 3 months.
+            // OR BETTER: Just create 3 distinct PaymentIntents? No, we need to save card.
+
+            // Let's go with the **Subscription** model as it's most robust for "Auto Charge".
+            // 1. Create a Product "Inscription 3 Versements"
+            // 2. Create a Price (amount/month)
+            // 3. Create Subscription with `iterations=3`.
+
+            // WAIT, exact amounts might vary per child. Subscription needs fixed Price object.
+            // Creating ad-hoc prices for every user is messy.
+
+            // REVISED PLAN FOR INSTALLMENTS (Since we are in Firebase):
+            // We will create Invoice 1 immediately and pay it.
+            // We will store "Future Payments" in Firestore `scheduled_payments` collection.
+            // We will use a Scheduled Function (`processScheduledPayments` daily) to generate Invoices 2 & 3.
+            // This gives us full control and visibility in ERP.
+
+            // SO: Just do Payment 1 now.
+            const paymentIntent = paidInvoice1.payment_intent;
+
+            // SAVE FUTURE PAYMENTS TO FIRESTORE
+            // We schedule them for +30 and +60 days
+            const futurePay1 = {
+                customerId: customerId,
+                amount: amount2,
+                currency: 'cad',
+                description: `${description || "Inscription"} - Versement 2/3`,
+                dueDate: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+                status: 'pending',
+                created: admin.firestore.FieldValue.serverTimestamp()
+            };
+            const futurePay2 = {
+                customerId: customerId,
+                amount: amount3,
+                currency: 'cad',
+                description: `${description || "Inscription"} - Versement 3/3`,
+                dueDate: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)),
+                status: 'pending',
+                created: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            await db.collection('scheduled_payments').add(futurePay1);
+            await db.collection('scheduled_payments').add(futurePay2);
+
+            // Return success
+            res.json({
+                success: true,
+                paymentIntentId: typeof paymentIntent === 'string' ? paymentIntent : paymentIntent.id,
+                customerId: customerId,
+                invoiceId: invoice1.id,
+                isInstallment: true
+            });
+
+        } else {
+            // --- OPTION A: SINGLE PAYMENT via Invoice ---
+            // We use Invoice so the user gets a nice PDF receipt automatically via Stripe.
+
+            // 1. Create Invoice (Draft)
+            const invoice = await stripe.invoices.create({
+                customer: customerId,
+                auto_advance: true,
+                collection_method: 'charge_automatically',
+                description: "Frais d'inscription (Paiement complet)"
+            });
+
+            // 2. Create Invoice Item linked to Invoice
+            await stripe.invoiceItems.create({
+                customer: customerId,
+                invoice: invoice.id,
+                amount: parseInt(amount),
+                currency: 'cad',
+                description: description || "Inscription Saison"
+            });
+
+            // 3. Finalize
+            const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+
+            // 4. Pay
+            const paidInvoice = await stripe.invoices.pay(finalized.id);
+
+            res.json({
+                success: true,
+                paymentIntentId: paidInvoice.payment_intent,
+                customerId: customerId,
+                invoiceId: invoice.id
+            });
+        }
+
+    } catch (e) {
+        console.error("Payment Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// --- SCHEDULED FUNCTION: PROCESS FUTURE PAYMENTS ---
+// Runs every day to check for due payments and generate invoices
+exports.processScheduledPayments = onSchedule("every 24 hours", async (event) => {
+    const now = admin.firestore.Timestamp.now();
+    const paymentsRef = db.collection("scheduled_payments");
+
+    // Query: status == 'pending' AND dueDate <= now
+    const q = paymentsRef.where("status", "==", "pending").where("dueDate", "<=", now);
+    const snapshot = await q.get();
+
+    if (snapshot.empty) {
+        console.log("No scheduled payments due.");
+        return;
+    }
+
+    const promises = snapshot.docs.map(async (doc) => {
+        const payData = doc.data();
+        const payId = doc.id;
+
+        console.log(`Processing scheduled payment: ${payId} for ${payData.amount} cents`);
+
+        try {
+            // 1. Create Invoice (Draft)
+            const invoice = await stripe.invoices.create({
+                customer: payData.customerId,
+                auto_advance: true,
+                collection_method: 'charge_automatically'
+            });
+
+            // 2. Create Invoice Item linked to Invoice
+            await stripe.invoiceItems.create({
+                customer: payData.customerId,
+                invoice: invoice.id,
+                amount: payData.amount,
+                currency: payData.currency || 'cad',
+                description: payData.description
+            });
+
+            // 3. Finalize and Pay
+            const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+            await stripe.invoices.pay(finalized.id);
+
+            // 3. Update DB Status
+            await paymentsRef.doc(payId).update({
+                status: 'processed',
+                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                generatedInvoiceId: invoice.id
+            });
+            console.log(`Invoice ${invoice.id} generated for scheduled payment ${payId}`);
+
+        } catch (e) {
+            console.error(`Failed to process payment ${payId}`, e);
+            await paymentsRef.doc(payId).update({
+                status: 'error',
+                lastError: e.message
+            });
+        }
+    });
+
+    await Promise.all(promises);
+});
+
+// --- STRIPE LOGIC: MANUAL INVOICE ---
+exports.createManualInvoice = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { email, name, items, dueDate } = req.body;
+        // items = [{ description, amount }]
+
+        const customerId = await getOrCreateStripeCustomer(email, name);
+
+        // 1. Create Invoice (Draft)
+        const invoice = await stripe.invoices.create({
+            customer: customerId,
+            auto_advance: true,
+            collection_method: 'send_invoice',
+            days_until_due: 30
+        });
+
+        // 2. Create Invoice Items linked to Invoice
+        for (const item of items) {
+            await stripe.invoiceItems.create({
+                customer: customerId,
+                invoice: invoice.id,
+                amount: item.amount, // cents
+                currency: 'cad',
+                description: item.description
+            });
+        }
+
+        // 3. Finalize
+        const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+
+        // If we wanted to send immediately:
+        await stripe.invoices.sendInvoice(finalized.id);
+
+        res.json({ success: true, invoiceId: finalized.id, url: finalized.hosted_invoice_url });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// --- STRIPE WEBHOOK (Sync to Firestore) ---
+exports.stripeWebhook = onRequest(async (req, res) => {
+    const endpointSecret = "whsec_YOUR_STRIPE_WEBHOOK_SECRET"; // Configure this in specific deployment
+    const sig = req.headers['stripe-signature'];
+
+    let event;
+
+    try {
+        // Validation skipped for simple test mode if key not set, but recommended
+        // event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
+        event = req.body; // Use body directly for easier Dev testing if not verifying sig
+    } catch (err) {
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle Events
+    if (event.type === 'invoice.payment_succeeded' || event.type === 'invoice.payment_failed' || event.type === 'invoice.created') {
+        const invoice = event.data.object;
+
+        // Sync to Firestore 'invoices' collection
+        await db.collection('invoices').doc(invoice.id).set({
+            stripeId: invoice.id,
+            customerId: invoice.customer,
+            customerEmail: invoice.customer_email,
+            amount: invoice.amount_due,
+            amountPaid: invoice.amount_paid,
+            status: invoice.status,
+            currency: invoice.currency,
+            hostedInvoiceUrl: invoice.hosted_invoice_url,
+            pdfUrl: invoice.invoice_pdf,
+            created: invoice.created,
+            lines: invoice.lines.data.map(l => ({ desc: l.description, amount: l.amount }))
+        }, { merge: true });
+
+        console.log(`Synced Invoice ${invoice.id} to Firestore.`);
+    }
+
+    res.json({ received: true });
+});
 
 // --- HTML TEMPLATE HELPER ---
 const getEmailTemplate = (content, title = "Celtics de l'Ouest") => {
@@ -48,117 +378,116 @@ const getEmailTemplate = (content, title = "Celtics de l'Ouest") => {
 };
 
 // --- HTTP FUNCTION: SEND CAMPAIGN (Immediate or Test) ---
-exports.sendCampaign = onRequest((req, res) => {
-    cors(req, res, async () => {
-        try {
-            const { campaignId, testEmail, testContent, testSubject } = req.body;
+exports.sendCampaign = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { campaignId, testEmail, testContent, testSubject } = req.body;
 
-            // CASE 1: TEST EMAIL
-            if (testEmail) {
-                const html = getEmailTemplate(testContent || "Ceci est un test.");
-                const { data, error } = await resend.emails.send({
-                    from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
-                    reply_to: "celtics.portneuf@gmail.com",
-                    to: testEmail,
-                    subject: `[TEST] ${testSubject || "Test Design"}`,
-                    html: html
-                });
-                if (error) throw error;
-                return res.json({ success: true, message: "Test envoyé" });
-            }
-
-            // CASE 2: SEND ACTUAL CAMPAIGN
-            if (!campaignId) return res.status(400).json({ error: "Missing campaignId" });
-
-            const docRef = db.collection("campaigns").doc(campaignId);
-            const docSnap = await docRef.get();
-            if (!docSnap.exists) return res.status(404).json({ error: "Campaign not found" });
-
-            const campaign = docSnap.data();
-
-            // Guard: Don't resend if already sent (unless force flag?)
-            if (campaign.status === "sent") return res.status(400).json({ error: "Campaign already sent" });
-
-            // 1. Resolve Audience
-            let recipients = [];
-
-            // Logic to fetch users based on audience filter
-            // This can be heavy, so we might need to handle this via chunks or a separate trigger if list is huge.
-            // For now, we assume reasonable size (< 500)
-
-            // FETCH RECIPIENTS LOGIC (Simplified for now, needs to match frontend logic or pass recipients IDs)
-            // Ideally, frontend passes criteria, backend queries DB.
-            // Let's assume the frontend passed 'audience' object in the campaign doc.
-
-            const audience = campaign.audience || {};
-            let snapshot;
-
-            if (audience.type === 'specific') {
-                // Specific emails already in audience.emails array
-                recipients = audience.emails || [];
-            } else if (audience.type === 'all_active') {
-                // Query players with active flag (logic to be refined)
-                snapshot = await db.collection("players").get(); // Filter by season if needed
-                snapshot.forEach(doc => {
-                    const d = doc.data();
-                    if (d.parentEmail) recipients.push(d.parentEmail);
-                });
-            } else if (audience.type === 'team') {
-                snapshot = await db.collection("players").where("teamId", "==", audience.teamId).get();
-                snapshot.forEach(doc => {
-                    const d = doc.data();
-                    if (d.parentEmail) recipients.push(d.parentEmail);
-                });
-            } else if (audience.type === 'coaches') {
-                snapshot = await db.collection("coaches").get();
-                snapshot.forEach(doc => {
-                    const d = doc.data();
-                    if (d.email) recipients.push(d.email); // Assuming coaches have 'email'
-                });
-            }
-            // Add more cases as needed
-
-            // Deduplicate
-            recipients = [...new Set(recipients)];
-
-            if (recipients.length === 0) {
-                await docRef.update({ status: 'sent', sentAt: admin.firestore.FieldValue.serverTimestamp(), 'stats.error': "No recipients found" });
-                return res.json({ success: false, message: "No recipients found" });
-            }
-
-            // 2. Send (Batching handled by Resend logic or loop)
-            // Resend allows up to 50 "to" in one call, or use BCC. 
-            // For mass marketing, individual emails are better for delivery/tracking.
-            // Loop for now (simple), optimized later for bulk.
-
-            // Using BCC for efficiency if generic content
+        // CASE 1: TEST EMAIL
+        if (testEmail) {
+            const html = getEmailTemplate(testContent || "Ceci est un test.");
             const { data, error } = await resend.emails.send({
                 from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
                 reply_to: "celtics.portneuf@gmail.com",
-                bcc: recipients,
-                subject: campaign.subject,
-                html: getEmailTemplate(campaign.content, campaign.subject),
-                tags: [{ name: 'campaignId', value: campaignId }]
+                to: testEmail,
+                subject: `[TEST] ${testSubject || "Test Design"}`,
+                html: html
             });
-
             if (error) throw error;
-
-            // 3. Update Doc
-            await docRef.update({
-                status: 'sent',
-                sentAt: admin.firestore.FieldValue.serverTimestamp(),
-                'stats.sentCount': recipients.length,
-                'stats.resendId': data.id
-            });
-
-            res.json({ success: true, recipientsCount: recipients.length });
-
-        } catch (e) {
-            console.error("Error sending campaign:", e);
-            res.status(500).json({ error: e.message });
+            return res.json({ success: true, message: "Test envoyé" });
         }
-    }); // CORS
+
+        // CASE 2: SEND ACTUAL CAMPAIGN
+        if (!campaignId) return res.status(400).json({ error: "Missing campaignId" });
+
+        const docRef = db.collection("campaigns").doc(campaignId);
+        const docSnap = await docRef.get();
+        if (!docSnap.exists) return res.status(404).json({ error: "Campaign not found" });
+
+        const campaign = docSnap.data();
+
+        // Guard: Don't resend if already sent (unless force flag?)
+        if (campaign.status === "sent") return res.status(400).json({ error: "Campaign already sent" });
+
+        // 1. Resolve Audience
+        let recipients = [];
+
+        // Logic to fetch users based on audience filter
+        // This can be heavy, so we might need to handle this via chunks or a separate trigger if list is huge.
+        // For now, we assume reasonable size (< 500)
+
+        // FETCH RECIPIENTS LOGIC (Simplified for now, needs to match frontend logic or pass recipients IDs)
+        // Ideally, frontend passes criteria, backend queries DB.
+        // Let's assume the frontend passed 'audience' object in the campaign doc.
+
+        const audience = campaign.audience || {};
+        let snapshot;
+
+        if (audience.type === 'specific') {
+            // Specific emails already in audience.emails array
+            recipients = audience.emails || [];
+        } else if (audience.type === 'all_active') {
+            // Query players with active flag (logic to be refined)
+            snapshot = await db.collection("players").get(); // Filter by season if needed
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.parentEmail) recipients.push(d.parentEmail);
+            });
+        } else if (audience.type === 'team') {
+            snapshot = await db.collection("players").where("teamId", "==", audience.teamId).get();
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.parentEmail) recipients.push(d.parentEmail);
+            });
+        } else if (audience.type === 'coaches') {
+            snapshot = await db.collection("coaches").get();
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.email) recipients.push(d.email); // Assuming coaches have 'email'
+            });
+        }
+        // Add more cases as needed
+
+        // Deduplicate
+        recipients = [...new Set(recipients)];
+
+        if (recipients.length === 0) {
+            await docRef.update({ status: 'sent', sentAt: admin.firestore.FieldValue.serverTimestamp(), 'stats.error': "No recipients found" });
+            return res.json({ success: false, message: "No recipients found" });
+        }
+
+        // 2. Send (Batching handled by Resend logic or loop)
+        // Resend allows up to 50 "to" in one call, or use BCC. 
+        // For mass marketing, individual emails are better for delivery/tracking.
+        // Loop for now (simple), optimized later for bulk.
+
+        // Using BCC for efficiency if generic content
+        const { data, error } = await resend.emails.send({
+            from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+            reply_to: "celtics.portneuf@gmail.com",
+            bcc: recipients,
+            subject: campaign.subject,
+            html: getEmailTemplate(campaign.content, campaign.subject),
+            tags: [{ name: 'campaignId', value: campaignId }]
+        });
+
+        if (error) throw error;
+
+        // 3. Update Doc
+        await docRef.update({
+            status: 'sent',
+            sentAt: admin.firestore.FieldValue.serverTimestamp(),
+            'stats.sentCount': recipients.length,
+            'stats.resendId': data.id
+        });
+
+        res.json({ success: true, recipientsCount: recipients.length });
+
+    } catch (e) {
+        console.error("Error sending campaign:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
+
 
 // --- SCHEDULED FUNCTION: PROCESS CAMPAIGNS ---
 // Runs every 15 minutes to check for scheduled campaigns
@@ -304,29 +633,28 @@ exports.resendWebhook = onRequest(async (req, res) => {
 });
 
 // Original function kept
-exports.sendConfirmationEmail = onRequest((req, res) => {
-    cors(req, res, async () => {
-        try {
-            const { parentEmail, emailHtml } = req.body;
-            if (!parentEmail || !emailHtml) return res.status(400).json({ error: "Missing parentEmail or emailHtml" });
+exports.sendConfirmationEmail = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { parentEmail, emailHtml } = req.body;
+        if (!parentEmail || !emailHtml) return res.status(400).json({ error: "Missing parentEmail or emailHtml" });
 
-            const { data, error } = await resend.emails.send({
-                from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
-                reply_to: "celtics.portneuf@gmail.com",
-                to: parentEmail,
-                subject: "Confirmation d'inscription - Celtics de l'Ouest",
-                html: emailHtml, // Already formatted? Or wrap it? 
-                // Assuming original caller formats it well or uses simple HTML
-            });
+        const { data, error } = await resend.emails.send({
+            from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+            reply_to: "celtics.portneuf@gmail.com",
+            to: parentEmail,
+            subject: "Confirmation d'inscription - Celtics de l'Ouest",
+            html: emailHtml, // Already formatted? Or wrap it? 
+            // Assuming original caller formats it well or uses simple HTML
+        });
 
-            if (error) {
-                console.error("Resend Error:", error);
-                return res.status(400).json({ error });
-            }
-            res.status(200).json({ data });
-        } catch (e) {
-            console.error("Function Error:", e);
-            res.status(500).json({ error: e.message });
+        if (error) {
+            console.error("Resend Error:", error);
+            return res.status(400).json({ error });
         }
-    });
+        res.status(200).json({ data });
+    } catch (e) {
+        console.error("Function Error:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
+

@@ -2814,7 +2814,6 @@ document.getElementById('reg-search')?.addEventListener('input', loadRegistratio
 const migrateBtn = document.getElementById('btn-migrate-registrations');
 if (migrateBtn) {
     migrateBtn.addEventListener('click', () => {
-        console.log("Migrate button clicked");
         migrateRegistrations();
     });
 } else {

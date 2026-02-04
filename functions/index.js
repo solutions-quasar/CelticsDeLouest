@@ -58,6 +58,7 @@ exports.sendCampaign = onRequest((req, res) => {
                 const html = getEmailTemplate(testContent || "Ceci est un test.");
                 const { data, error } = await resend.emails.send({
                     from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+                    reply_to: "celtics.portneuf@gmail.com",
                     to: testEmail,
                     subject: `[TEST] ${testSubject || "Test Design"}`,
                     html: html
@@ -133,6 +134,7 @@ exports.sendCampaign = onRequest((req, res) => {
             // Using BCC for efficiency if generic content
             const { data, error } = await resend.emails.send({
                 from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+                reply_to: "celtics.portneuf@gmail.com",
                 bcc: recipients,
                 subject: campaign.subject,
                 html: getEmailTemplate(campaign.content, campaign.subject),
@@ -204,6 +206,7 @@ exports.processScheduledCampaigns = onSchedule("every 15 minutes", async (event)
             if (recipients.length > 0) {
                 await resend.emails.send({
                     from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+                    reply_to: "celtics.portneuf@gmail.com",
                     bcc: recipients,
                     subject: campaign.subject,
                     html: getEmailTemplate(campaign.content, campaign.subject),
@@ -309,6 +312,7 @@ exports.sendConfirmationEmail = onRequest((req, res) => {
 
             const { data, error } = await resend.emails.send({
                 from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+                reply_to: "celtics.portneuf@gmail.com",
                 to: parentEmail,
                 subject: "Confirmation d'inscription - Celtics de l'Ouest",
                 html: emailHtml, // Already formatted? Or wrap it? 

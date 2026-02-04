@@ -462,7 +462,7 @@
                     <div id="view-registrations" class="view">
                         <div class="card">
                             <div class="card-header">
-                                <h3>Demandes d'inscription</h3>
+                                <h3 id="reg-view-header">Demandes d'inscription</h3>
                                 <div class="header-actions-group">
                                     <div class="filter-group"
                                         style="display:flex; gap:10px; align-items:center; margin-right:15px;">
@@ -473,6 +473,10 @@
                                         <input type="text" id="reg-search" placeholder="Rechercher..."
                                             style="padding:6px; border:1px solid #ddd; border-radius:4px;">
                                     </div>
+                                    <button class="btn-action" id="btn-migrate-registrations"
+                                        style="margin-right:5px; background:var(--secondary);">
+                                        <i class="fas fa-exchange-alt"></i> Migrer Joueurs
+                                    </button>
                                     <button class="btn-action" id="open-registration-modal"><i class="fas fa-plus"></i>
                                         Nouvelle</button>
                                 </div>
@@ -2360,6 +2364,75 @@
     </div>
 
     <!-- Main Logic -->
+    <!-- GENERIC CONFIRM MODAL -->
+    <div id="generic-confirm-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px; text-align: center;">
+            <div style="margin-bottom: 20px;">
+                <i class="fas fa-question-circle" style="font-size: 3rem; color: var(--primary);"></i>
+            </div>
+            <h3 id="generic-confirm-title" style="margin-bottom: 15px;">Confirmation</h3>
+            <p id="generic-confirm-message" style="color: #666; margin-bottom: 25px; font-size: 1rem;"></p>
+
+            <div class="modal-footer" style="justify-content: center; gap: 15px;">
+                <button class="btn-secondary" id="generic-confirm-cancel"
+                    style="background: #7f8c8d; border-color: #7f8c8d;">Annuler</button>
+                <button class="btn-action" id="generic-confirm-ok" style="background: var(--primary); color: white;">
+                    Confirmer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GENERIC ALERT MODAL -->
+    <div id="generic-alert-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px; text-align: center;">
+            <div style="margin-bottom: 20px;">
+                <i class="fas fa-info-circle" style="font-size: 3rem; color: var(--secondary);"></i>
+            </div>
+            <h3 id="generic-alert-title" style="margin-bottom: 15px;">Information</h3>
+            <p id="generic-alert-message" style="color: #666; margin-bottom: 25px; font-size: 1rem;"></p>
+
+            <button class="btn-action" id="generic-alert-ok"
+                style="width: 100%; justify-content: center; background: var(--secondary);">
+                OK
+            </button>
+        </div>
+    </div>
+
+    <!-- MIGRATION CONFLICT MODAL -->
+    <div id="migration-conflict-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle" style="color: orange;"></i> Conflits de Migration</h3>
+                <p>Certains inscrits semblent déjà exister dans la base de joueurs. Veuillez sélectionner l'action à
+                    entreprendre.</p>
+            </div>
+            <div class="card-body">
+                <div class="table-container" style="max-height: 50vh; overflow-y: auto;">
+                    <table id="migration-conflict-table">
+                        <thead>
+                            <tr>
+                                <th>Inscripton (Nouveau)</th>
+                                <th>Joueur Existant (Similaire)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="migration-conflict-cancel"
+                    style="background: #7f8c8d; border-color: #7f8c8d;">Annuler</button>
+                <button class="btn-action" id="confirm-migration-btn" style="background: var(--primary); color: white;">
+                    <i class="fas fa-check"></i> Confirmer la Migration
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="./js/players.js"></script>
     <script src="./js/search.js"></script>
     <script src="./js/email-campaigns.js"></script>
@@ -2367,3 +2440,4 @@
 </body>
 
 </html>
+```

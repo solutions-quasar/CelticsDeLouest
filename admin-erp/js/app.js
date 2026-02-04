@@ -2065,11 +2065,8 @@ async function loadInventory() {
         let distributedCount = 0;
         batchItems.forEach(item => {
             let distributions = item.distributions || [];
-            if ((!distributions || distributions.length === 0) && item.assignedType && item.assignedType !== 'none' && item.assignedTo) {
-                distributedCount += 1;
-            } else {
-                distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
-            }
+            // Legacy support removed to align with card view
+            distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
         });
 
         // Construct a "Leader" object for display
@@ -2116,11 +2113,8 @@ async function loadInventory() {
                 let distributedCount = 0;
                 let distributions = data.distributions || [];
 
-                if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
-                    distributedCount = 1;
-                } else {
-                    distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
-                }
+                // Legacy support removed to align with card view
+                distributions.forEach(d => distributedCount += (parseInt(d.qty) || 0));
 
                 const stockRemaining = (parseInt(data.quantity) || 0) - distributedCount;
 
@@ -2714,6 +2708,13 @@ async function loadRegistrations() {
         });
     }
 
+    // Ensure seasons loaded for header display
+    if (!dataCache.seasons || Object.keys(dataCache.seasons).length === 0) {
+        const sSnap = await getDocs(collection(db, 'seasons'));
+        dataCache.seasons = {};
+        sSnap.forEach(d => dataCache.seasons[d.id] = d.data());
+    }
+
     const q = query(collection(db, "registrations"), orderBy("timestamp", "desc"));
     const snapshot = await getDocs(q);
 
@@ -2739,10 +2740,25 @@ async function loadRegistrations() {
         row.setAttribute('data-id', doc.id);
         row.className = 'reg-row';
 
+        // Get active season info if needed
+        let seasonText = '';
+        if (dataCache.seasons) {
+            const ags = Object.values(dataCache.seasons).find(s => s.active);
+            if (ags) seasonText = ags.name || `${ags.type} ${ags.year}`;
+        }
+
+        const headerEl = document.getElementById('reg-view-header');
+        if (headerEl) {
+            headerEl.innerHTML = `Demandes d'inscription <span style="font-size:0.9rem; color:#666; font-weight:normal;">(${seasonText} - ${snapshot.size} inscrits)</span>`;
+        }
+
         row.innerHTML = `<td>${date}</td>
-                         <td><strong>${data.childFirstName} ${data.childLastName}</strong><br><small>Né(e): ${data.birthYear || '?'}</small></td>
-                         <td>${data.program}<br><small>${teamName}</small></td>
-                         <td>${data.parentFirstName} ${data.parentLastName}<br><small>${data.email}</small></td>
+                         <td><strong>${data.childFirstName} ${data.childLastName}</strong><br><small>Né(e): ${data.dob || data.birthYear || '?'}</small></td>
+                         <td>
+                            <strong style="color:${teamName !== 'Non assigné' && teamName !== '-' ? '#007A33' : '#666'}">${teamName !== '-' ? teamName : 'Non assigné'}</strong>
+                            ${teamName === '-' || teamName === 'Non assigné' ? `<br><small>${data.program || data.programCat || ''}</small>` : ''}
+                         </td>
+                         <td>${data.parentFirstName} ${data.parentLastName}</td>
                          <td class="actions-cell">
                              <a href="mailto:${data.email}" class="btn-action" title="Envoyer courriel" onclick="event.stopPropagation()"><i class="fas fa-envelope"></i></a>
                              <button class="delete-reg" data-id="${doc.id}" title="Supprimer" onclick="event.stopPropagation()"><i class="fas fa-trash"></i></button>
@@ -2793,6 +2809,318 @@ async function loadRegistrations() {
 // Add Listeners
 document.getElementById('reg-filter-team')?.addEventListener('change', loadRegistrations);
 document.getElementById('reg-search')?.addEventListener('input', loadRegistrations);
+
+// --- MIGRATION LOGIC ---
+const migrateBtn = document.getElementById('btn-migrate-registrations');
+if (migrateBtn) {
+    migrateBtn.addEventListener('click', () => {
+        console.log("Migrate button clicked");
+        migrateRegistrations();
+    });
+} else {
+    console.error("Migrate button NOT FOUND");
+}
+
+// --- HELPER WRAPPERS FOR CUSTOM MODALS ---
+function showConfirm(message, title = "Confirmation") {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('generic-confirm-modal');
+        document.getElementById('generic-confirm-title').innerText = title;
+        document.getElementById('generic-confirm-message').innerText = message;
+
+        modal.classList.add('active');
+
+        const btnOk = document.getElementById('generic-confirm-ok');
+        const btnCancel = document.getElementById('generic-confirm-cancel');
+
+        // Clone to remove old listeners
+        const newBtnOk = btnOk.cloneNode(true);
+        const newBtnCancel = btnCancel.cloneNode(true);
+        btnOk.parentNode.replaceChild(newBtnOk, btnOk);
+        btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
+
+        newBtnOk.addEventListener('click', () => {
+            modal.classList.remove('active');
+            resolve(true);
+        });
+
+        newBtnCancel.addEventListener('click', () => {
+            modal.classList.remove('active');
+            resolve(false);
+        });
+    });
+}
+
+function showAlert(message, title = "Information") {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('generic-alert-modal');
+        document.getElementById('generic-alert-title').innerText = title;
+        document.getElementById('generic-alert-message').innerText = message;
+
+        modal.classList.add('active');
+
+        const btnOk = document.getElementById('generic-alert-ok');
+        const newBtnOk = btnOk.cloneNode(true);
+        btnOk.parentNode.replaceChild(newBtnOk, btnOk);
+
+        newBtnOk.addEventListener('click', () => {
+            modal.classList.remove('active');
+            resolve(true);
+        });
+
+        // Also close on x close-modal (if present, usually generic class handles hiding but we need resolve)
+        // For safety we can rely on just btnOk or adding a generic listener that resolves.
+        // But for "Alert" simple click OK is enough.
+    });
+}
+
+async function migrateRegistrations() {
+    if (!await showConfirm("Voulez-vous lancer l'analyse pour la migration des inscriptions vers la base de joueurs ?", "Démarrer Migration")) return;
+
+    const container = document.querySelector('#view-registrations .card');
+    setLoading(container, true);
+
+    try {
+        // 1. Fetch Candidates (New, Confirmed, Paid)
+        const qReg = query(collection(db, "registrations"), where("status", "in", ["New", "Confirmed", "Paid"]));
+        const snapReg = await getDocs(qReg);
+
+        if (snapReg.empty) {
+            await showAlert("Aucune inscription éligible (New, Confirmed, Paid) trouvée.");
+            setLoading(container, false);
+            return;
+        }
+
+        // 2a. Fetch Active Season & Teams (Auto-Assign Logic)
+        console.log("Fetching active season and teams...");
+        let activeTeams = [];
+        try {
+            // Find active season
+            const qSeason = query(collection(db, "seasons"), where("active", "==", true));
+            const snapSeason = await getDocs(qSeason);
+            if (!snapSeason.empty) {
+                const seasonId = snapSeason.docs[0].id;
+                const qTeams = query(collection(db, "teams"), where("seasonId", "==", seasonId));
+                const snapTeams = await getDocs(qTeams);
+                snapTeams.forEach(t => activeTeams.push({ id: t.id, ...t.data() }));
+            }
+        } catch (e) {
+            console.error("Error fetching teams for auto-assign:", e);
+        }
+
+        // 2b. Fetch Existing Players (for dedupe)
+        console.log("Fetching existing players for deduplication...");
+        const snapPlayers = await getDocs(collection(db, "players"));
+        const players = [];
+        snapPlayers.forEach(d => {
+            const data = d.data();
+            // Normalize for comparison
+            const name = (data.name || `${data.firstName || ''} ${data.lastName || ''}`).toLowerCase().trim();
+            const parent = (data.parentName || data.parentFirstName || '').toLowerCase().trim();
+            players.push({ id: d.id, name, parent });
+        });
+
+        // 3. Analyze
+        const conflicts = [];
+        const toMigrate = [];
+
+        snapReg.forEach(doc => {
+            const r = doc.data();
+            const rId = doc.id;
+
+            const rFirst = (r.childFirstName || '').trim();
+            const rLast = (r.childLastName || '').trim();
+            const rName = `${rFirst} ${rLast}`.toLowerCase();
+            // const rParent = (r.parent1Name || '').toLowerCase().trim();
+
+            // Check duplicate
+            // We check Name AND (Parent Name matches partially?)
+            // If checking parent name, maybe we allow same name different parent?
+            const potentialMatch = players.find(p => p.name === rName);
+
+            if (potentialMatch) {
+                conflicts.push({
+                    regId: rId,
+                    regData: r,
+                    matchId: potentialMatch.id,
+                    matchName: potentialMatch.name,
+                    matchParent: potentialMatch.parent
+                });
+            } else {
+                toMigrate.push({ id: rId, data: r });
+            }
+        });
+
+        setLoading(container, false);
+
+        if (conflicts.length === 0 && toMigrate.length === 0) {
+            await showAlert("Tous les joueurs semblent déjà migrés ou traités.");
+            return;
+        }
+
+        if (conflicts.length > 0) {
+            showMigrationConflictModal(conflicts, toMigrate, activeTeams);
+        } else {
+            if (await showConfirm(`${toMigrate.length} joueurs prêts à être migrés. Confirmer ?`)) {
+                await executeMigration(toMigrate, activeTeams);
+            }
+        }
+
+    } catch (e) {
+        console.error("Migration Error:", e);
+        await showAlert("Erreur lors de l'analyse: " + e.message, "Erreur");
+        setLoading(container, false);
+    }
+}
+
+function showMigrationConflictModal(conflicts, cleanList, activeTeams) {
+    const modal = document.getElementById('migration-conflict-modal');
+    const tbody = document.querySelector('#migration-conflict-table tbody');
+    tbody.innerHTML = '';
+
+    conflicts.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <strong>${c.regData.childFirstName} ${c.regData.childLastName}</strong><br>
+                <small>Parent: ${c.regData.parent1Name}</small>
+            </td>
+            <td>
+                Existe déjà: <strong style="color:orange;">${c.matchName}</strong><br>
+                <small>Parent : ${c.matchParent || '?'}</small>
+            </td>
+            <td>
+                <select class="form-control migration-decision" data-id="${c.regId}" style="font-size:0.9rem; padding: 5px;">
+                    <option value="skip">Ignorer (Déjà fait)</option>
+                    <option value="force">Forcer la création (Homonyme)</option>
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Add Clean Items info
+    const infoDiv = document.createElement('tr');
+    infoDiv.innerHTML = `<td colspan="3" style="background:#e8f5e9; text-align:center; padding: 10px;">
+        + <strong>${cleanList.length}</strong> joueurs sans conflit seront migrés automatiquement via confirmation.
+    </td>`;
+    tbody.prepend(infoDiv);
+
+    modal.classList.add('active');
+
+    // Confirm Button
+    const btn = document.getElementById('confirm-migration-btn');
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.addEventListener('click', async () => {
+        // Gather decisions
+        const finalToMigrate = [...cleanList];
+        const selects = document.querySelectorAll('.migration-decision');
+        selects.forEach(sel => {
+            const val = sel.value;
+            const rid = sel.getAttribute('data-id');
+            if (val === 'force') {
+                const c = conflicts.find(x => x.regId === rid);
+                if (c) finalToMigrate.push({ id: rid, data: c.regData });
+            }
+        });
+
+        modal.classList.remove('active');
+        if (finalToMigrate.length === 0) {
+            await showAlert("Aucune migration effectuée.");
+            return;
+        }
+
+        await executeMigration(finalToMigrate, activeTeams);
+    });
+
+    modal.querySelector('.close-modal') ? modal.querySelector('.close-modal').onclick = () => modal.classList.remove('active') : null;
+    document.getElementById('migration-conflict-cancel')?.addEventListener('click', () => modal.classList.remove('active'));
+}
+
+async function executeMigration(list, activeTeams = []) {
+    if (list.length === 0) return;
+    const container = document.querySelector('#view-registrations .card');
+    setLoading(container, true);
+
+    let processed = 0;
+    try {
+        for (const item of list) {
+            const r = item.data;
+
+            // Auto-Assign Logic
+            let assignedTeamId = '';
+            if (activeTeams.length > 0) {
+                const regCat = (r.programCat || r.program || '').trim();
+                const regGender = (r.gender || '').trim();
+
+                // Find matching team
+                const match = activeTeams.find(t =>
+                    (t.category === regCat) &&
+                    (t.gender === regGender)
+                );
+
+                if (match) assignedTeamId = match.id;
+            }
+
+            // Map Fields
+            const newPlayer = {
+                firstName: r.childFirstName,
+                lastName: r.childLastName,
+                name: `${r.childFirstName} ${r.childLastName}`,
+                dob: r.dob || '',
+                year: r.dob ? parseInt(r.dob.split('-')[0]) : (r.yearOfBirth || new Date().getFullYear()),
+                gender: r.gender || '',
+                medical: r.medical || '',
+
+                parentName: r.parent1Name || '',
+                parentFirstName: r.parentFirstName || (r.parent1Name ? r.parent1Name.split(' ')[0] : ''),
+                parentLastName: r.parentLastName || (r.parent1Name ? r.parent1Name.split(' ').slice(1).join(' ') : ''),
+                parentEmail: r.parent1Email || r.email || '',
+                phone: r.phoneFamily || r.phone || '',
+
+                address: r.addressLine || '',
+                city: r.city || '',
+                postalCode: r.postalCode || '',
+
+                jerseySize: r.jerseySize || '',
+                shortSize: r.shortSize || '',
+                socksSize: r.socksSize || '',
+
+                teamId: assignedTeamId || r.teamId || '',
+                photoAuth: r.photoAuth || '',
+
+                sourceRegistrationId: item.id,
+                createdAt: new Date(),
+                skill: 1, // Default to lowest skill or unrated
+                pos: 'TBD', // Default pos
+                status: 'Active'
+            };
+
+            // Add to Players
+            await addDoc(collection(db, "players"), newPlayer);
+
+            // Update Registration
+            await updateDoc(doc(db, "registrations", item.id), {
+                status: 'Migrated'
+            });
+
+            processed++;
+        }
+
+        await showAlert(`Migration terminée avec succès ! ${processed} joueurs créés.`, "Succès");
+        loadRegistrations(); // Refresh UI
+        // Refresh Players if needed (e.g. if we add a notification)
+        updateStats();
+
+    } catch (e) {
+        console.error(e);
+        await showAlert(`Erreur partielle après ${processed} éléments : ${e.message}`, "Erreur");
+    } finally {
+        setLoading(container, false);
+    }
+}
 
 
 

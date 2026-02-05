@@ -200,8 +200,22 @@ export async function refreshBillingData() {
         if (invoices.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Aucune facture trouvée.</td></tr>';
         } else {
-            invoices.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).forEach(data => {
-                const date = data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toLocaleDateString() : new Date(data.createdAt.seconds * 1000).toLocaleDateString()) : '-';
+            invoices.sort((a, b) => {
+                const timeA = a.createdAt?.seconds || a.created || 0;
+                const timeB = b.createdAt?.seconds || b.created || 0;
+                return timeB - timeA;
+            }).forEach(data => {
+                let date = '-';
+                const timestamp = data.createdAt || data.created;
+                if (timestamp) {
+                    if (timestamp.toDate) date = timestamp.toDate().toLocaleDateString();
+                    else if (timestamp.seconds) date = new Date(timestamp.seconds * 1000).toLocaleDateString();
+                    else if (typeof timestamp === 'number') {
+                        // Stripe timestamps are in seconds, but could be ms if from elsewhere
+                        const dateObj = timestamp > 10000000000 ? new Date(timestamp) : new Date(timestamp * 1000);
+                        date = dateObj.toLocaleDateString();
+                    }
+                }
                 const amount = ((data.amount || 0) / 100).toFixed(2);
 
                 let limitStatus = data.status || 'pending';
@@ -262,14 +276,25 @@ export async function refreshBillingData() {
             if (inv.status === 'paid') {
                 totalPaid += (inv.amount || 0) / 100;
                 txCount++;
-            } else {
+            } else if (inv.status === 'pending' || inv.status === 'open') {
                 totalPending += (inv.amount || 0) / 100;
             }
         });
 
-        document.getElementById('bill-total-paid').textContent = `${totalPaid.toFixed(2)} $`;
-        document.getElementById('bill-total-pending').textContent = `${totalPending.toFixed(2)} $`;
-        document.getElementById('bill-tx-count').textContent = txCount;
+        // Add pending scheduled payments to the 'En Attente' total
+        scheduled.forEach(pay => {
+            if (pay.status === 'pending') {
+                totalPending += (pay.amount || 0) / 100;
+            }
+        });
+
+        const paidEl = document.getElementById('bill-total-paid');
+        const pendingEl = document.getElementById('bill-total-pending');
+        const countEl = document.getElementById('bill-tx-count');
+
+        if (paidEl) paidEl.textContent = `${totalPaid.toFixed(2)} $`;
+        if (pendingEl) pendingEl.textContent = `${totalPending.toFixed(2)} $`;
+        if (countEl) countEl.textContent = txCount;
 
     } catch (e) {
         console.error("Error refreshing billing data:", e);

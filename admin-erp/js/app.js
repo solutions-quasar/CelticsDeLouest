@@ -363,9 +363,17 @@ function syncCollection(collectionName, cacheKey, refreshCallback) {
         });
         if (refreshCallback) refreshCallback();
     }, (error) => {
-        console.error(`Error syncing ${collectionName}:`, error);
+        // Only log errors if we are still authenticated (prevents noise on logout)
+        if (auth.currentUser) {
+            console.error(`Error syncing ${collectionName}:`, error);
+        }
     });
     activeUnsubscribes.push(unsub);
+}
+
+function stopRealTimeListeners() {
+    activeUnsubscribes.forEach(unsub => unsub());
+    activeUnsubscribes = [];
 }
 
 function initRealTimeListeners() {
@@ -561,6 +569,7 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         dashboardScreen.classList.remove('active');
         authScreen.classList.add('active');
+        stopRealTimeListeners();
     }
 });
 
@@ -3230,13 +3239,16 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
 
         if (roles.length === 0) throw new Error("Veuillez sélectionner au moins une permission ou le rôle Super Admin.");
 
-        const data = { email, name, role: roles };
+        const lowerEmail = email.toLowerCase().trim();
+        const data = { email: lowerEmail, name, role: roles };
 
         if (id) {
+            // If editing, we might need to handle ID change if they changed email
+            // But for now, let's keep it simple: use the ID provided by the table
             await updateDoc(doc(db, "admins", id), data);
         } else {
-            // Use email as doc ID for easier FireStore Rules lookup
-            await setDoc(doc(db, "admins", email), data);
+            // ALWAYS use lowercase email as the Document ID for security rules
+            await setDoc(doc(db, "admins", lowerEmail), data);
         }
 
         adminModal.classList.remove('active');
@@ -3425,27 +3437,6 @@ async function getUserRole(email) {
     return []; // No roles
 }
 
-// Ensure Benjamin is in the DB list for visibility
-async function ensureBenjaminInDb() {
-    const email = "bensult78@gmail.com";
-    try {
-        const admins = Object.values(dataCache.admins || {});
-        const benAdmin = admins.find(a => a.email === email);
-        if (!benAdmin) {
-            // Still need to write to DB if missing
-            const benRef = doc(db, "admins", email);
-            await setDoc(benRef, { email, name: "Benjamin Sultan", role: ["SuperAdmin"] });
-        }
-
-        const referees = Object.values(dataCache.referees || {});
-        const benRefProfile = referees.find(r => r.email === email);
-        if (!benRefProfile) {
-            await addDoc(collection(db, "referees"), { name: "Benjamin Sultan", email, visible: true, unavails: "" });
-        }
-    } catch (e) {
-        console.error("Auto-add Benjamin failed", e);
-    }
-}
 
 // Hook into Nav clicks to load Admins
 document.getElementById('nav-admins-btn')?.addEventListener('click', loadAdmins);
@@ -3454,13 +3445,42 @@ document.getElementById('nav-admins-btn')?.addEventListener('click', loadAdmins)
 window.checkAdminAndSetupUI = async (user) => {
     if (!user) return;
 
-    // Auto-ensure Benjamin is in DB (just in case)
-    if (user.email.toLowerCase() === 'bensult78@gmail.com') {
-        await ensureBenjaminInDb();
-    }
-
     const roles = await getUserRole(user.email);
     console.log("User Roles:", roles);
+
+    // --- MIGRATION: Ensure SuperAdmin has document ID == lowercase email (for rules) ---
+    if (roles.includes('SuperAdmin')) {
+        const lowerEmail = user.email.toLowerCase().trim();
+        const docRef = doc(db, "admins", lowerEmail);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+            console.warn("CRITICAL: Admin ID mismatch. Starting migration for:", lowerEmail);
+            // Search for ANY document in 'admins' that has this email (case insensitive search)
+            const qSnap = await getDocs(collection(db, "admins"));
+            let legacyDoc = null;
+            qSnap.forEach(d => {
+                const dData = d.data();
+                if (dData.email && dData.email.toLowerCase() === lowerEmail) {
+                    legacyDoc = d;
+                }
+            });
+
+            if (legacyDoc) {
+                console.log("Legacy record found with ID:", legacyDoc.id, ". Migrating...");
+                const data = legacyDoc.data();
+                data.email = lowerEmail; // Standardize data too
+                await setDoc(docRef, data);
+                if (legacyDoc.id !== lowerEmail) {
+                    await deleteDoc(legacyDoc.ref);
+                }
+                console.log("Migration successful. System access should now be granted.");
+                location.reload(); // Reload to apply new rule permissions
+            } else {
+                console.error("Migration failed: No legacy record found for Admin. Please contact support.");
+            }
+        }
+    }
 
     // Also check if user is a referee
     window.currentUserRefereeId = null;

@@ -3,26 +3,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: Check if the user is a master admin (hardcoded for safety)
-    function isMasterAdmin() {
-      return request.auth != null && (
-        request.auth.token.email == "bensult78@gmail.com" || 
-        request.auth.token.email == "admin@celtics.com" || 
-        request.auth.token.email == "celtics.portneuf@gmail.com"
-      );
-    }
-
     // Helper: Check permissions for a specific module and level
     function hasPermission(module, level) {
-      return isMasterAdmin() || (
-        request.auth != null && 
-        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) && (
-          "SuperAdmin" in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role ||
-          (module + ":" + level) in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role ||
-          (level == "view" && (module + ":edit") in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role) ||
-          (level == "edit" && module in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role)
-        )
-      );
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) && (
+          "SuperAdmin" in get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.role ||
+          (module + ":" + level) in get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.role ||
+          (level == "view" && (module + ":edit") in get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.role) ||
+          (level == "edit" && module in get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.role)
+        );
     }
     
     function canView(module) {
@@ -73,9 +62,11 @@ service cloud.firestore {
     // ADMINS
     match /admins/{adminId} {
       allow read: if request.auth != null;
-      allow write: if isMasterAdmin() || (
-        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
-        "SuperAdmin" in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role
+      // Allow writing if the user is a SuperAdmin OR if they are updating their own record (migration/self-info)
+      allow write: if request.auth != null && (
+        (request.auth.token.email.lower() == adminId) || 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) &&
+         "SuperAdmin" in get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.role)
       );
     }
 

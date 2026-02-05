@@ -3488,11 +3488,17 @@ async function loadAdmins() {
 
             // Handle legacy strings vs modern arrays
             const rolesArray = Array.isArray(data.role) ? data.role : [data.role];
-            const rolesHtml = rolesArray.map(r => `
-                <span class="badge ${r === 'SuperAdmin' ? 'badge-primary' : 'badge-secondary'}" style="margin-right:5px; margin-bottom:5px; display:inline-block;">
-                    ${r}
-                </span>
-            `).join('');
+            const rolesHtml = rolesArray.map(r => {
+                let label = r;
+                let color = 'badge-secondary';
+                if (r === 'SuperAdmin') {
+                    color = 'badge-primary';
+                } else if (r.includes(':')) {
+                    const [mod, level] = r.split(':');
+                    label = `${mod}: ${level === 'edit' ? 'Modifier' : 'Visionner'}`;
+                }
+                return `<span class="badge ${color}" style="margin-right:5px; margin-bottom:5px; display:inline-block;">${label}</span>`;
+            }).join('');
 
             row.innerHTML = `
                 <td>${data.email}</td>
@@ -3530,11 +3536,12 @@ async function loadAdmins() {
                         rolesArray.forEach(r => {
                             if (r.includes(':')) {
                                 const [mod, level] = r.split(':');
-                                const radio = document.querySelector(`input[name="perm-${mod}"][value="${level}"]`);
+                                let targetMod = (mod === 'Terrains' || mod === 'Saisons') ? 'Config' : mod;
+                                const radio = document.querySelector(`input[name="perm-${targetMod}"][value="${level}"]`);
                                 if (radio) radio.checked = true;
                             } else {
-                                // Legacy support: default to 'edit'
-                                const radio = document.querySelector(`input[name="perm-${r}"][value="edit"]`);
+                                let targetMod = (r === 'Terrains' || r === 'Saisons') ? 'Config' : r;
+                                const radio = document.querySelector(`input[name="perm-${targetMod}"][value="edit"]`);
                                 if (radio) radio.checked = true;
                             }
                         });
@@ -3667,9 +3674,7 @@ window.checkAdminAndSetupUI = async (user) => {
         'Campagnes': ['view-email-campaigns'],
         'Automatisations': ['view-automations'],
         'Facturation': ['view-billing'],
-        'Terrains': ['view-fields'],
-        'Saisons': ['view-seasons'],
-        'Config': ['view-settings']
+        'Config': ['view-fields', 'view-seasons', 'view-settings', 'view-fields-list']
     };
 
     // Determine which views are allowed and store permissions

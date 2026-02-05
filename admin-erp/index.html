@@ -2237,7 +2237,11 @@
                     </label>
                 </div>
 
-                <button type="submit" class="btn-save">Enregistrer</button>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button type="submit" class="btn-save" style="flex: 2; margin-top: 0;">Enregistrer</button>
+                    <button type="button" id="btn-delete-match"
+                        style="flex: 1; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: none;">Supprimer</button>
+                </div>
                 <button type="button" class="btn-close-custom"
                     onclick="document.getElementById('match-modal').classList.remove('active')" style="
                     width: 100%;

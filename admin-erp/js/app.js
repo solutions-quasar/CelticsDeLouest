@@ -4189,6 +4189,28 @@ async function loadSettings() {
 // --- MATCHES LOGIC ---
 const matchModal = document.getElementById('match-modal');
 const openMatchModalBtn = document.getElementById('open-match-modal');
+const btnDeleteMatch = document.getElementById('btn-delete-match');
+
+if (btnDeleteMatch) {
+    btnDeleteMatch.addEventListener('click', async () => {
+        const id = document.getElementById('match-id').value;
+        if (!id) return;
+
+        if (confirm("Êtes-vous sûr de vouloir supprimer ce match ? Cette action est irréversible.")) {
+            try {
+                setLoading(btnDeleteMatch.parentElement, true);
+                await deleteDoc(doc(db, "matches", id));
+                matchModal.classList.remove('active');
+                loadMatches();
+            } catch (err) {
+                console.error("Error deleting match:", err);
+                alert("Erreur lors de la suppression: " + err.message);
+            } finally {
+                setLoading(btnDeleteMatch.parentElement, false);
+            }
+        }
+    });
+}
 
 let selectedMatchFields = []; // Array to store selected field IDs
 
@@ -4763,6 +4785,12 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
     const form = document.getElementById('match-form');
     if (form) form.reset();
     document.getElementById('match-id').value = data ? data.id : '';
+
+    // Show/Hide delete button
+    const btnDelete = document.getElementById('btn-delete-match');
+    if (btnDelete) {
+        btnDelete.style.display = data ? 'block' : 'none';
+    }
 
     if (data) {
         document.getElementById('match-date').value = data.date;

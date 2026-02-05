@@ -3,40 +3,32 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: Check if user document exists in 'admins' and return roles list
-    function getAdminRoles() {
-      return get(/databases/$(database)/documents/admins/$(getAdminId())).data.role;
+    // Helper: Check if the user is a master admin (hardcoded for safety)
+    function isMasterAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == "bensult78@gmail.com" || 
+        request.auth.token.email == "admin@celtics.com" || 
+        request.auth.token.email == "celtics.portneuf@gmail.com"
+      );
     }
 
-    // Helper: Get the document ID for the admin (matched by email)
-    // Note: We'll match by request.auth.token.email for simplicity, 
-    // but security expects the admin doc ID to be known or queried.
-    // INSTEAD, we'll use a standard approach: query by attribute
+    // Helper: Check permissions for a specific module and level
     function hasPermission(module, level) {
-      let roles = get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role;
-      return roles.includes("SuperAdmin") || 
-             roles.includes(module + ":" + level) || 
-             (level == "view" && roles.includes(module + ":edit")) ||
-             (level == "edit" && roles.includes(module)); // Legacy support
+      return isMasterAdmin() || (
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) && (
+          get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.hasAny(["SuperAdmin", module + ":" + level]) ||
+          (level == "view" && get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.hasAny([module + ":edit"])) ||
+          (level == "edit" && get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.hasAny([module]))
+        )
+      );
     }
     
-    // Easier alternative: require the admin doc ID to match Auth UID if possible, 
-    // OR we check if a document with that email exists and has the role.
-    // Since Firebase Rules don't support full collection queries easily,
-    // we assume the admin's document ID is their email for efficient lookup.
-    
     function canView(module) {
-      return request.auth != null && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) && 
-        hasPermission(module, "view")
-      );
+      return request.auth != null && hasPermission(module, "view");
     }
 
     function canEdit(module) {
-      return request.auth != null && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) && 
-        hasPermission(module, "edit")
-      );
+      return request.auth != null && hasPermission(module, "edit");
     }
 
     // PRODUCTS (Boutique)
@@ -78,9 +70,11 @@ service cloud.firestore {
 
     // ADMINS
     match /admins/{adminId} {
-      allow read: if request.auth != null; // Admins can see each other
-      allow write: if exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
-                     get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.includes("SuperAdmin");
+      allow read: if request.auth != null;
+      allow write: if isMasterAdmin() || (
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.hasAny(["SuperAdmin"])
+      );
     }
 
     // COACHES

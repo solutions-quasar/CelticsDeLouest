@@ -3414,7 +3414,8 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
         if (id) {
             await updateDoc(doc(db, "admins", id), data);
         } else {
-            await addDoc(collection(db, "admins"), data);
+            // Use email as doc ID for easier FireStore Rules lookup
+            await setDoc(doc(db, "admins", email), data);
         }
 
         adminModal.classList.remove('active');
@@ -3571,7 +3572,6 @@ async function loadAdmins() {
     }
 }
 
-// --- GLOBAL ROLE CHECK ---
 async function getUserRole(email) {
     // 1. Hardcoded SuperAdmins (God Mode)
     const lowerEmail = email.toLowerCase();
@@ -3580,7 +3580,7 @@ async function getUserRole(email) {
 
     // 2. Check Firestore
     try {
-        const q = query(collection(db, "admins"), where("email", "==", email));
+        const q = query(collection(db, "admins"), where("email", "==", lowerEmail));
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
             const roleData = snapshot.docs[0].data().role;
@@ -3596,15 +3596,16 @@ async function getUserRole(email) {
 async function ensureBenjaminInDb() {
     const email = "bensult78@gmail.com";
     try {
-        const q = query(collection(db, "admins"), where("email", "==", email));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-            await addDoc(collection(db, "admins"), {
+        // Use email as doc ID for easier FireStore Rules lookup
+        const benRef = doc(db, "admins", email);
+        const snap = await getDoc(benRef);
+        if (!snap.exists()) {
+            await setDoc(benRef, {
                 email: email,
                 name: "Benjamin Sultan",
                 role: ["SuperAdmin"]
             });
-            console.log("Benjamin auto-added to DB");
+            console.log("Benjamin auto-added to DB with email ID");
         }
     } catch (e) {
         console.error("Auto-add Benjamin failed", e);
@@ -5282,11 +5283,16 @@ document.getElementById('field-form')?.addEventListener('submit', async (e) => {
 
     const form = e.target;
     setLoading(form, true);
-    await uploadAndSave('fields', id, data, null);
-    setLoading(form, false);
-
-    fieldModal.classList.remove('active');
-    loadFields();
+    try {
+        await uploadAndSave('fields', id, data, null);
+        fieldModal.classList.remove('active');
+        loadFields();
+    } catch (err) {
+        console.error("Error saving field:", err);
+        alert("Erreur lors de l'enregistrement: " + err.message);
+    } finally {
+        setLoading(form, false);
+    }
 });
 
 

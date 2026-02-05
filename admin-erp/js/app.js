@@ -3389,19 +3389,38 @@ async function loadAdmins() {
 async function getUserRole(email) {
     if (!email) return [];
     const lowerEmail = email.toLowerCase();
-    const hardcodedSuperAdmins = ['admin@celtics.com', 'celtics.portneuf@gmail.com', 'bensult78@gmail.com'];
-    if (hardcodedSuperAdmins.includes(lowerEmail)) return ['SuperAdmin'];
 
-    // 2. Check Cache
+    // 1. Check Cache
     try {
         const admins = Object.values(dataCache.admins || {});
-        const admin = admins.find(a => a.email && a.email.toLowerCase() === lowerEmail);
+        let admin = admins.find(a => a.email && a.email.toLowerCase() === lowerEmail);
+
+        // 2. Fallback: Direct DB Fetch (Race condition protection)
+        if (!admin) {
+            // Check if document exists with ID = email
+            const docSnap = await getDoc(doc(db, "admins", lowerEmail));
+            if (docSnap.exists()) {
+                admin = { id: docSnap.id, ...docSnap.data() };
+            } else {
+                // Try querying by email field if ID is not email
+                const q = query(collection(db, "admins"), where("email", "==", email)); // use original Case just in case, or lower? usually DB has exact match
+                // actually lets try loose
+                const qSnap = await getDocs(query(collection(db, "admins")));
+                qSnap.forEach(d => {
+                    const dData = d.data();
+                    if (dData.email && dData.email.toLowerCase() === lowerEmail) {
+                        admin = { id: d.id, ...dData };
+                    }
+                });
+            }
+        }
+
         if (admin) {
             const roleData = admin.role;
             return Array.isArray(roleData) ? roleData : [roleData]; // Always array
         }
     } catch (e) {
-        console.warn("Error checking admin roles from cache:", e);
+        console.warn("Error checking admin roles:", e);
     }
     return []; // No roles
 }

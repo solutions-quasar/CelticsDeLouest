@@ -13,6 +13,7 @@
     --warning: #f59e0b;
     --success: #10b981;
     --sidebar-width: 250px;
+    --sidebar-collapsed-width: 80px;
 }
 
 /* Grid System */
@@ -165,8 +166,14 @@ body {
     border-right: 1px solid #e5e7eb;
     display: flex;
     flex-direction: column;
-    transition: transform 0.3s ease;
+    transition: all 0.3s ease;
     height: 100vh;
+    position: relative;
+    z-index: 100;
+}
+
+.sidebar.collapsed {
+    width: var(--sidebar-collapsed-width);
 }
 
 .sidebar-header {
@@ -209,6 +216,62 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.sidebar.collapsed .nav-btn {
+    justify-content: center;
+    padding: 12px 0;
+}
+
+.sidebar.collapsed .nav-btn i {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.sidebar.collapsed .sidebar-header span,
+.sidebar.collapsed .nav-btn span,
+.sidebar.collapsed .sidebar-footer button span,
+.sidebar.collapsed #logout-btn span {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 0;
+}
+
+.sidebar.collapsed .sidebar-header img {
+    margin: 0;
+}
+
+.sidebar-collapse-btn {
+    position: absolute;
+    right: -12px;
+    top: 35px;
+    width: 24px;
+    height: 24px;
+    background: var(--white);
+    border: 1px solid #e5e7eb;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 101;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    color: var(--text-light);
+    transition: 0.3s;
+}
+
+.sidebar-collapse-btn:hover {
+    color: var(--primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar.collapsed .sidebar-collapse-btn {
+    transform: rotate(180deg);
 }
 
 .nav-btn:hover {
@@ -439,7 +502,7 @@ body {
 }
 
 #content-area {
-    padding: 30px;
+    padding: 0;
     overflow-y: auto;
     flex: 1;
 }
@@ -1013,7 +1076,7 @@ th {
     }
 
     #content-area {
-        padding: 15px;
+        padding: 0;
     }
 
     /* Adjust Grid for Mobile */
@@ -1151,4 +1214,61 @@ th {
 .product-actions .btn-danger:hover {
     background-color: #d32f2f !important;
     transform: translateY(-2px);
+}
+
+/* --- TEAMS MULTI-COLUMN LAYOUT --- */
+.teams-columns-container {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+    align-items: flex-start;
+}
+
+.team-gender-column {
+    flex: 1;
+    background: #fdfdfd;
+    border-radius: 12px;
+    padding: 15px;
+    border: 1px solid #eee;
+    min-width: 0;
+}
+
+.team-gender-column .column-title {
+    text-align: center;
+    padding: 10px;
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+    color: var(--text-dark);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 2px solid #eee;
+}
+
+.team-card .admin-card-img {
+    display: none;
+}
+
+.team-gender-column.column-masculin {
+    background-color: #f0f7ff;
+    border-color: #d0e4ff;
+}
+
+.team-gender-column.column-feminin {
+    background-color: #fff0f6;
+    border-color: #ffd6e7;
+}
+
+.team-gender-column.column-mixte {
+    background-color: #f8f0ff;
+    border-color: #efdbff;
+}
+
+@media (max-width: 900px) {
+    .teams-columns-container {
+        flex-direction: column;
+    }
+
+    .team-gender-column {
+        width: 100%;
+    }
 }

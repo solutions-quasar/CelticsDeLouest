@@ -40,13 +40,13 @@ export async function loadBilling() {
         </div>
 
         <!-- INVOICES TABLE -->
-        <div class="card">
+        <div class="card" style="margin-bottom:20px;">
             <div class="card-header">
-                <h3>Historique des Factures</h3>
-                <input type="text" id="billing-search" placeholder="Rechercher par email, nom..." style="padding:8px; border:1px solid #ddd; border-radius:4px; margin-left:auto;">
+                <h3>Historique des Factures (Stripe)</h3>
+                <input type="text" id="billing-search" placeholder="Rechercher par email..." style="padding:8px; border:1px solid #ddd; border-radius:4px; margin-left:auto;">
             </div>
             <div class="card-body">
-                <div class="table-container">
+                <div class="table-container" style="max-height: 400px; overflow-y: auto;">
                     <table class="table" id="invoices-table">
                         <thead>
                             <tr>
@@ -55,6 +55,31 @@ export async function loadBilling() {
                                 <th>Montant</th>
                                 <th>Status</th>
                                 <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" style="text-align:center;">Chargement...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SCHEDULED PAYMENTS TABLE -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Paiements Planifiés (Versements à venir)</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-container">
+                    <table class="table" id="scheduled-payments-table">
+                        <thead>
+                            <tr>
+                                <th>Date d'échéance</th>
+                                <th>Client / Session</th>
+                                <th>Montant</th>
+                                <th>Description</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -164,18 +189,34 @@ export async function loadBilling() {
 
 async function refreshBillingData() {
     const tbody = document.getElementById('invoices-table').querySelector('tbody');
+    const schedTbody = document.getElementById('scheduled-payments-table').querySelector('tbody');
+
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Chargement...</td></tr>';
+    schedTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Chargement...</td></tr>';
 
     try {
-        // Fetch 'invoices' collection
-        // Assuming window.getDocs, window.collection, window.db avail
-        const snap = await window.getDocs(window.collection(window.db, "invoices"));
+        // Fetch 'invoices', 'scheduled_payments', and 'registrations' collections
+        const [invSnap, schedSnap, regSnap] = await Promise.all([
+            window.getDocs(window.collection(window.db, "invoices")),
+            window.getDocs(window.collection(window.db, "scheduled_payments")),
+            window.getDocs(window.collection(window.db, "registrations"))
+        ]);
+
+        // Map session IDs to Parent Names
+        const sessionNames = {};
+        regSnap.forEach(doc => {
+            const r = doc.data();
+            if (r.registrationSessionId) {
+                // Combine for display: "Parent Name (Email)"
+                sessionNames[r.registrationSessionId] = `${r.parent1Name || r.parentName || 'Parent'} (${r.parent1Email || r.parentEmail || ''})`;
+            }
+        });
 
         let totalPaid = 0;
         let totalPending = 0;
         let invoices = [];
 
-        snap.forEach(doc => {
+        invSnap.forEach(doc => {
             const d = doc.data();
             d.id = doc.id;
             invoices.push(d);
@@ -187,46 +228,69 @@ async function refreshBillingData() {
             }
         });
 
+        // 1. Render Invoices
+        invoices.sort((a, b) => (b.created || 0) - (a.created || 0));
+        tbody.innerHTML = invoices.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Aucune facture.</td></tr>' : '';
+        invoices.forEach(inv => {
+            const dateStr = inv.created ? new Date(inv.created * 1000).toLocaleDateString('fr-CA') : 'N/A';
+            const amountStr = ((inv.amount || 0) / 100).toFixed(2) + ' $';
+            let statusColor = inv.status === 'paid' ? 'green' : (inv.status === 'open' ? 'orange' : 'gray');
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>${dateStr}</td>
+                    <td>
+                        <div style="font-weight:bold;">${inv.customerEmail || 'Inconnu'}</div>
+                        <small style="color:#666;">${inv.id}</small>
+                    </td>
+                    <td>${amountStr}</td>
+                    <td><span class="badge" style="background:${statusColor}; color:white; padding:4px 8px; border-radius:4px;">${inv.status}</span></td>
+                    <td>
+                        ${inv.hostedInvoiceUrl ? `<a href="${inv.hostedInvoiceUrl}" target="_blank" class="btn-icon" title="Voir"><i class="fas fa-external-link-alt"></i></a>` : ''}
+                        ${inv.pdfUrl ? `<a href="${inv.pdfUrl}" target="_blank" class="btn-icon" title="PDF"><i class="fas fa-file-pdf"></i></a>` : ''}
+                    </td>
+                </tr>
+            `;
+        });
+
+        // 2. Render Scheduled Payments
+        let scheduled = [];
+        schedSnap.forEach(doc => {
+            const d = doc.data();
+            d.id = doc.id;
+            scheduled.push(d);
+            if (d.status === 'pending') {
+                totalPending += (d.amount || 0) / 100;
+            }
+        });
+
+        scheduled.sort((a, b) => (a.dueDate ? a.dueDate.seconds : 0) - (b.dueDate ? b.dueDate.seconds : 0));
+        schedTbody.innerHTML = scheduled.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Aucun versement planifié.</td></tr>' : '';
+
+        scheduled.forEach(s => {
+            const dateStr = s.dueDate ? new Date(s.dueDate.seconds * 1000).toLocaleDateString('fr-CA') : 'N/A';
+            const amountStr = ((s.amount || 0) / 100).toFixed(2) + ' $';
+            let statusColor = s.status === 'processed' ? 'green' : (s.status === 'pending' ? 'orange' : 'red');
+            const customerIdentity = sessionNames[s.sessionId] || s.customerId || 'Client Inconnu';
+
+            schedTbody.innerHTML += `
+                <tr>
+                    <td>${dateStr}</td>
+                    <td>
+                        <div style="font-weight:bold;">${customerIdentity}</div>
+                        <small style="color:#666; font-size:0.75rem;">ID Stripe: ${s.customerId || 'N/A'}</small>
+                    </td>
+                    <td>${amountStr}</td>
+                    <td>${s.description || 'Paiement versement'}</td>
+                    <td><span class="badge" style="background:${statusColor}; color:white; padding:4px 8px; border-radius:4px;">${s.status}</span></td>
+                </tr>
+            `;
+        });
+
         // Update Stats
         document.getElementById('bill-total-paid').innerText = totalPaid.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
         document.getElementById('bill-total-pending').innerText = totalPending.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
-        document.getElementById('bill-tx-count').innerText = invoices.length;
-
-        // Render Table
-        invoices.sort((a, b) => (b.created || 0) - (a.created || 0)); // Descending
-
-        tbody.innerHTML = '';
-        if (invoices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Aucune facture trouvée.</td></tr>';
-            return;
-        }
-
-        invoices.forEach(inv => {
-            const tr = document.createElement('tr');
-
-            const dateStr = inv.created ? new Date(inv.created * 1000).toLocaleDateString('fr-CA') : 'N/A';
-            const amountStr = ((inv.amount || 0) / 100).toFixed(2) + ' $';
-
-            let statusColor = 'gray';
-            if (inv.status === 'paid') statusColor = 'green';
-            if (inv.status === 'open') statusColor = 'orange';
-            if (inv.status === 'void') statusColor = 'red';
-
-            tr.innerHTML = `
-                <td>${dateStr}</td>
-                <td>
-                    <div style="font-weight:bold;">${inv.customerEmail || 'Inconnu'}</div>
-                    <small style="color:#666;">${inv.id}</small>
-                </td>
-                <td>${amountStr}</td>
-                <td><span class="badge" style="background:${statusColor}; color:white; padding:4px 8px; border-radius:4px;">${inv.status}</span></td>
-                <td>
-                    ${inv.hostedInvoiceUrl ? `<a href="${inv.hostedInvoiceUrl}" target="_blank" class="btn-icon" title="Voir"><i class="fas fa-external-link-alt"></i></a>` : ''}
-                    ${inv.pdfUrl ? `<a href="${inv.pdfUrl}" target="_blank" class="btn-icon" title="PDF"><i class="fas fa-file-pdf"></i></a>` : ''}
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
+        document.getElementById('bill-tx-count').innerText = invoices.length + scheduled.length;
 
     } catch (e) {
         console.error("Billing Load Error:", e);

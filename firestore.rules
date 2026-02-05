@@ -3,106 +3,144 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
+    // Helper: Check if user document exists in 'admins' and return roles list
+    function getAdminRoles() {
+      return get(/databases/$(database)/documents/admins/$(getAdminId())).data.role;
+    }
+
+    // Helper: Get the document ID for the admin (matched by email)
+    // Note: We'll match by request.auth.token.email for simplicity, 
+    // but security expects the admin doc ID to be known or queried.
+    // INSTEAD, we'll use a standard approach: query by attribute
+    function hasPermission(module, level) {
+      let roles = get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role;
+      return roles.includes("SuperAdmin") || 
+             roles.includes(module + ":" + level) || 
+             (level == "view" && roles.includes(module + ":edit")) ||
+             (level == "edit" && roles.includes(module)); // Legacy support
+    }
+    
+    // Easier alternative: require the admin doc ID to match Auth UID if possible, 
+    // OR we check if a document with that email exists and has the role.
+    // Since Firebase Rules don't support full collection queries easily,
+    // we assume the admin's document ID is their email for efficient lookup.
+    
+    function canView(module) {
+      return request.auth != null && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) && 
+        hasPermission(module, "view")
+      );
+    }
+
+    function canEdit(module) {
+      return request.auth != null && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) && 
+        hasPermission(module, "edit")
+      );
     }
 
     // PRODUCTS (Boutique)
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if canEdit("Boutique");
     }
 
     // BOARD MEMBERS (Conseil d'administration)
     match /board_members/{memberId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if canEdit("Club");
     }
 
     // REFEREES (Arbitres)
     match /referees/{refereeId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if canEdit("Club");
     }
 
     // REGISTRATIONS (Inscriptions)
-    // Public can create (submit form), but only Admins can read (view list)
     match /registrations/{regId} {
       allow create: if true;
-      allow read, update, delete: if isAuthenticated();
+      allow read: if canView("Inscriptions");
+      allow update, delete: if canEdit("Inscriptions");
     }
 
     // PLAYERS (Team Generator)
     match /players/{playerId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canView("Equipes");
+      allow write: if canEdit("Equipes");
     }
 
     // INVENTORY
     match /inventory/{itemId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canView("Boutique");
+      allow write: if canEdit("Boutique");
     }
 
     // ADMINS
     match /admins/{adminId} {
-      allow read, write: if isAuthenticated();
+      allow read: if request.auth != null; // Admins can see each other
+      allow write: if exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+                     get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.includes("SuperAdmin");
     }
 
     // COACHES
     match /coaches/{coachId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if canEdit("Equipes");
     }
     
     // SETTINGS (Global Config)
     match /settings/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if canEdit("Config");
     }
-
     
     // MATCHES
     match /matches/{matchId} {
         allow read: if true;
-        allow write: if isAuthenticated();
+        allow write: if canEdit("Matchs");
     }
 
     // SPONSORS
     match /sponsors/{sponsorId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if canEdit("Club");
     }
 
     // TEAMS
     match /teams/{teamId} {
-      allow read, write: if isAuthenticated();
+      allow read: if canView("Equipes");
+      allow write: if canEdit("Equipes");
     }
 
     // SEASONS
     match /seasons/{seasonId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if canEdit("Config");
     }
 
     // FIELDS (Terrains)
     match /fields/{fieldId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if canEdit("Config");
     }
 
     // EMAIL CAMPAIGNS
     match /campaigns/{campaignId} {
-        allow read, write: if isAuthenticated();
+        allow read: if canView("Campagnes");
+        allow write: if canEdit("Campagnes");
     }
 
     // INVOICES (Stripe Integration)
     match /invoices/{invoiceId} {
-        allow read, write: if isAuthenticated();
+        allow read: if canView("Facturation");
+        allow write: if canEdit("Facturation");
     }
 
     // SCHEDULED PAYMENTS (Installments)
     match /scheduled_payments/{paymentId} {
-        allow read, write: if isAuthenticated();
+        allow read: if canView("Facturation");
+        allow write: if canEdit("Facturation");
     }
     
     // Default fallback: Deny everything else

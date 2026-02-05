@@ -29,7 +29,7 @@ async function getOrCreateStripeCustomer(email, name) {
 // --- STRIPE LOGIC: PAYMENTS ---
 exports.createRegistrationPayment = onRequest({ cors: true }, async (req, res) => {
     try {
-        const { paymentMethodId, amount, email, parentName, installments, description } = req.body;
+        const { paymentMethodId, amount, email, parentName, installments, description, sessionId } = req.body;
 
         if (!amount || !email || !paymentMethodId) {
             return res.status(400).json({ error: "Missing required fields (amount, email, paymentMethodId)" });
@@ -68,7 +68,8 @@ exports.createRegistrationPayment = onRequest({ cors: true }, async (req, res) =
                 customer: customerId,
                 auto_advance: true,
                 collection_method: 'charge_automatically',
-                description: "Paiement 1 sur 3"
+                description: "Paiement 1 sur 3",
+                metadata: { sessionId: sessionId, installment: 1 }
             });
 
             // 2. Create Invoice Item linked to Invoice
@@ -123,24 +124,61 @@ exports.createRegistrationPayment = onRequest({ cors: true }, async (req, res) =
             // SO: Just do Payment 1 now.
             const paymentIntent = paidInvoice1.payment_intent;
 
-            // SAVE FUTURE PAYMENTS TO FIRESTORE
-            // We schedule them for +30 and +60 days
+            // --- INVOICE 2 (+45 Days) ---
+            const invoice2 = await stripe.invoices.create({
+                customer: customerId,
+                auto_advance: false,
+                collection_method: 'charge_automatically',
+                description: "Paiement 2 sur 3",
+                metadata: { sessionId: sessionId, installment: 2 }
+            });
+            await stripe.invoiceItems.create({
+                customer: customerId,
+                invoice: invoice2.id,
+                amount: amount2,
+                currency: 'cad',
+                description: `${description || "Inscription"} - Versement 2/3`
+            });
+
+            // --- INVOICE 3 (+90 Days) ---
+            const invoice3 = await stripe.invoices.create({
+                customer: customerId,
+                auto_advance: false,
+                collection_method: 'charge_automatically',
+                description: "Paiement 3 sur 3",
+                metadata: { sessionId: sessionId, installment: 3 }
+            });
+            await stripe.invoiceItems.create({
+                customer: customerId,
+                invoice: invoice3.id,
+                amount: amount3,
+                currency: 'cad',
+                description: `${description || "Inscription"} - Versement 3/3`
+            });
+
+            // SAVE FUTURE PAYMENTS TO FIRESTORE (Link to Stripe IDs)
             const futurePay1 = {
                 customerId: customerId,
+                sessionId: sessionId,
+                stripeInvoiceId: invoice2.id,
                 amount: amount2,
                 currency: 'cad',
                 description: `${description || "Inscription"} - Versement 2/3`,
-                dueDate: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+                dueDate: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 45 * 24 * 60 * 60 * 1000)),
                 status: 'pending',
+                installmentOrder: 2,
                 created: admin.firestore.FieldValue.serverTimestamp()
             };
             const futurePay2 = {
                 customerId: customerId,
+                sessionId: sessionId,
+                stripeInvoiceId: invoice3.id,
                 amount: amount3,
                 currency: 'cad',
                 description: `${description || "Inscription"} - Versement 3/3`,
-                dueDate: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)),
+                dueDate: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
                 status: 'pending',
+                installmentOrder: 3,
                 created: admin.firestore.FieldValue.serverTimestamp()
             };
 
@@ -165,7 +203,8 @@ exports.createRegistrationPayment = onRequest({ cors: true }, async (req, res) =
                 customer: customerId,
                 auto_advance: true,
                 collection_method: 'charge_automatically',
-                description: "Frais d'inscription (Paiement complet)"
+                description: "Frais d'inscription (Paiement complet)",
+                metadata: { sessionId: sessionId }
             });
 
             // 2. Create Invoice Item linked to Invoice
@@ -220,33 +259,37 @@ exports.processScheduledPayments = onSchedule("every 24 hours", async (event) =>
         console.log(`Processing scheduled payment: ${payId} for ${payData.amount} cents`);
 
         try {
-            // 1. Create Invoice (Draft)
-            const invoice = await stripe.invoices.create({
-                customer: payData.customerId,
-                auto_advance: true,
-                collection_method: 'charge_automatically'
-            });
+            let invoiceId = payData.stripeInvoiceId;
 
-            // 2. Create Invoice Item linked to Invoice
-            await stripe.invoiceItems.create({
-                customer: payData.customerId,
-                invoice: invoice.id,
-                amount: payData.amount,
-                currency: payData.currency || 'cad',
-                description: payData.description
-            });
+            if (!invoiceId) {
+                // Fallback: Create if somehow missing
+                const invoice = await stripe.invoices.create({
+                    customer: payData.customerId,
+                    auto_advance: true,
+                    collection_method: 'charge_automatically',
+                    metadata: { sessionId: payData.sessionId, installment: payData.installmentOrder }
+                });
+                await stripe.invoiceItems.create({
+                    customer: payData.customerId,
+                    invoice: invoice.id,
+                    amount: payData.amount,
+                    currency: payData.currency || 'cad',
+                    description: payData.description
+                });
+                invoiceId = invoice.id;
+            }
 
             // 3. Finalize and Pay
-            const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+            const finalized = await stripe.invoices.finalizeInvoice(invoiceId);
             await stripe.invoices.pay(finalized.id);
 
             // 3. Update DB Status
             await paymentsRef.doc(payId).update({
                 status: 'processed',
                 processedAt: admin.firestore.FieldValue.serverTimestamp(),
-                generatedInvoiceId: invoice.id
+                generatedInvoiceId: invoiceId
             });
-            console.log(`Invoice ${invoice.id} generated for scheduled payment ${payId}`);
+            console.log(`Invoice ${invoiceId} processed for scheduled payment ${payId}`);
 
         } catch (e) {
             console.error(`Failed to process payment ${payId}`, e);
@@ -316,8 +359,9 @@ exports.stripeWebhook = onRequest(async (req, res) => {
     }
 
     // Handle Events
-    if (event.type === 'invoice.payment_succeeded' || event.type === 'invoice.payment_failed' || event.type === 'invoice.created') {
+    if (event.type === 'invoice.payment_succeeded') {
         const invoice = event.data.object;
+        const sessionId = invoice.metadata ? invoice.metadata.sessionId : null;
 
         // Sync to Firestore 'invoices' collection
         await db.collection('invoices').doc(invoice.id).set({
@@ -334,7 +378,37 @@ exports.stripeWebhook = onRequest(async (req, res) => {
             lines: invoice.lines.data.map(l => ({ desc: l.description, amount: l.amount }))
         }, { merge: true });
 
-        console.log(`Synced Invoice ${invoice.id} to Firestore.`);
+        // UPDATE REGISTRATIONS
+        if (sessionId) {
+            const regsSnap = await db.collection('registrations').where('registrationSessionId', '==', sessionId).get();
+            if (!regsSnap.empty) {
+                const isFinal = !invoice.metadata.installment || invoice.metadata.installment == 3;
+                const newStatus = isFinal ? 'Paid' : 'Partial';
+
+                const updateBatch = db.batch();
+                regsSnap.forEach(doc => {
+                    updateBatch.update(doc.ref, {
+                        paymentStatus: newStatus,
+                        lastPaidInvoiceId: invoice.id,
+                        lastPaymentDate: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+                await updateBatch.commit();
+                console.log(`Updated ${regsSnap.size} registrations for session ${sessionId} to ${newStatus}`);
+            }
+        }
+    } else if (event.type === 'invoice.payment_failed' || event.type === 'invoice.created') {
+        const invoice = event.data.object;
+        // Basic sync for visibility
+        await db.collection('invoices').doc(invoice.id).set({
+            stripeId: invoice.id,
+            customerId: invoice.customer,
+            customerEmail: invoice.customer_email,
+            status: invoice.status,
+            amount: invoice.amount_due,
+            metadata: invoice.metadata || {},
+            created: invoice.created
+        }, { merge: true });
     }
 
     res.json({ received: true });

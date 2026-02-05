@@ -41,6 +41,15 @@ const dataCache = {
     currentSeason: null
 };
 
+// --- Custom Calendar State ---
+window.calendarCurrentDate = new Date();
+window.calendarSettings = {
+    startHour: 8,
+    endHour: 22,
+    slotDuration: 15, // minutes
+    defaultDuration: 60 // minutes
+};
+
 // Make dataCache globally accessible for search
 window.dataCache = dataCache;
 
@@ -323,9 +332,12 @@ function createCard(imageUrl, title, subtitle, id, editClass, deleteClass, defau
     const imgClass = isLogo ? 'admin-card-img logo-img' : 'admin-card-img circle-img';
 
     // We'll move most styles to CSS, but keep the core logic here
-    const imgHtml = imageUrl
-        ? `<img src="${imageUrl}" class="${imgClass}">`
-        : `<div class="${imgClass} placeholder-img" style="background:#eee; display:flex; align-items:center; justify-content:center; color:#888"><i class="fas ${defaultIcon} fa-2x"></i></div>`;
+    let imgHtml = '';
+    if (imageUrl !== false) {
+        imgHtml = imageUrl
+            ? `<img src="${imageUrl}" class="${imgClass}">`
+            : `<div class="${imgClass} placeholder-img" style="background:#eee; display:flex; align-items:center; justify-content:center; color:#888"><i class="fas ${defaultIcon} fa-2x"></i></div>`;
+    }
 
     card.innerHTML = `
         ${imgHtml}
@@ -433,7 +445,7 @@ if (logoutBtn) {
     });
 }
 
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
     if (initLoader) {
         initLoader.classList.remove('active');
         initLoader.style.display = 'none';
@@ -444,7 +456,7 @@ onAuthStateChanged(auth, (user) => {
         dashboardScreen.classList.add('active');
 
         // CHECK ROLE
-        if (window.checkAdminAndSetupUI) window.checkAdminAndSetupUI(user);
+        if (window.checkAdminAndSetupUI) await window.checkAdminAndSetupUI(user);
 
         document.getElementById('user-email').textContent = user.email;
 
@@ -459,6 +471,7 @@ onAuthStateChanged(auth, (user) => {
         }
 
         seedDatabase();
+        await loadSettings(); // Load global settings (including calendar)
     } else {
         dashboardScreen.classList.remove('active');
         authScreen.classList.add('active');
@@ -476,6 +489,15 @@ const sidebar = document.querySelector('.sidebar');
 if (mobileMenuBtn) {
     mobileMenuBtn.addEventListener('click', () => {
         sidebar.classList.toggle('mobile-visible');
+    });
+}
+
+// Sidebar Collapse Toggle
+const collapseBtn = document.getElementById('sidebar-collapse-btn');
+if (collapseBtn) {
+    collapseBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        // Save state to local storage if preferred? Let's just keep it simple for now.
     });
 }
 
@@ -564,6 +586,14 @@ document.querySelectorAll('.view-toggle-btn').forEach(btn => {
             } else {
                 container.classList.remove('view-grid', 'view-list');
                 container.classList.add(`view-${viewType}`);
+
+                // If it's the teams list, propagate to sub-containers (columns)
+                if (targetId === 'teams-list') {
+                    container.querySelectorAll('.team-gender-column > div').forEach(sub => {
+                        sub.classList.remove('view-grid', 'view-list');
+                        sub.classList.add(`view-${viewType}`);
+                    });
+                }
             }
         }
     });
@@ -705,9 +735,12 @@ document.getElementById('board-form')?.addEventListener('submit', async (e) => {
         const mandateEnd = document.getElementById('board-mandate').value || null;
         const file = document.getElementById('board-image').files[0];
 
+        const email = document.getElementById('board-email').value;
+        const phone = document.getElementById('board-phone').value;
+
         if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
 
-        const data = { name, role, order, visible, mandateEnd };
+        const data = { name, email, phone, role, order, visible, mandateEnd };
         await uploadAndSave('board_members', id, data, file);
 
         boardModal.classList.remove('active');
@@ -733,12 +766,18 @@ async function loadBoard() {
         boardList.push({ id: doc.id, ...doc.data() });
     });
 
-    // Sort: Active first, then by order
+    const sortBy = document.getElementById('board-sort')?.value || 'name';
+
+    // Sorting Logic
     boardList.sort((a, b) => {
-        const visA = a.visible !== false;
-        const visB = b.visible !== false;
-        if (visA !== visB) return visA ? -1 : 1;
-        return (a.order || 99) - (b.order || 99);
+        if (sortBy === 'active') {
+            const visA = a.visible !== false;
+            const visB = b.visible !== false;
+            if (visA !== visB) return visA ? -1 : 1;
+        } else if (sortBy === 'email') {
+            return (a.email || '').localeCompare(b.email || '');
+        }
+        return (a.name || '').localeCompare(b.name || '');
     });
 
     boardList.forEach(data => {
@@ -763,8 +802,10 @@ async function loadBoard() {
     });
 
     setupClickableCard('.clickable-card', 'board', 'board-modal', 'board-id', (data) => {
-        document.getElementById('board-name').value = data.name;
-        document.getElementById('board-role').value = data.role;
+        document.getElementById('board-name').value = data.name || '';
+        document.getElementById('board-email').value = data.email || '';
+        document.getElementById('board-phone').value = data.phone || '';
+        document.getElementById('board-role').value = data.role || '';
         document.getElementById('board-order').value = data.order || 99;
         document.getElementById('board-visible').checked = data.visible !== false;
         document.getElementById('board-mandate').value = data.mandateEnd || '';
@@ -798,10 +839,13 @@ document.getElementById('referee-form')?.addEventListener('submit', async (e) =>
         const visible = document.getElementById('ref-visible').checked;
         const file = document.getElementById('ref-image').files[0];
 
+        const email = document.getElementById('ref-email').value;
+        const phone = document.getElementById('ref-phone').value;
+
         if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
 
         const unavails = document.getElementById('ref-unavails').value.split(',').map(s => s.trim()).filter(s => s);
-        const data = { name, visible, unavails };
+        const data = { name, email, phone, visible, unavails };
         await uploadAndSave('referees', id, data, file);
 
         refModal.classList.remove('active');
@@ -853,12 +897,18 @@ async function loadReferees() {
         refList.push({ id: doc.id, ...doc.data() });
     });
 
-    // Sort: Active first, then name
+    const sortBy = document.getElementById('ref-sort')?.value || 'name';
+
+    // Sorting Logic
     refList.sort((a, b) => {
-        const visA = a.visible !== false;
-        const visB = b.visible !== false;
-        if (visA !== visB) return visA ? -1 : 1;
-        return a.name.localeCompare(b.name);
+        if (sortBy === 'active') {
+            const visA = a.visible !== false;
+            const visB = b.visible !== false;
+            if (visA !== visB) return visA ? -1 : 1;
+        } else if (sortBy === 'email') {
+            return (a.email || '').localeCompare(b.email || '');
+        }
+        return (a.name || '').localeCompare(b.name || '');
     });
 
     refList.forEach(data => {
@@ -878,7 +928,9 @@ async function loadReferees() {
     });
 
     setupClickableCard('.ref-card', 'referees', 'referee-modal', 'referee-id', (data) => {
-        document.getElementById('ref-name').value = data.name;
+        document.getElementById('ref-name').value = data.name || '';
+        document.getElementById('ref-email').value = data.email || '';
+        document.getElementById('ref-phone').value = data.phone || '';
         document.getElementById('ref-visible').checked = data.visible !== false;
         document.getElementById('ref-unavails').value = data.unavails ? data.unavails.join(', ') : '';
         setExistingPreview('ref-image-preview', data.imageUrl);
@@ -1311,38 +1363,96 @@ async function loadTeams() {
             return;
         }
 
-        // Convert to array and sort client-side
-        const teams = [];
+        // Convert to array
+        let teams = [];
         snapshot.forEach(doc => {
             teams.push({ id: doc.id, data: doc.data() });
         });
 
-        // Sort by name
-        teams.sort((a, b) => (a.data.name || '').localeCompare(b.data.name || ''));
+        // Define Category Order
+        const catOrder = ["U4", "U5", "U6", "U7", "U8", "U9", "U10", "U11", "U12", "U13", "U14", "U15", "U16", "U17", "U18", "Senior"];
+        const getCatIndex = (cat) => {
+            const index = catOrder.indexOf(cat);
+            return index === -1 ? 999 : index;
+        };
 
-        teams.forEach(({ id, data }) => {
-            dataCache.teams[id] = data;
+        // Group by Gender
+        const groups = {
+            'Masculin': [],
+            'Féminin': [],
+            'Mixte': []
+        };
 
-            // Get coach names
-            let coachNames = 'Non assigné';
-            if (data.coachIds && Array.isArray(data.coachIds) && data.coachIds.length > 0) {
-                coachNames = data.coachIds.map(id => coachesMap[id] || 'N/A').join(', ');
+        teams.forEach(t => {
+            const g = t.data.gender || 'Mixte';
+            if (groups[g]) groups[g].push(t);
+            else groups['Mixte'].push(t);
+        });
+
+        // Clear and prepare main container
+        list.innerHTML = '';
+        list.classList.remove('view-grid', 'view-list'); // Remove grid/list from parent
+
+        const mainWrapper = document.createElement('div');
+        mainWrapper.className = 'teams-columns-container';
+        list.appendChild(mainWrapper);
+
+        const viewMode = document.querySelector('.view-toggle-btn.active[data-target="teams-list"]')?.getAttribute('data-view') || 'grid';
+
+        // Render Each Column
+        ['Masculin', 'Féminin', 'Mixte'].forEach(gender => {
+            const groupTeams = groups[gender];
+            // Sort by category index, then by name
+            groupTeams.sort((a, b) => {
+                const idxA = getCatIndex(a.data.category);
+                const idxB = getCatIndex(b.data.category);
+                if (idxA !== idxB) return idxA - idxB;
+                return (a.data.name || '').localeCompare(b.data.name || '');
+            });
+
+            const colId = `column-${gender.toLowerCase().replace('é', 'e')}`;
+            const col = document.createElement('div');
+            col.className = `team-gender-column ${colId}`;
+            col.innerHTML = `<h4 class="column-title">${gender}</h4>`;
+
+            const cardsContainer = document.createElement('div');
+            cardsContainer.className = `view-${viewMode}`; // Respect current view mode
+            col.appendChild(cardsContainer);
+
+            groupTeams.forEach(({ id, data }) => {
+                dataCache.teams[id] = data;
+
+                let coachNames = 'Non assigné';
+                if (data.coachIds && Array.isArray(data.coachIds) && data.coachIds.length > 0) {
+                    coachNames = data.coachIds.map(cid => coachesMap[cid] || 'N/A').join(', ');
+                }
+
+                const seasonName = data.seasonId && seasonsMap[data.seasonId] ? seasonsMap[data.seasonId] : 'N/A';
+
+                const subtitle = `
+                    <div style="font-size:0.85rem; text-align:left; margin-top:5px;">
+                        Saison: ${seasonName}<br>
+                        Coach: ${coachNames}
+                    </div>
+                `;
+
+                let teamTitle = data.name;
+                const hasCoach = data.coachIds && Array.isArray(data.coachIds) && data.coachIds.length > 0;
+                if (!hasCoach) {
+                    teamTitle = `<span style="color:red;">${data.name}</span>`;
+                }
+
+                const card = createCard(false, teamTitle, subtitle, id, 'edit-team', 'delete-team');
+                card.classList.add('team-card');
+                card.setAttribute('data-id', id);
+                cardsContainer.appendChild(card);
+            });
+
+            if (groupTeams.length === 0) {
+                cardsContainer.innerHTML = '<p style="text-align:center; color:#999; font-style:italic; padding:10px;">Aucune équipe</p>';
             }
 
-            const seasonName = data.seasonId && seasonsMap[data.seasonId] ? seasonsMap[data.seasonId] : 'N/A';
-
-            const subtitle = `
-                <div style="font-size:0.85rem; text-align:left; margin-top:5px;">
-                    <strong>${data.category || 'N/A'} - ${data.gender || 'N/A'}</strong><br>
-                    Saison: ${seasonName}<br>
-                    Coach: ${coachNames}
-                </div>
-            `;
-
-            const card = createCard(null, data.name, subtitle, id, 'edit-team', 'delete-team', 'fa-shield-alt');
-            card.classList.add('team-card');
-            card.setAttribute('data-id', id);
-            list.appendChild(card);
+            mainWrapper.appendChild(col);
         });
 
         setupClickableCard('.team-card', 'teams', 'team-modal', 'team-id', async (data) => {
@@ -2683,7 +2793,6 @@ async function loadRegistrations() {
     if (!tbody) return;
 
     // Filter values
-    const filterTeam = document.getElementById('reg-filter-team')?.value || 'all';
     const searchText = document.getElementById('reg-search')?.value.toLowerCase() || '';
 
     tbody.innerHTML = '<tr><td colspan="5">Chargement...</td></tr>';
@@ -2695,20 +2804,6 @@ async function loadRegistrations() {
         tSnap.forEach(d => dataCache.teams[d.id] = d.data());
     }
 
-    // Populate Filter if empty
-    const teamSelect = document.getElementById('reg-filter-team');
-    // Only populate if we have 'all' option only (length 1) to avoid duplicating
-    if (teamSelect && teamSelect.options.length <= 1) {
-        // Sort teams by name
-        const sortedTeams = Object.entries(dataCache.teams).map(([id, t]) => ({ id, name: t.name || 'Sans Nom' }))
-            .sort((a, b) => a.name.localeCompare(b.name));
-        sortedTeams.forEach((t) => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            teamSelect.appendChild(opt);
-        });
-    }
 
     // Ensure seasons loaded for header display
     if (!dataCache.seasons || Object.keys(dataCache.seasons).length === 0) {
@@ -2728,8 +2823,6 @@ async function loadRegistrations() {
         const data = doc.data();
         dataCache.registrations[doc.id] = data;
 
-        // Filtering
-        if (filterTeam !== 'all' && data.teamId !== filterTeam) return;
 
         const fullName = `${data.childFirstName} ${data.childLastName}`.toLowerCase();
         if (searchText && !fullName.includes(searchText)) return;
@@ -2757,8 +2850,10 @@ async function loadRegistrations() {
         row.innerHTML = `<td>${date}</td>
                          <td><strong>${data.childFirstName} ${data.childLastName}</strong><br><small>Né(e): ${data.dob || data.birthYear || '?'}</small></td>
                          <td>
-                            <strong style="color:${teamName !== 'Non assigné' && teamName !== '-' ? '#007A33' : '#666'}">${teamName !== '-' ? teamName : 'Non assigné'}</strong>
-                            ${teamName === '-' || teamName === 'Non assigné' ? `<br><small>${data.program || data.programCat || ''}</small>` : ''}
+                            ${teamName !== '-' && teamName !== 'Non assigné' ?
+                `<strong style="color:#007A33;">${teamName}</strong>` :
+                `<strong>${data.program || data.programCat || ''}</strong>`
+            }
                          </td>
                          <td>${data.parentFirstName} ${data.parentLastName}</td>
                          <td class="actions-cell">
@@ -2809,7 +2904,6 @@ async function loadRegistrations() {
 }
 
 // Add Listeners
-document.getElementById('reg-filter-team')?.addEventListener('change', loadRegistrations);
 document.getElementById('reg-search')?.addEventListener('input', loadRegistrations);
 
 // --- MIGRATION LOGIC ---
@@ -3259,6 +3353,8 @@ const navAdminsBtn = document.getElementById('nav-admins-btn');
 if (openAdminModalBtn) openAdminModalBtn.addEventListener('click', () => {
     document.getElementById('admin-form').reset();
     document.getElementById('admin-id').value = '';
+    document.getElementById('admin-preset-roles').value = 'custom';
+    document.getElementById('is-referee-link').checked = false;
     setLoading(document.getElementById('admin-form'), false);
     adminModal.classList.add('active');
 });
@@ -3274,22 +3370,46 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
         const email = document.getElementById('admin-email').value;
         const name = document.getElementById('admin-name').value;
 
-        // Collect roles from checkboxes
+        // Collect roles from radios and checkbox
         const roles = [];
-        document.querySelectorAll('#roles-checkbox-group input[type="checkbox"]:checked').forEach(cb => {
-            roles.push(cb.value);
-        });
+        const isSuperAdmin = document.getElementById('role-superadmin').checked;
 
-        if (roles.length === 0) throw new Error("Veuillez sélectionner au moins un rôle.");
+        if (isSuperAdmin) {
+            roles.push('SuperAdmin');
+        } else {
+            // Find all permission radios
+            const permissionsGrid = document.querySelector('.permissions-grid');
+            const moduleNames = ['Equipes', 'Boutique', 'Club', 'Inscriptions', 'Matchs', 'Campagnes', 'Automatisations', 'Facturation', 'Config'];
 
-        // Check if email already exists (if new)
-        if (!id) {
-            const q = query(collection(db, "admins"), where("email", "==", email));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) throw new Error("Cet email est déjà enregistré comme administrateur.");
+            moduleNames.forEach(mod => {
+                const selected = document.querySelector(`input[name="perm-${mod}"]:checked`)?.value;
+                if (selected && selected !== 'none') {
+                    roles.push(`${mod}:${selected}`);
+                }
+            });
         }
 
-        const data = { email, name, role: roles }; // saved as array
+        // Handle Referee Linkage
+        const isReferee = document.getElementById('is-referee-link').checked;
+        if (isReferee) {
+            // Check if already in referees collection
+            const qRef = query(collection(db, "referees"), where("email", "==", email));
+            const snapRef = await getDocs(qRef);
+            if (snapRef.empty) {
+                // Auto-create referee profile
+                await addDoc(collection(db, "referees"), {
+                    name: name,
+                    email: email,
+                    visible: true,
+                    unavails: ""
+                });
+                console.log("Auto-created referee profile for", email);
+            }
+        }
+
+        if (roles.length === 0) throw new Error("Veuillez sélectionner au moins une permission ou le rôle Super Admin.");
+
+        const data = { email, name, role: roles };
 
         if (id) {
             await updateDoc(doc(db, "admins", id), data);
@@ -3304,6 +3424,43 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
         alert("Erreur: " + (err.message || err));
     } finally {
         setLoading(form, false);
+    }
+});
+
+document.getElementById('admin-preset-roles')?.addEventListener('change', (e) => {
+    const preset = e.target.value;
+    if (preset === 'custom') return;
+
+    // Reset all to none
+    document.querySelectorAll('.permissions-grid input[value="none"]').forEach(r => r.checked = true);
+    document.getElementById('role-superadmin').checked = false;
+    document.getElementById('is-referee-link').checked = false;
+
+    const setPerm = (mod, level) => {
+        const rad = document.querySelector(`input[name="perm-${mod}"][value="${level}"]`);
+        if (rad) rad.checked = true;
+    };
+
+    switch (preset) {
+        case 'super-admin':
+            document.getElementById('role-superadmin').checked = true;
+            break;
+        case 'secretaire':
+            setPerm('Equipes', 'view');
+            setPerm('Inscriptions', 'edit');
+            setPerm('Matchs', 'edit');
+            break;
+        case 'coach-general':
+            setPerm('Equipes', 'edit');
+            break;
+        case 'arbitre-general':
+            setPerm('Matchs', 'view');
+            document.getElementById('is-referee-link').checked = true;
+            break;
+        case 'tresorier':
+            setPerm('Facturation', 'edit');
+            setPerm('Boutique', 'edit');
+            break;
     }
 });
 
@@ -3350,19 +3507,44 @@ async function loadAdmins() {
 
         // Setup Edit
         table.querySelectorAll('.edit-admin').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const id = btn.getAttribute('data-id');
                 const data = dataCache.admins[id];
                 if (data) {
                     document.getElementById('admin-id').value = id;
                     document.getElementById('admin-email').value = data.email;
                     document.getElementById('admin-name').value = data.name;
+                    document.getElementById('admin-preset-roles').value = 'custom';
 
-                    // Set Checks
+                    // Reset Checks & Radios
+                    document.getElementById('role-superadmin').checked = false;
+                    document.getElementById('is-referee-link').checked = false;
+                    document.querySelectorAll('.permissions-grid input[value="none"]').forEach(r => r.checked = true);
+
                     const rolesArray = Array.isArray(data.role) ? data.role : [data.role];
-                    document.querySelectorAll('#roles-checkbox-group input[type="checkbox"]').forEach(cb => {
-                        cb.checked = rolesArray.includes(cb.value);
-                    });
+
+                    if (rolesArray.includes('SuperAdmin')) {
+                        document.getElementById('role-superadmin').checked = true;
+                    } else {
+                        rolesArray.forEach(r => {
+                            if (r.includes(':')) {
+                                const [mod, level] = r.split(':');
+                                const radio = document.querySelector(`input[name="perm-${mod}"][value="${level}"]`);
+                                if (radio) radio.checked = true;
+                            } else {
+                                // Legacy support: default to 'edit'
+                                const radio = document.querySelector(`input[name="perm-${r}"][value="edit"]`);
+                                if (radio) radio.checked = true;
+                            }
+                        });
+                    }
+
+                    // Check if referee profile exists
+                    const qRef = query(collection(db, "referees"), where("email", "==", data.email));
+                    const snapRef = await getDocs(qRef);
+                    if (!snapRef.empty) {
+                        document.getElementById('is-referee-link').checked = true;
+                    }
 
                     adminModal.classList.add('active');
                 }
@@ -3444,19 +3626,137 @@ window.checkAdminAndSetupUI = async (user) => {
     const roles = await getUserRole(user.email);
     console.log("User Roles:", roles);
 
+    // Also check if user is a referee
+    window.currentUserRefereeId = null;
+    try {
+        const qr = query(collection(db, "referees"), where("email", "==", user.email));
+        const refSnap = await getDocs(qr);
+        if (!refSnap.empty) {
+            window.currentUserRefereeId = refSnap.docs[0].id;
+            console.log("Logged in as Referee:", window.currentUserRefereeId);
+        } else {
+            console.log("Not recognized as a Referee for email:", user.email);
+        }
+    } catch (e) {
+        console.warn("Error checking referee status:", e);
+    }
+
     const isSuper = roles.includes('SuperAdmin');
 
-    if (isSuper) {
-        if (navAdminsBtn) navAdminsBtn.style.display = 'block';
-    } else {
-        if (navAdminsBtn) navAdminsBtn.style.display = 'none';
+    // Define permission mapping
+    const permissionMap = {
+        'Equipes': ['view-teams', 'view-coaches', 'view-players'],
+        'Boutique': ['view-inventory', 'view-boutique'],
+        'Club': ['view-board', 'view-referees', 'view-sponsors'],
+        'Inscriptions': ['view-registrations'],
+        'Matchs': ['view-matches'],
+        'Campagnes': ['view-email-campaigns'],
+        'Automatisations': ['view-automations'],
+        'Facturation': ['view-billing'],
+        'Terrains': ['view-fields'],
+        'Saisons': ['view-seasons'],
+        'Config': ['view-settings']
+    };
 
-        // If user is on admin view but dropped rights, redirect
-        if (document.getElementById('view-admins').classList.contains('active')) {
-            const dashboardBtn = document.querySelector('.nav-btn[data-target="view-dashboard"]');
-            if (dashboardBtn) dashboardBtn.click();
-        }
+    // Determine which views are allowed and store permissions
+    let allowedViews = ['view-dashboard'];
+    window.currentPermissions = {}; // Reset
+
+    if (isSuper) {
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            const target = btn.dataset.target;
+            if (target) allowedViews.push(target);
+        });
+        window.currentPermissions.all = 'edit';
+    } else {
+        roles.forEach(role => {
+            // Handle 'Equipes:view' vs legacy 'Equipes'
+            const [mod, level] = role.includes(':') ? role.split(':') : [role, 'edit'];
+            window.currentPermissions[mod] = level;
+
+            if (permissionMap[mod]) {
+                allowedViews = allowedViews.concat(permissionMap[mod]);
+            }
+        });
     }
+
+    // Sort Listeners
+    document.getElementById('coach-sort')?.addEventListener('change', loadCoaches);
+    document.getElementById('board-sort')?.addEventListener('change', loadBoard);
+    document.getElementById('ref-sort')?.addEventListener('change', loadReferees);
+
+    // Update Sidebar Visibility
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        const target = btn.dataset.target;
+        if (!target) return;
+
+        if (allowedViews.includes(target)) {
+            btn.style.display = 'flex';
+        } else {
+            btn.style.display = 'none';
+        }
+    });
+
+    // Enforce Read-Only UI (disable modifications)
+    function enforcePermissions() {
+        const isSuper = window.currentPermissions.all === 'edit';
+
+        const modMap = {
+            'view-teams': 'Equipes', 'view-players': 'Equipes', 'view-coaches': 'Equipes',
+            'view-boutique': 'Boutique', 'view-inventory': 'Boutique',
+            'view-board': 'Club', 'view-referees': 'Club', 'view-sponsors': 'Club',
+            'view-registrations': 'Inscriptions',
+            'view-matches': 'Matchs',
+            'view-email-campaigns': 'Campagnes',
+            'view-automations': 'Automatisations',
+            'view-billing': 'Facturation',
+            'view-fields': 'Config', 'view-seasons': 'Config', 'view-settings': 'Config'
+        };
+
+        Object.keys(modMap).forEach(viewId => {
+            const mod = modMap[viewId];
+            const level = isSuper ? 'edit' : (window.currentPermissions[mod] || 'none');
+            const viewEl = document.getElementById(viewId);
+            if (!viewEl) return;
+
+            if (level === 'view') {
+                const actionSelectors = [
+                    '.btn-action', '#open-team-modal', '#open-player-modal-directory',
+                    '#open-product-modal', '#open-inventory-modal', '#open-board-modal',
+                    '#open-referee-modal', '#open-registration-modal', '#open-coach-modal',
+                    '#open-match-modal', '#open-field-modal', '#open-season-modal',
+                    '#btn-new-campaign', '#btn-new-invoice',
+                    '.delete-team', '.delete-player', '.delete-product', '.delete-inventory',
+                    '.delete-board', '.delete-referee', '.delete-registration', '.delete-coach',
+                    '.delete-match', '.delete-field', '.delete-season', '.edit-admin', '.delete-admin'
+                ];
+
+                viewEl.querySelectorAll(actionSelectors.join(', ')).forEach(el => {
+                    el.style.display = 'none';
+                });
+
+                viewEl.querySelectorAll('.btn-icon i.fa-edit, .btn-icon i.fa-trash').forEach(icon => {
+                    icon.parentElement.style.display = 'none';
+                });
+            }
+        });
+    }
+
+    // Run enforcement after views are rendered
+    setTimeout(enforcePermissions, 500);
+
+    // Handle "Users" button specifically
+    if (navAdminsBtn) {
+        navAdminsBtn.style.display = isSuper ? 'flex' : 'none';
+    }
+
+    // Redirect if current view is now forbidden
+    const activeView = document.querySelector('.view.active');
+    if (activeView && !allowedViews.includes(activeView.id)) {
+        const dashboardBtn = document.querySelector('.nav-btn[data-target="view-dashboard"]');
+        if (dashboardBtn) dashboardBtn.click();
+    }
+
     return roles;
 };
 
@@ -3495,9 +3795,12 @@ document.getElementById('coach-form')?.addEventListener('submit', async (e) => {
         const visible = document.getElementById('coach-visible').checked;
         const file = document.getElementById('coach-image').files[0];
 
+        const email = document.getElementById('coach-email').value;
+        const phone = document.getElementById('coach-phone').value;
+
         if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
 
-        const data = { name, policeExpiry, sportRespectExpiry, visible };
+        const data = { name, email, phone, policeExpiry, sportRespectExpiry, visible };
         await uploadAndSave('coaches', id, data, file);
 
         coachModal.classList.remove('active');
@@ -3531,24 +3834,25 @@ async function loadCoaches() {
         coachesList.push({ id: doc.id, ...data });
     });
 
-    // Custom Sort: Active first, then Empty policeExpiry first, then chronological
+    const sortBy = document.getElementById('coach-sort')?.value || 'name';
+
+    // Sorting Logic
     coachesList.sort((a, b) => {
-        const visA = a.visible !== false;
-        const visB = b.visible !== false;
-        if (visA !== visB) return visA ? -1 : 1;
-
-        const noDateA = !a.policeExpiry;
-        const noDateB = !b.policeExpiry;
-
-        if (noDateA && noDateB) {
-            const nameA = (a.name || `${a.firstName || ''} ${a.lastName || ''}`).trim().toLowerCase();
-            const nameB = (b.name || `${b.firstName || ''} ${b.lastName || ''}`).trim().toLowerCase();
-            return nameA.localeCompare(nameB);
+        if (sortBy === 'active') {
+            const visA = a.visible !== false;
+            const visB = b.visible !== false;
+            if (visA !== visB) return visA ? -1 : 1;
+        } else if (sortBy === 'email') {
+            return (a.email || '').localeCompare(b.email || '');
+        } else if (sortBy === 'police') {
+            const noDateA = !a.policeExpiry;
+            const noDateB = !b.policeExpiry;
+            if (noDateA && noDateB) return (a.name || '').localeCompare(b.name || '');
+            if (noDateA) return 1;
+            if (noDateB) return -1;
+            return new Date(a.policeExpiry) - new Date(b.policeExpiry);
         }
-        if (noDateA) return -1;
-        if (noDateB) return 1;
-
-        return new Date(a.policeExpiry) - new Date(b.policeExpiry);
+        return (a.name || '').localeCompare(b.name || '');
     });
 
     list.innerHTML = '';
@@ -3578,7 +3882,9 @@ async function loadCoaches() {
     });
 
     setupClickableCard('#coaches-list .product-card-admin', 'coaches', 'coach-modal', 'coach-id', async (data) => {
-        document.getElementById('coach-name').value = data.name;
+        document.getElementById('coach-name').value = data.name || '';
+        document.getElementById('coach-email').value = data.email || '';
+        document.getElementById('coach-phone').value = data.phone || '';
         document.getElementById('coach-police-expiry').value = data.policeExpiry || '';
         document.getElementById('coach-sport-respect-expiry').value = data.sportRespectExpiry || '';
         document.getElementById('coach-visible').checked = data.visible !== false;
@@ -3842,6 +4148,14 @@ async function loadSettings() {
                     sizePreview.innerHTML = '<p style="font-size:0.85rem; color:#888; font-style:italic;">Aucun guide de tailles configuré.</p>';
                 }
             }
+
+            // Apply Calendar Settings from Firestore if present
+            if (data.calendarConfig) {
+                window.calendarSettings.startHour = data.calendarConfig.startHour || 8;
+                window.calendarSettings.endHour = data.calendarConfig.endHour || 22;
+                window.calendarSettings.slotDuration = data.calendarConfig.slotDuration || 15;
+                window.calendarSettings.defaultDuration = data.calendarConfig.defaultDuration || 60;
+            }
         } else {
             // Seed defaults with 2025 Rates provided by User
             addPriceRow({ year: '2022', category: 'Timbits', price: 75 });
@@ -3967,10 +4281,13 @@ document.getElementById('btn-add-match-field')?.addEventListener('click', () => 
     sel.value = ''; // Reset selection
 });
 
-async function loadRefereesIntoSelects() {
+async function loadRefereesIntoSelects(matchData = null) {
     // Populate the 3 selects with referee names
     const q = query(collection(db, "referees"), orderBy("name", "asc"));
     const snapshot = await getDocs(q);
+
+    // Get list of available refs for this match
+    const availableRefs = matchData?.availableRefs || [];
 
     // Helper to fill a select
     const fillSelect = (id) => {
@@ -3982,7 +4299,12 @@ async function loadRefereesIntoSelects() {
             const r = doc.data();
             const opt = document.createElement('option');
             opt.value = doc.id; // Store ID
-            opt.textContent = r.name;
+
+            let name = r.name;
+            if (availableRefs.includes(doc.id)) {
+                name += " (DISPO)";
+            }
+            opt.textContent = name;
             sel.appendChild(opt);
         });
     };
@@ -4009,6 +4331,7 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
         const data = {
             date: document.getElementById('match-date').value,
             time: document.getElementById('match-time').value,
+            endTime: document.getElementById('match-end-time').value,
             category: document.getElementById('match-category').value,
             opponent: document.getElementById('match-opponent').value,
             fieldIds: selectedMatchFields, // Array of field IDs
@@ -4022,29 +4345,26 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
 
 
         // --- CONFLICT DETECTION ---
-        // Check for overlaps on any of the selected fields within +/- 60 minutes
+        const newStart = timeToMinutes(data.time);
+        const newEnd = timeToMinutes(data.endTime || data.time);
+
         if (selectedMatchFields.length > 0 && dataCache.matches) {
-            const newStart = new Date(`${data.date}T${data.time}`).getTime();
-            const conflictWindow = 60 * 60 * 1000; // 60 mins assumption
-
             const conflicts = Object.values(dataCache.matches).filter(m => {
-                if (m.id === id) return false; // Ignore self
-                if (m.date !== data.date) return false; // Different day (simple check)
+                if (m.id === id) return false;
+                if (m.date !== data.date) return false;
 
-                // Check if any of the match's fields overlap with our selected fields
                 const matchFieldIds = m.fieldIds || (m.fieldId ? [m.fieldId] : []);
                 const hasFieldOverlap = matchFieldIds.some(mfid => selectedMatchFields.includes(mfid));
+                if (!hasFieldOverlap) return false;
 
-                if (!hasFieldOverlap) return false; // No field overlap
-
-                const matchStart = new Date(`${m.date}T${m.time}`).getTime();
-                const diff = Math.abs(newStart - matchStart);
-                return diff < conflictWindow;
+                const mStart = timeToMinutes(m.time);
+                const mEnd = timeToMinutes(m.endTime || m.time);
+                return (newStart < mEnd && newEnd > mStart);
             });
 
             if (conflicts.length > 0) {
-                const conflictMsg = conflicts.map(c => `- ${c.time} : ${c.category} vs ${c.opponent} (${c.fields || c.field})`).join('\n');
-                if (!confirm(`⚠️ CONFLIT D'HORAIRE DÉTECTÉ !\n\nIl y a déjà ${conflicts.length} match(s) sur un ou plusieurs terrains sélectionnés dans un intervalle de 60 minutes :\n${conflictMsg}\n\nVoulez-vous vraiment sauvegarder ce match malgré le conflit ?`)) {
+                const conflictMsg = conflicts.map(c => `- ${c.time}-${c.endTime || c.time} : ${c.category} vs ${c.opponent}`).join('\n');
+                if (!confirm(`⚠️ CONFLIT D'HORAIRE !\n\nIl y a déjà des matchs sur ces terrains :\n${conflictMsg}\n\nSauvegarder quand même ?`)) {
                     setLoading(form, false);
                     return;
                 }
@@ -4068,280 +4388,502 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
     }
 });
 
-async function loadMatches() {
+async function loadMatches(skipFetch = false) {
     const list = document.getElementById('matches-list');
     const calEl = document.getElementById('calendar');
 
-    // Init List View
-    if (!list.classList.contains('view-grid')) list.classList.add('view-grid');
+    if (!calEl) return;
 
-    // Init Calendar
-    // We destroy previous instance to apply new config if needed (e.g. user navigation)
-    if (window.calendarAPI) {
-        window.calendarAPI.destroy();
-        window.calendarAPI = null;
-    }
+    if (!skipFetch) {
+        // Reset view + Spinner only if NOT skipping fetch
+        calEl.innerHTML = '<div style="padding: 20px; text-align: center;"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Chargement du calendrier...</div>';
 
-    if (typeof FullCalendar !== 'undefined' && calEl) {
-        window.calendarAPI = new FullCalendar.Calendar(calEl, {
-            initialView: 'timeGridWeek',
-            locale: 'fr',
-            buttonText: {
-                today: "Aujourd'hui",
-                month: 'Mois',
-                week: 'Semaine',
-                day: 'Jour',
-                list: 'Liste',
-                year: 'Année'
-            },
-            height: 'auto',
-            editable: true, // Enable Drag & Drop
-            droppable: true,
-            slotMinTime: '17:00:00',
-            slotMaxTime: '23:00:00',
-            // Custom Content (Teams + Field)
-            eventContent: function (arg) {
-                let italicContent = document.createElement('div');
-                italicContent.style.fontStyle = 'italic';
-                italicContent.style.fontSize = '0.9em';
-                italicContent.innerText = '📍 ' + (arg.event.extendedProps.field || '?');
+        try {
+            // 1. Fetch Data
+            const matchesSnap = await getDocs(collection(db, "matches"));
+            const refereesSnap = await getDocs(collection(db, "referees"));
+            const fieldsSnap = await getDocs(collection(db, "fields"));
 
-                let titleContent = document.createElement('div');
-                titleContent.style.fontWeight = 'bold';
-                titleContent.innerText = arg.timeText;
+            dataCache.matches = {};
+            matchesSnap.forEach(d => dataCache.matches[d.id] = { id: d.id, ...d.data() });
 
-                let descContent = document.createElement('div');
-                descContent.innerText = `${arg.event.extendedProps.category} vs ${arg.event.extendedProps.opponent}`;
+            dataCache.referees = {};
+            refereesSnap.forEach(d => dataCache.referees[d.id] = { id: d.id, ...d.data() });
 
-                let arrayOfDomNodes = [titleContent, descContent, italicContent];
-                return { domNodes: arrayOfDomNodes };
-            },
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'multiMonthYear,dayGridMonth,timeGridWeek,listMonth'
-            },
-            dayMaxEvents: false, // Show all events
-            // Open Modal on Date Click (Create)
-            dateClick: (info) => {
-                const form = document.getElementById('match-form');
-                if (form) form.reset();
-                document.getElementById('match-id').value = '';
-
-                // Handle Date and Time extraction
-                const dateObj = info.date;
-                const yyyy = dateObj.getFullYear();
-                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-                const dd = String(dateObj.getDate()).padStart(2, '0');
-                const dateStr = `${yyyy}-${mm}-${dd}`;
-
-                let timeStr = '19:00';
-                // If the view has time (e.g. timeGridWeek), or dateStr contains T
-                if (info.allDay === false || info.view.type.includes('time') || info.dateStr.includes('T')) {
-                    const hh = String(dateObj.getHours()).padStart(2, '0');
-                    const min = String(dateObj.getMinutes()).padStart(2, '0');
-                    timeStr = `${hh}:${min}`;
-                }
-
-                document.getElementById('match-date').value = dateStr;
-                document.getElementById('match-time').value = timeStr;
-
-                loadRefereesIntoSelects().then(() => {
-                    populateFieldSelect().then(() => {
-                        document.getElementById('match-modal').classList.add('active');
-                    });
-                });
-            },
-            // Open Modal on Event Click (Edit)
-            eventClick: (info) => {
-                const matchId = info.event.id;
-                if (dataCache.matches && dataCache.matches[matchId]) {
-                    const data = dataCache.matches[matchId];
-                    loadRefereesIntoSelects().then(() => {
-                        loadFieldsIntoAddSelect().then(() => {
-                            document.getElementById('match-id').value = matchId;
-                            document.getElementById('match-date').value = data.date;
-                            document.getElementById('match-time').value = data.time;
-                            document.getElementById('match-category').value = data.category;
-                            document.getElementById('match-opponent').value = data.opponent;
-
-                            // Populate selected fields from data
-                            selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
-                            renderMatchFieldTags();
-
-                            document.getElementById('match-ref-center').value = data.refCenter || '';
-                            document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
-                            document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
-                            document.getElementById('match-played').checked = data.played || false;
-
-                            document.getElementById('match-modal').classList.add('active');
-                        });
-                    });
-                }
-            },
-            // Handle Drag & Drop (Update Date/Time)
-            eventDrop: async (info) => {
-                const matchId = info.event.id;
-                const newDate = info.event.start;
-
-                // Format Date YYYY-MM-DD
-                const yyyy = newDate.getFullYear();
-                const mm = String(newDate.getMonth() + 1).padStart(2, '0');
-                const dd = String(newDate.getDate()).padStart(2, '0');
-                const dateStr = `${yyyy}-${mm}-${dd}`;
-
-                // Format Time HH:MM
-                const hh = String(newDate.getHours()).padStart(2, '0');
-                const min = String(newDate.getMinutes()).padStart(2, '0');
-                const timeStr = `${hh}:${min}`;
-
-                try {
-                    const docRef = doc(db, "matches", matchId);
-                    await updateDoc(docRef, {
-                        date: dateStr,
-                        time: timeStr
-                    });
-                    // Update Cache
-                    if (dataCache.matches[matchId]) {
-                        dataCache.matches[matchId].date = dateStr;
-                        dataCache.matches[matchId].time = timeStr;
-                    }
-                    console.log("Match updated via drag & drop");
-                } catch (e) {
-                    console.error("Error updating match drop:", e);
-                    alert("Erreur lors du déplacement du match: " + e.message);
-                    info.revert();
-                }
-            }
-        });
-        window.calendarAPI.render();
+            dataCache.fields = {};
+            fieldsSnap.forEach(d => dataCache.fields[d.id] = { id: d.id, ...d.data() });
+        } catch (e) {
+            console.error("Error loading matches:", e);
+            calEl.innerHTML = `<div class="alert alert-danger">Erreur: ${e.message}</div>`;
+            return;
+        }
     }
 
     try {
-        const q = query(collection(db, "matches"));
-        const snapshot = await getDocs(q);
+        const activeFields = Object.values(dataCache.fields).filter(f => f.active !== false);
+        activeFields.sort((a, b) => a.name.localeCompare(b.name));
 
-        // Load Referees
-        if (!dataCache.referees || Object.keys(dataCache.referees).length === 0) {
-            const refSnap = await getDocs(collection(db, "referees"));
-            dataCache.referees = {};
-            refSnap.forEach(r => dataCache.referees[r.id] = r.data());
+        if (activeFields.length === 0) {
+            calEl.innerHTML = '<div class="alert alert-warning">Veuillez configurer au moins un terrain actif pour voir le calendrier.</div>';
+            return;
         }
 
-        list.innerHTML = '';
-        dataCache.matches = {};
-        const events = [];
-        const matchDocs = [];
-
-        // Add Referee Unavailabilities to Calendar
-        if (dataCache.referees) {
-            Object.values(dataCache.referees).forEach(ref => {
-                if (ref.unavails && Array.isArray(ref.unavails)) {
-                    ref.unavails.forEach(dateStr => {
-                        // Validate date format slightly?
-                        if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                            events.push({
-                                title: '🚫 ' + ref.name,
-                                start: dateStr,
-                                allDay: true,
-                                color: '#e74c3c',
-                                display: 'block',
-                                editable: false,
-                                extendedProps: { type: 'unavailability' }
-                            });
-                        }
-                    });
-                }
-            });
-        }
-
-        snapshot.forEach(doc => matchDocs.push({ id: doc.id, ...doc.data() }));
-
-        // Sort client-side to avoid index issues
-        matchDocs.sort((a, b) => {
-            if (a.date !== b.date) return a.date.localeCompare(b.date);
-            return a.time.localeCompare(b.time);
-        });
-
-        if (matchDocs.length === 0) {
-            list.innerHTML = '<p>Aucun match prévu.</p>';
-        } else {
-            matchDocs.forEach(data => {
-                dataCache.matches[data.id] = data;
-
-                // Calendar Event
-                const startStr = `${data.date}T${data.time}`;
-                events.push({
-                    id: data.id,
-                    title: `${data.category} vs ${data.opponent}`,
-                    start: startStr,
-                    color: '#008744',
-                    extendedProps: {
-                        category: data.category,
-                        opponent: data.opponent,
-                        field: data.field
-                    }
-                });
-
-                // List Item
-                const getRefName = (rid) => (rid && dataCache.referees[rid]) ? dataCache.referees[rid].name : (rid ? 'non assigné' : 'non assigné');
-
-                const subtitle = `
-                    <div style="font-size:0.85rem; text-align:left; margin-top:5px;">
-                        <strong><i class="fas fa-clock"></i> ${data.date} à ${data.time}</strong><br>
-                        Vs ${data.opponent} (${data.category})<br>
-                        Terrain(s): ${data.fields || data.field || 'Non spécifié'}
-                    </div>
-                    <div style="font-size:0.8rem; text-align:left; margin-top:8px; border-top:1px solid #eee; padding-top:5px;">
-                        <i class="fas fa-flag"></i> C: ${getRefName(data.refCenter)}<br>
-                        <i class="fas fa-flag-checkered"></i> A1: ${getRefName(data.refAsst1)}<br>
-                        <i class="fas fa-flag-checkered"></i> A2: ${getRefName(data.refAsst2)}
-                    </div>
-                `;
-
-                const card = createCard(null, `${data.category} vs ${data.opponent}`, subtitle, data.id, 'edit-match', 'delete-match', 'fa-futbol');
-                card.querySelector('p').style.whiteSpace = 'normal';
-                card.style.height = 'auto';
-                card.setAttribute('data-id', data.id);
-                card.classList.add('match-card');
-                list.appendChild(card);
-            });
-        }
-
-        // Update Calendar Events
-        if (window.calendarAPI) {
-            window.calendarAPI.removeAllEvents();
-            window.calendarAPI.addEventSource(events);
-        }
+        // 3. Render Custom Grid
+        renderCustomCalendarGrid(calEl, activeFields);
 
     } catch (e) {
         console.error("Error loading matches:", e);
-        list.innerHTML = `<p style="color:red">Erreur chargement: ${e.message}</p>`;
+        calEl.innerHTML = `<div class="alert alert-danger">Erreur: ${e.message}</div>`;
     }
 
-    setupClickableCard('.match-card', 'matches', 'match-modal', 'match-id', async (data) => {
-        await loadRefereesIntoSelects();
-        await loadFieldsIntoAddSelect(); // Load fields into add select
+    // List View (Sync Cache)
+    if (list) {
+        list.innerHTML = '';
+        Object.values(dataCache.matches).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)).forEach(data => {
+            const getRefName = (rid) => (rid && dataCache.referees[rid]) ? dataCache.referees[rid].name : 'non assigné';
+            const subtitle = `
+                <div style="font-size:0.85rem; text-align:left; margin-top:5px;">
+                    <strong><i class="fas fa-clock"></i> ${data.date} à ${data.time}</strong><br>
+                    Vs ${data.opponent} (${data.category})<br>
+                    Terrain(s): ${data.fields || 'Non spécifié'}
+                </div>
+            `;
+            const card = createCard(null, `${data.category} vs ${data.opponent}`, subtitle, data.id, 'edit-match', 'delete-match', 'fa-futbol');
+            card.classList.add('match-card');
+            list.appendChild(card);
+        });
+        setupClickableCard('.match-card', 'matches', 'match-modal', 'match-id', async (data) => {
+            await loadRefereesIntoSelects();
+            await loadFieldsIntoAddSelect();
+            document.getElementById('match-date').value = data.date;
+            document.getElementById('match-time').value = data.time;
+            document.getElementById('match-category').value = data.category;
+            document.getElementById('match-opponent').value = data.opponent;
+            window.selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
+            renderMatchFieldTags();
+            document.getElementById('match-ref-center').value = data.refCenter || '';
+            document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
+            document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
+            document.getElementById('match-played').checked = data.played || false;
+        });
+        setupDeleteButton('.delete-match', 'matches', () => loadMatches());
+    }
+}
 
+function renderCustomCalendarGrid(container, fields) {
+    container.innerHTML = '';
+
+    // Header with Navigation
+    const nav = document.createElement('div');
+    nav.className = 'calendar-nav';
+    nav.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; background:white; padding:15px; border-radius:12px; box-shadow:0 2px 4px rgba(0,0,0,0.05);';
+
+    const weekRange = getWeekRange(window.calendarCurrentDate || new Date());
+    nav.innerHTML = `
+        <div style="display:flex; gap:10px;">
+            <button class="btn-action" id="cal-prev"><i class="fas fa-chevron-left"></i></button>
+            <button class="btn-action" id="cal-today">Aujourd'hui</button>
+            <button class="btn-action" id="cal-next"><i class="fas fa-chevron-right"></i></button>
+        </div>
+        <h3 style="margin:0; text-transform: capitalize;">Semaine du ${weekRange.start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</h3>
+        <div>
+            <button class="btn-action" id="cal-settings-btn"><i class="fas fa-cog"></i> Config</button>
+        </div>
+    `;
+    container.appendChild(nav);
+
+    // Nav Events
+    nav.querySelector('#cal-prev').onclick = () => { window.calendarCurrentDate.setDate(window.calendarCurrentDate.getDate() - 7); loadMatches(); };
+    nav.querySelector('#cal-next').onclick = () => { window.calendarCurrentDate.setDate(window.calendarCurrentDate.getDate() + 7); loadMatches(); };
+    nav.querySelector('#cal-today').onclick = () => { window.calendarCurrentDate = new Date(); loadMatches(); };
+
+    const gridWrapper = document.createElement('div');
+    gridWrapper.className = 'calendar-grid-wrapper';
+    container.appendChild(gridWrapper);
+
+    // Render 7 Days
+    for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(weekRange.start);
+        dayDate.setDate(dayDate.getDate() + i);
+        renderDaySection(gridWrapper, dayDate, fields);
+    }
+}
+
+function renderDaySection(container, date, fields) {
+    const dayName = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' });
+    const isoDate = date.toISOString().split('T')[0];
+
+    const section = document.createElement('div');
+    section.className = 'day-section';
+
+    let tableHtml = `
+        <div class="day-header">
+            <span>${dayName.charAt(0).toUpperCase() + dayName.slice(1)}</span>
+        </div>
+        <table class="day-grid-table">
+            <thead>
+                <tr>
+                    <th class="time-col-header">Heure</th>
+                    ${fields.map(f => `<th>${f.name}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    // Time Slots
+    const settings = window.calendarSettings || { startHour: 8, endHour: 22, slotDuration: 15 };
+    for (let h = settings.startHour; h < settings.endHour; h++) {
+        for (let m = 0; m < 60; m += settings.slotDuration) {
+            const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            tableHtml += `
+                <tr data-time="${timeStr}">
+                    <td class="time-label">${m === 0 ? `<strong>${h}h00</strong>` : `<small>${h}h${m}</small>`}</td>
+                    ${fields.map(f => `<td class="grid-cell" data-field-id="${f.id}" data-date="${isoDate}" data-time="${timeStr}"></td>`).join('')}
+                </tr>
+            `;
+        }
+    }
+
+    tableHtml += `</tbody></table>`;
+    section.innerHTML = tableHtml;
+    container.appendChild(section);
+
+    // Place Matches
+    Object.values(dataCache.matches).forEach(match => {
+        if (match.date === isoDate) {
+            const fieldIds = match.fieldIds || (match.fieldId ? [match.fieldId] : []);
+            fieldIds.forEach(fid => {
+                const cell = section.querySelector(`td[data-field-id="${fid}"][data-time="${match.time}"]`);
+                if (cell) {
+                    const evt = document.createElement('div');
+                    evt.className = 'grid-event-wrapper';
+
+                    const startMins = timeToMinutes(match.time);
+                    const endMins = timeToMinutes(match.endTime || match.time);
+                    const duration = Math.max(settings.slotDuration, endMins - startMins);
+                    const heightFactor = duration / settings.slotDuration;
+
+                    evt.style.height = `calc(${heightFactor} * 100% - 4px)`;
+                    evt.style.minHeight = `calc(100% - 4px)`;
+
+                    evt.innerHTML = `
+                        <div class="grid-event-title">${match.category} vs ${match.opponent}</div>
+                        <div class="grid-event-meta"><i class="fas fa-user"></i> ${match.refCenter ? 'Arbitres OK' : 'Pas d\'arbitre'}</div>
+                        <div class="resize-handle"></div>
+                    `;
+
+                    // If simple referee, show availability toggle
+                    if (window.currentUserRefereeId) {
+                        const isAvailable = (match.availableRefs || []).includes(window.currentUserRefereeId);
+                        const dispoBtn = document.createElement('button');
+                        dispoBtn.className = `btn-dispo ${isAvailable ? 'btn-dispo-active' : 'btn-dispo-inactive'}`;
+                        dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Dispo' : 'Dispo ?';
+                        dispoBtn.title = "Indiquer ma disponibilité pour ce match";
+                        dispoBtn.style.cssText = 'margin-top:auto; font-size:0.7rem; padding:6px; z-index:20;';
+
+                        dispoBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            toggleMatchAvailability(match.id);
+                        };
+                        evt.appendChild(dispoBtn);
+                    }
+
+                    evt.onclick = (e) => {
+                        e.stopPropagation();
+                        // Prevent opening if we just finished dragging/resizing
+                        if (evt.dataset.preventClick === 'true') {
+                            evt.dataset.preventClick = 'false';
+                            return;
+                        }
+                        openMatchModal(match);
+                    };
+
+                    // Init Drag & Resize
+                    setupMatchInteractions(evt, match, isoDate);
+
+                    cell.appendChild(evt);
+                }
+            });
+        }
+    });
+
+    // Cell Click (Create)
+    section.querySelectorAll('.grid-cell').forEach(cell => {
+        cell.onclick = () => {
+            if (cell.children.length > 0) return; // Already has event
+            openMatchModal(null, isoDate, cell.dataset.time, cell.dataset.fieldId);
+        };
+    });
+}
+
+// --- Time Helpers ---
+function timeToMinutes(time) {
+    if (!time) return 0;
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
+}
+
+function minutesToTime(mins) {
+    mins = Math.max(0, Math.min(1439, mins));
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// --- Drag & Resize Support ---
+function setupMatchInteractions(el, match, date) {
+    let isDragging = false;
+    let isResizing = false;
+    let hasMoved = false;
+    let startY, startH, initialX, initialY;
+
+    el.onmousedown = (e) => {
+        if (e.target.classList.contains('resize-handle')) {
+            isResizing = true;
+            startY = e.pageY;
+            startH = el.offsetHeight;
+            e.preventDefault();
+            e.stopPropagation();
+        } else if (e.target.tagName !== 'BUTTON') {
+            isDragging = true;
+            hasMoved = false;
+            initialX = e.clientX;
+            initialY = e.clientY;
+            // Don't add dragging class immediately to avoid visual jump on simple click
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+
+    window.addEventListener('mousemove', (e) => {
+        if (isResizing) {
+            const diff = e.pageY - startY;
+            if (Math.abs(diff) > 3) hasMoved = true;
+            const slotPixels = el.parentElement.offsetHeight || 35;
+            const newH = startH + diff;
+            const snappedH = Math.max(slotPixels, Math.round(newH / slotPixels) * slotPixels);
+            el.style.height = (snappedH - 4) + 'px';
+        } else if (isDragging) {
+            const dx = e.clientX - initialX;
+            const dy = e.clientY - initialY;
+
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                if (!hasMoved) {
+                    hasMoved = true;
+                    el.classList.add('dragging');
+                }
+                el.style.transform = `translate(${dx}px, ${dy}px)`;
+                el.style.zIndex = "1000";
+
+                // Visual Cue: Highlight target cell
+                el.style.pointerEvents = 'none';
+                const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+                el.style.pointerEvents = '';
+
+                // Remove previous highlights
+                document.querySelectorAll('.grid-cell.drop-target').forEach(c => c.classList.remove('drop-target'));
+
+                const cell = dropTarget?.closest('.grid-cell');
+                if (cell) {
+                    cell.classList.add('drop-target');
+                }
+            }
+        }
+    });
+
+    window.addEventListener('mouseup', async (e) => {
+        if (isResizing) {
+            isResizing = false;
+            if (hasMoved) el.dataset.preventClick = 'true';
+
+            if (hasMoved) {
+                const settings = window.calendarSettings || { slotDuration: 15 };
+                const slotPixels = el.parentElement.offsetHeight || 35;
+                const newDurationSlots = Math.round(el.offsetHeight / slotPixels);
+                const durationMins = newDurationSlots * settings.slotDuration;
+                const startMins = timeToMinutes(match.time);
+                const newEndTime = minutesToTime(startMins + durationMins);
+
+                if (newEndTime !== match.endTime) {
+                    match.endTime = newEndTime;
+                    loadMatches(true);
+                    await updateDoc(doc(db, "matches", match.id), { endTime: newEndTime });
+                }
+            }
+        } else if (isDragging) {
+            isDragging = false;
+            if (hasMoved) el.dataset.preventClick = 'true';
+            el.classList.remove('dragging');
+            el.style.transform = '';
+            el.style.zIndex = "";
+
+            if (hasMoved) {
+                // Remove highlights
+                document.querySelectorAll('.grid-cell.drop-target').forEach(c => c.classList.remove('drop-target'));
+
+                // Find cell under mouse
+                el.style.pointerEvents = 'none';
+                const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+                el.style.pointerEvents = '';
+
+                const cell = dropTarget?.closest('.grid-cell');
+                if (cell) {
+                    const newTime = cell.dataset.time;
+                    const newFieldId = cell.dataset.fieldId;
+                    const newDate = cell.dataset.date;
+
+                    if (newTime !== match.time || !match.fieldIds.includes(newFieldId) || newDate !== match.date) {
+                        const durationMins = timeToMinutes(match.endTime || match.time) - timeToMinutes(match.time);
+                        const newStartMins = timeToMinutes(newTime);
+                        const newEndTimeStr = minutesToTime(newStartMins + Math.max(15, durationMins));
+
+                        // Optimistic UI update
+                        match.time = newTime;
+                        match.endTime = newEndTimeStr;
+                        match.date = newDate;
+                        match.fieldIds = [newFieldId];
+                        loadMatches(true);
+
+                        // For now, replace fieldIds if moved (simplification)
+                        await updateDoc(doc(db, "matches", match.id), {
+                            time: newTime,
+                            endTime: newEndTimeStr,
+                            date: newDate,
+                            fieldIds: [newFieldId]
+                        });
+                    }
+                }
+            }
+        }
+    });
+}
+
+function openMatchModal(data = null, date = null, time = null, fieldId = null) {
+    const form = document.getElementById('match-form');
+    if (form) form.reset();
+    document.getElementById('match-id').value = data ? data.id : '';
+
+    if (data) {
         document.getElementById('match-date').value = data.date;
         document.getElementById('match-time').value = data.time;
+        document.getElementById('match-end-time').value = data.endTime || '';
         document.getElementById('match-category').value = data.category;
         document.getElementById('match-opponent').value = data.opponent;
-
-        // Populate selected fields from data
-        selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
-        renderMatchFieldTags();
-
+        window.selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
         document.getElementById('match-ref-center').value = data.refCenter || '';
         document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
         document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
-        document.getElementById('match-played').checked = data.played || false; // Set checkbox
-    });
+        document.getElementById('match-played').checked = data.played || false;
+    } else {
+        document.getElementById('match-date').value = date || '';
+        document.getElementById('match-time').value = time || '18:00';
 
-    setupDeleteButton('.delete-match', 'matches', () => loadMatches());
+        // Default end time using settings
+        if (time) {
+            const [h, m] = time.split(':').map(Number);
+            const duration = window.calendarSettings.defaultDuration || 60;
+            const endMins = (h * 60 + m) + duration;
+            document.getElementById('match-end-time').value = minutesToTime(endMins);
+        } else {
+            const duration = window.calendarSettings.defaultDuration || 60;
+            const endMins = (18 * 60) + duration;
+            document.getElementById('match-end-time').value = minutesToTime(endMins);
+        }
+
+        window.selectedMatchFields = fieldId ? [fieldId] : [];
+    }
+
+    loadRefereesIntoSelects(data).then(() => {
+        loadFieldsIntoAddSelect().then(() => {
+            renderMatchFieldTags();
+            document.getElementById('match-modal').classList.add('active');
+        });
+    });
 }
 
-// --- SPONSORS LOGIC ---
+function getWeekRange(d) {
+    const date = new Date(d);
+    const day = date.getDay(); // 0 is Sunday
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+    const start = new Date(date.setDate(diff));
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return { start, end };
+}
+
+async function toggleMatchAvailability(matchId) {
+    if (!window.currentUserRefereeId) return;
+
+    try {
+        const matchRef = doc(db, "matches", matchId);
+        const matchSnap = await getDoc(matchRef);
+        if (!matchSnap.exists()) return;
+
+        const data = matchSnap.data();
+        let availableRefs = data.availableRefs || [];
+
+        if (availableRefs.includes(window.currentUserRefereeId)) {
+            // Remove
+            availableRefs = availableRefs.filter(id => id !== window.currentUserRefereeId);
+        } else {
+            // Add
+            availableRefs.push(window.currentUserRefereeId);
+        }
+
+        await updateDoc(matchRef, { availableRefs });
+        loadMatches(); // Refresh UI
+    } catch (e) {
+        console.error("Error toggling availability:", e);
+        alert("Erreur lors de la mise à jour de la disponibilité.");
+    }
+}
+
+// --- Calendar Settings Modal Logic ---
+const calendarSettingsModal = document.getElementById('calendar-settings-modal');
+const calendarSettingsForm = document.getElementById('calendar-settings-form');
+
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'cal-settings-btn' || e.target.closest('#cal-settings-btn')) {
+        document.getElementById('cal-set-start').value = window.calendarSettings.startHour;
+        document.getElementById('cal-set-end').value = window.calendarSettings.endHour;
+        document.getElementById('cal-set-slot').value = window.calendarSettings.slotDuration;
+        document.getElementById('cal-set-duration').value = window.calendarSettings.defaultDuration || 60;
+        calendarSettingsModal.classList.add('active');
+    }
+});
+
+if (calendarSettingsModal) {
+    calendarSettingsModal.querySelector('.close-modal').onclick = () => calendarSettingsModal.classList.remove('active');
+}
+
+calendarSettingsForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const startHour = parseInt(document.getElementById('cal-set-start').value);
+    const endHour = parseInt(document.getElementById('cal-set-end').value);
+    const slotDuration = parseInt(document.getElementById('cal-set-slot').value);
+    const defaultDuration = parseInt(document.getElementById('cal-set-duration').value);
+
+    // 1. Update Global State
+    window.calendarSettings.startHour = startHour;
+    window.calendarSettings.endHour = endHour;
+    window.calendarSettings.slotDuration = slotDuration;
+    window.calendarSettings.defaultDuration = defaultDuration;
+
+    // 2. Persist to Firestore (in general settings)
+    try {
+        const docRef = doc(db, "settings", "current_season");
+        await updateDoc(docRef, {
+            calendarConfig: { startHour, endHour, slotDuration, defaultDuration }
+        });
+        console.log("Calendar settings saved to Firestore");
+    } catch (err) {
+        console.error("Error saving calendar settings:", err);
+    }
+
+    calendarSettingsModal.classList.remove('active');
+    loadMatches(); // Refresh grid
+});
 const sponsorModal = document.getElementById('sponsor-modal');
 const openSponsorModalBtn = document.getElementById('open-sponsor-modal');
 if (openSponsorModalBtn) openSponsorModalBtn.addEventListener('click', () => {
@@ -4839,6 +5381,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         if (target === 'view-email-campaigns') {
             if (typeof initCampaignModule === 'function') initCampaignModule();
             if (typeof loadCampaigns === 'function') loadCampaigns('all');
+        }
+
+        if (target === 'view-billing') {
+            if (typeof loadBilling === 'function') loadBilling();
         }
     });
 });

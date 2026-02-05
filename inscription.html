@@ -1480,14 +1480,14 @@
 
             // Dates
             const today = new Date();
-            const d30 = new Date(); d30.setDate(today.getDate() + 30);
-            const d60 = new Date(); d60.setDate(today.getDate() + 60);
+            const d45 = new Date(); d45.setDate(today.getDate() + 45);
+            const d90 = new Date(); d90.setDate(today.getDate() + 90);
 
             const fmt = (d) => d.toLocaleDateString('fr-CA');
             const modal = document.getElementById('stripe-payment-modal');
-            modal.querySelector('.val-today').innerText = `${partVal} $`; // Technically first payment might handle rounding, but simple display is fine
-            modal.querySelectorAll('.val-next')[0].innerText = `${partVal} $ (${fmt(d30)})`;
-            modal.querySelectorAll('.val-next')[1].innerText = `${partVal} $ (${fmt(d60)})`;
+            modal.querySelector('.val-today').innerText = `${partVal} $`;
+            modal.querySelectorAll('.val-next')[0].innerText = `${partVal} $ (${fmt(d45)})`;
+            modal.querySelectorAll('.val-next')[1].innerText = `${partVal} $ (${fmt(d90)})`;
 
             modal.classList.add('active');
 
@@ -1510,6 +1510,8 @@
             errorDiv.textContent = '';
 
             try {
+                // Generate a unique session ID for this registration attempt
+                const sessionId = `${document.querySelector('#payment-form input[placeholder="Nom complet"]').value}_${Date.now()}`;
                 // 1. Create Payment Method via Stripe.js
                 const { paymentMethod, error } = await stripe.createPaymentMethod({
                     type: 'card',
@@ -1545,6 +1547,7 @@
                     email: parentEmail,
                     parentName: parentInfo.parent1Name,
                     installments: (plan === 'installments'),
+                    sessionId: sessionId,
                     description: `Inscription ${allChildren.length} enfant(s)`
                 };
 
@@ -1567,8 +1570,8 @@
                 payBtn.innerHTML = originalText;
                 payBtn.disabled = false;
 
-                // Pass payment info to database saver
-                await submitAllRegistrations(result);
+                // Pass payment info AND session info to database saver
+                await submitAllRegistrations(result, sessionId);
 
             } catch (err) {
                 console.error(err);
@@ -1652,7 +1655,7 @@
             }
         }
 
-        async function submitAllRegistrations(paymentInfo = null) {
+        async function submitAllRegistrations(paymentInfo = null, existingSessionId = null) {
             // We can show a global loading state here if needed, but the modals are closed now or transitioning.
             // Let's use the 'success-message' logic container logic as before.
 
@@ -1660,7 +1663,7 @@
                 const formData = new FormData(form);
                 const lastChildData = Object.fromEntries(formData.entries());
                 const allChildren = [...registeredChildren, lastChildData];
-                const sessionId = `${lastChildData.parent1Email}_${Date.now()} `;
+                const sessionId = existingSessionId || `${lastChildData.parent1Email}_${Date.now()}`;
 
                 for (let i = 0; i < allChildren.length; i++) {
                     const child = allChildren[i];
@@ -1923,7 +1926,7 @@
                                 <input type="radio" name="paymentPlan" value="installments"
                                     style="accent-color: var(--celtics-green);">
                                 <div>
-                                    <b>3 Versements mensuels</b>
+                                    <b>3 Versements (aux 45 jours)</b>
                                     <div style="font-size:0.8rem; color:#666;">Sans frais additionnels</div>
                                 </div>
                             </div>
@@ -1931,8 +1934,8 @@
                         </div>
                         <div style="margin-top:8px; font-size:0.85rem; color:#666; padding-left: 25px;">
                             <i class="fas fa-calendar-alt"></i> Aujourd'hui: <span class="val-today"></span><br>
-                            <i class="fas fa-clock"></i> Dans 30 jours: <span class="val-next"></span><br>
-                            <i class="fas fa-clock"></i> Dans 60 jours: <span class="val-next"></span>
+                            <i class="fas fa-clock"></i> Dans 45 jours: <span class="val-next"></span><br>
+                            <i class="fas fa-clock"></i> Dans 90 jours: <span class="val-next"></span>
                         </div>
                     </div>
                 </div>

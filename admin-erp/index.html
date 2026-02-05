@@ -106,47 +106,53 @@
 
         <!-- Dashboard Screen -->
         <div id="dashboard-screen" class="screen">
-            <aside class="sidebar">
+            <aside class="sidebar" id="sidebar">
+                <button id="sidebar-collapse-btn" class="sidebar-collapse-btn"><i
+                        class="fas fa-chevron-left"></i></button>
                 <div class="sidebar-header">
                     <img src="images/logo.png" alt="Logo">
                     <span>Admin</span>
                 </div>
                 <nav class="sidebar-nav">
-                    <button class="nav-btn active" data-target="view-dashboard"><i class="fas fa-home"></i> Tableau de
-                        bord</button>
+                    <button class="nav-btn active" data-target="view-dashboard"><i class="fas fa-home"></i>
+                        <span>Tableau de bord</span></button>
                     <button class="nav-btn" data-target="view-players"><i class="fas fa-user-friends"></i>
-                        Joueurs</button>
-                    <button class="nav-btn" data-target="view-coaches"><i class="fas fa-stopwatch"></i> Coachs</button>
-                    <button class="nav-btn" data-target="view-referees"><i class="fas fa-gavel"></i> Arbitres</button>
-                    <button class="nav-btn" data-target="view-board"><i class="fas fa-users-cog"></i> C.A.</button>
+                        <span>Joueurs</span></button>
+                    <button class="nav-btn" data-target="view-coaches"><i class="fas fa-stopwatch"></i>
+                        <span>Coachs</span></button>
+                    <button class="nav-btn" data-target="view-referees"><i class="fas fa-gavel"></i>
+                        <span>Arbitres</span></button>
+                    <button class="nav-btn" data-target="view-board"><i class="fas fa-users-cog"></i>
+                        <span>C.A.</span></button>
                     <button class="nav-btn" data-target="view-sponsors"><i class="fas fa-handshake"></i>
-                        Commanditaires</button>
+                        <span>Commanditaires</span></button>
                     <button class="nav-btn" data-target="view-email-campaigns"><i class="fas fa-bullhorn"></i>
-                        Campagnes</button>
-                    <button class="nav-btn" data-target="view-teams"><i class="fas fa-users"></i> Gestion
-                        Équipes</button>
-                    <button class="nav-btn" data-target="view-matches"><i class="fas fa-futbol"></i> Matchs</button>
+                        <span>Campagnes</span></button>
+                    <button class="nav-btn" data-target="view-teams"><i class="fas fa-users"></i> <span>Gestion
+                            Équipes</span></button>
+                    <button class="nav-btn" data-target="view-matches"><i class="fas fa-futbol"></i>
+                        <span>Matchs</span></button>
                     <button class="nav-btn" data-target="view-inventory"><i class="fas fa-clipboard-list"></i>
-                        Inventaire</button>
+                        <span>Inventaire</span></button>
                     <button class="nav-btn" data-target="view-automations"><i class="fas fa-robot"></i>
-                        Automatisations</button>
-                    <button class="nav-btn" data-target="view-registrations"><i class="fas fa-file-signature"></i> Liste
-                        des inscrits</button>
+                        <span>Automatisations</span></button>
+                    <button class="nav-btn" data-target="view-registrations"><i class="fas fa-file-signature"></i>
+                        <span>Liste des inscrits</span></button>
                     <button class="nav-btn" data-target="view-fields"><i class="fas fa-map-marker-alt"></i>
-                        Terrains</button>
+                        <span>Terrains</span></button>
                     <button class="nav-btn" data-target="view-seasons"><i class="fas fa-calendar-week"></i>
-                        Saisons</button>
-                    <button class="nav-btn" data-target="view-boutique"><i class="fas fa-store"></i> Boutique</button>
+                        <span>Saisons</span></button>
+                    <button class="nav-btn" data-target="view-boutique"><i class="fas fa-store"></i>
+                        <span>Boutique</span></button>
                     <button class="nav-btn" data-target="view-settings"><i class="fas fa-cogs"></i>
-                        Configuration</button>
+                        <span>Configuration</span></button>
                     <button class="nav-btn" data-target="view-billing"><i class="fas fa-file-invoice-dollar"></i>
-                        Facturation</button>
+                        <span>Facturation</span></button>
                     <button class="nav-btn" data-target="view-admins" id="nav-admins-btn" style="display:none;"><i
-                            class="fas fa-users-cog"></i> Utilisateurs</button>
-
+                            class="fas fa-users-cog"></i> <span>Utilisateurs</span></button>
                 </nav>
                 <div class="sidebar-footer">
-                    <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> Déconnexion</button>
+                    <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> <span>Déconnexion</span></button>
                 </div>
             </aside>
 
@@ -247,10 +253,6 @@
                                 <div class="header-actions-group">
                                     <select id="team-filter-season"
                                         style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; min-width: 150px;"></select>
-                                    <button class="view-toggle-btn active" data-view="grid" data-target="teams-list"><i
-                                            class="fas fa-th-large"></i></button>
-                                    <button class="view-toggle-btn" data-view="list" data-target="teams-list"><i
-                                            class="fas fa-list"></i></button>
 
                                     <button class="btn-action" id="open-team-modal"><i class="fas fa-plus"></i>
                                         Ajouter</button>
@@ -430,6 +432,12 @@
                                             class="fas fa-th-large"></i></button>
                                     <button class="view-toggle-btn" data-view="list" data-target="board-list"><i
                                             class="fas fa-list"></i></button>
+                                    <select class="sort-select" id="board-sort"
+                                        style="padding: 6px; border-radius: 4px; border: 1px solid #ddd; margin-right: 10px;">
+                                        <option value="name">Nom (A-Z)</option>
+                                        <option value="email">Courriel</option>
+                                        <option value="active">Actif</option>
+                                    </select>
                                     <button class="btn-action" id="open-board-modal"><i
                                             class="fas fa-plus"></i></button>
                                 </div>
@@ -452,6 +460,12 @@
                                         data-target="referees-list"><i class="fas fa-th-large"></i></button>
                                     <button class="view-toggle-btn" data-view="list" data-target="referees-list"><i
                                             class="fas fa-list"></i></button>
+                                    <select class="sort-select" id="ref-sort"
+                                        style="padding: 6px; border-radius: 4px; border: 1px solid #ddd; margin-right: 10px;">
+                                        <option value="name">Nom (A-Z)</option>
+                                        <option value="email">Courriel</option>
+                                        <option value="active">Actif</option>
+                                    </select>
                                     <button class="btn-action" id="open-referee-modal"><i
                                             class="fas fa-plus"></i></button>
                                 </div>
@@ -472,10 +486,6 @@
                                 <div class="header-actions-group">
                                     <div class="filter-group"
                                         style="display:flex; gap:10px; align-items:center; margin-right:15px;">
-                                        <select id="reg-filter-team" class="form-control"
-                                            style="max-width:200px; padding:6px; border:1px solid #ddd; border-radius:4px;">
-                                            <option value="all">Toutes équipes</option>
-                                        </select>
                                         <input type="text" id="reg-search" placeholder="Rechercher..."
                                             style="padding:6px; border:1px solid #ddd; border-radius:4px;">
                                     </div>
@@ -520,6 +530,13 @@
                                         data-target="coaches-list"><i class="fas fa-th-large"></i></button>
                                     <button class="view-toggle-btn" data-view="list" data-target="coaches-list"><i
                                             class="fas fa-list"></i></button>
+                                    <select class="sort-select" id="coach-sort"
+                                        style="padding: 6px; border-radius: 4px; border: 1px solid #ddd; margin-right: 10px;">
+                                        <option value="name">Nom (A-Z)</option>
+                                        <option value="email">Courriel</option>
+                                        <option value="police">Filiation Policière</option>
+                                        <option value="active">Actif</option>
+                                    </select>
                                     <button class="btn-action" id="open-coach-modal"><i class="fas fa-plus"></i> Ajouter
                                         Coach</button>
                                 </div>
@@ -1572,6 +1589,20 @@
                     <label>Nom Complet</label>
                     <input type="text" id="board-name" required>
                 </div>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Adresse Courriel</label>
+                            <input type="email" id="board-email">
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Téléphone</label>
+                            <input type="tel" id="board-phone">
+                        </div>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Rôle (ex: Président, Trésorière)</label>
                     <input type="text" id="board-role" required>
@@ -1628,6 +1659,20 @@
                 <div class="form-group">
                     <label>Nom Complet</label>
                     <input type="text" id="ref-name" required>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Adresse Courriel</label>
+                            <input type="email" id="ref-email">
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Téléphone</label>
+                            <input type="tel" id="ref-phone">
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Photo (Optionnel)</label>
@@ -1872,44 +1917,115 @@
                 </div>
                 <div class="form-group">
                     <label>Rôles / Permissions</label>
-                    <div id="roles-checkbox-group"
-                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
-                        <label
-                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
-                            <input type="checkbox" value="SuperAdmin"
-                                style="width:18px; height:18px; margin-right:8px;"> SuperAdmin (Accès total)
-                        </label>
-                        <label
-                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
-                            <input type="checkbox" value="Equipes" style="width:18px; height:18px; margin-right:8px;">
-                            Équipes & Coachs
-                        </label>
-                        <label
-                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
-                            <input type="checkbox" value="Boutique" style="width:18px; height:18px; margin-right:8px;">
-                            Boutique & Inventaire
-                        </label>
-                        <label
-                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
-                            <input type="checkbox" value="Club" style="width:18px; height:18px; margin-right:8px;">
-                            C.A.
-                            & Arbitres
-                        </label>
-                        <label
-                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
-                            <input type="checkbox" value="Inscriptions"
-                                style="width:18px; height:18px; margin-right:8px;"> Inscriptions
-                        </label>
-                        <label
-                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
-                            <input type="checkbox" value="Matchs" style="width:18px; height:18px; margin-right:8px;">
-                            Matchs (Calendrier)
-                        </label>
-                        <label
-                            style="display:flex; align-items:center; font-weight:normal; font-size:0.9rem; cursor:pointer;">
-                            <input type="checkbox" value="Config" style="width:18px; height:18px; margin-right:8px;">
-                            Configuration
-                        </label>
+                    <div id="roles-selection-container"
+                        style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+
+                        <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px dashed #eee;">
+                            <label
+                                style="font-size: 0.85rem; color: #666; margin-bottom: 5px; display: block;">Appliquer
+                                un préréglage</label>
+                            <select id="admin-preset-roles"
+                                style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; background: white;">
+                                <option value="custom">-- Personnalisé --</option>
+                                <option value="super-admin">Super Admin (Accès total)</option>
+                                <option value="secretaire">Secrétaire (Joueurs, Inscriptions, Matchs)</option>
+                                <option value="coach-general">Coach Général (Équipes, Joueurs)</option>
+                                <option value="arbitre-general">Arbitre (Calendrier, Visionnement)</option>
+                                <option value="tresorier">Trésorier (Facturation, Boutique)</option>
+                            </select>
+                        </div>
+
+                        <div
+                            style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                            <label
+                                style="display:flex; align-items:center; font-weight:bold; font-size:1rem; cursor:pointer; margin-bottom: 0;">
+                                <input type="checkbox" id="role-superadmin" value="SuperAdmin"
+                                    style="width:20px; height:20px; margin-right:8px;"> Super Admin
+                            </label>
+
+                            <label
+                                style="display:flex; align-items:center; font-weight:600; font-size:0.9rem; cursor:pointer; color: var(--primary);">
+                                <input type="checkbox" id="is-referee-link"
+                                    style="width:20px; height:20px; margin-right:8px;"> Est aussi un Arbitre (Voir
+                                calendrier & dispo)
+                            </label>
+                        </div>
+
+                        <div class="permissions-grid"
+                            style="display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center;">
+                            <div style="font-weight: 600; color: #444;">Module</div>
+                            <div style="font-size: 0.8rem; color: #666; text-align: center;">Aucun</div>
+                            <div style="font-size: 0.8rem; color: #666; text-align: center;">Visionner</div>
+                            <div style="font-size: 0.8rem; color: #666; text-align: center;">Modifier</div>
+
+                            <!-- Repeat for each module -->
+                            <div>Équipes & Joueurs</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Equipes" value="none"
+                                    checked></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Equipes" value="view"></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Equipes" value="edit"></div>
+
+                            <div>Boutique & Inventaire</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Boutique" value="none"
+                                    checked></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Boutique" value="view">
+                            </div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Boutique" value="edit">
+                            </div>
+
+                            <div>C.A. & Arbitres</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Club" value="none" checked>
+                            </div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Club" value="view"></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Club" value="edit"></div>
+
+                            <div>Inscriptions</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Inscriptions" value="none"
+                                    checked></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Inscriptions" value="view">
+                            </div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Inscriptions" value="edit">
+                            </div>
+
+                            <div>Matchs (Calendrier)</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Matchs" value="none"
+                                    checked></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Matchs" value="view"></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Matchs" value="edit"></div>
+
+                            <div>Campagnes Email</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Campagnes" value="none"
+                                    checked></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Campagnes" value="view">
+                            </div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Campagnes" value="edit">
+                            </div>
+
+                            <div>Automatisations</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
+                                    value="none" checked></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
+                                    value="view"></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
+                                    value="edit"></div>
+
+                            <div>Facturation</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Facturation" value="none"
+                                    checked></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Facturation" value="view">
+                            </div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Facturation" value="edit">
+                            </div>
+
+                            <div>Terrains / Saisons</div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Config" value="none"
+                                    checked></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Config" value="view"></div>
+                            <div style="text-align: center;"><input type="radio" name="perm-Config" value="edit"></div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.8rem; color: #888; font-style: italic;">
+                            Note: 'Modifier' inclut automatiquement les droits de visionnement.
+                        </div>
                     </div>
                 </div>
                 <button type="submit" class="btn-save">Enregistrer</button>
@@ -1928,6 +2044,20 @@
                 <div class="form-group">
                     <label>Nom Complet</label>
                     <input type="text" id="coach-name" required>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Adresse Courriel</label>
+                            <input type="email" id="coach-email">
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Téléphone</label>
+                            <input type="tel" id="coach-phone">
+                        </div>
+                    </div>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -2035,9 +2165,15 @@
                     <label>Date</label>
                     <input type="date" id="match-date" required>
                 </div>
-                <div class="form-group">
-                    <label>Heure</label>
-                    <input type="time" id="match-time" required>
+                <div style="display: flex; gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Heure de début</label>
+                        <input type="time" id="match-time" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Heure de fin</label>
+                        <input type="time" id="match-end-time" required>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Catégorie</label>
@@ -2436,6 +2572,38 @@
                     <i class="fas fa-check"></i> Confirmer la Migration
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Calendar Settings Modal -->
+    <div class="modal" id="calendar-settings-modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <span class="close-modal">&times;</span>
+            <h2>Configuration Calendrier</h2>
+            <form id="calendar-settings-form">
+                <div class="form-group">
+                    <label>Heure de début (H)</label>
+                    <input type="number" id="cal-set-start" min="0" max="23" value="8" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Heure de fin (H)</label>
+                    <input type="number" id="cal-set-end" min="1" max="24" value="22" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Durée des créneaux (Min)</label>
+                    <select id="cal-set-slot" class="form-control">
+                        <option value="15">15 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="60">1 heure</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Durée par défaut d'un match (Min)</label>
+                    <input type="number" id="cal-set-duration" min="15" step="15" value="60" class="form-control">
+                </div>
+                <button type="submit" class="btn-save" style="width:100%;"><i class="fas fa-save"></i>
+                    Appliquer</button>
+            </form>
         </div>
     </div>
 

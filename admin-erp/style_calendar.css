@@ -2,72 +2,190 @@
 #calendar {
     max-width: 100%;
     margin: 0 auto;
-    font-family: 'Inter', sans-serif;
-    padding: 10px;
+    font-family: 'Outfit', sans-serif;
+    padding: 0;
 }
 
+/* Custom Grid Calendar */
+.calendar-grid-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    padding: 0;
+    background: #f8f9fa;
+    border-radius: 12px;
+}
 
-.fc .fc-toolbar-title {
-    font-size: 1.25rem !important;
+.day-section {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    border: 1px solid #eee;
+}
+
+.day-header {
+    background: var(--primary);
+    color: white;
+    padding: 12px 20px;
     font-weight: 600;
+    font-size: 1.1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.day-grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.day-grid-table th {
+    background: #f1f1f1;
     color: var(--text-dark);
+    font-weight: 600;
+    padding: 10px;
+    border: 1px solid #ddd;
+    text-align: center;
+}
+
+.day-grid-table th.time-col-header {
+    width: 80px;
+    background: #e9ecef;
+}
+
+.day-grid-table td {
+    border: 1px solid #ddd;
+    height: 35px;
+    /* Base height for slots */
+    position: relative;
+    padding: 0;
+}
+
+.day-grid-table tr:nth-child(even) td {
+    border-bottom: 1px dashed #eee;
+}
+
+.time-label {
+    font-size: 0.8rem;
+    color: #666;
+    text-align: center;
+    background: #f9fafb;
+}
+
+.grid-cell {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.grid-cell:hover {
+    background: rgba(46, 204, 113, 0.05);
+}
+
+.grid-cell.drop-target {
+    background: rgba(46, 204, 113, 0.2) !important;
+    outline: 2px dashed #2ecc71;
+    outline-offset: -2px;
+}
+
+.grid-event-wrapper {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    /* height set by JS */
+    min-height: calc(100% - 4px);
+    background: var(--primary);
+    color: white;
+    border-radius: 4px;
+    padding: 4px;
+    font-size: 0.75rem;
+    overflow: hidden;
+    z-index: 10;
+    cursor: grab;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.grid-event-wrapper.dragging {
+    opacity: 0.8;
+    cursor: grabbing;
+    z-index: 1000;
+}
+
+.resize-handle {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+    background: rgba(0, 0, 0, 0.2);
+    display: none;
+}
+
+.grid-event-wrapper:hover .resize-handle {
+    display: block;
+}
+
+.grid-event-wrapper:hover {
+    filter: brightness(1.1);
+    transform: scale(1.02);
+}
+
+.grid-event-title {
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.grid-event-meta {
+    font-size: 0.7rem;
+    opacity: 0.9;
+}
+
+.grid-event-unavail {
+    background: #95a5a6;
+    color: white;
+}
+
+.btn-dispo {
+    width: 100%;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-weight: 600;
+}
+
+.btn-dispo-active {
+    background: #2ecc71 !important;
+    color: white !important;
+    box-shadow: 0 2px 4px rgba(46, 204, 113, 0.3);
+}
+
+.btn-dispo-inactive {
+    background: #ecf0f1 !important;
+    color: #7f8c8d !important;
+    border: 1px solid #bdc3c7 !important;
+}
+
+.btn-dispo-active:hover,
+.btn-dispo-inactive:hover {
+    filter: brightness(0.9);
+    transform: translateY(-1px);
 }
 
 .fc .fc-button-primary {
     background-color: var(--primary) !important;
     border-color: var(--primary) !important;
     text-transform: capitalize;
-}
-
-.fc .fc-button-primary:not(:disabled).fc-button-active,
-.fc .fc-button-primary:not(:disabled):active {
-    background-color: var(--primary-dark) !important;
-    border-color: var(--primary-dark) !important;
-}
-
-.fc-event {
-    cursor: pointer;
-    border: none !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.fc-event:hover {
-    transform: scale(1.02);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    z-index: 5;
-}
-
-/* Fix event content layout */
-.fc-daygrid-event {
-    white-space: normal !important;
-    align-items: flex-start !important;
-}
-
-.fc-event-main {
-    display: flex !important;
-    flex-direction: column;
-    gap: 2px;
-    padding: 2px;
-}
-
-/* Hover effect on days (Month View) */
-.fc-daygrid-day {
-    transition: background-color 0.2s ease;
-}
-
-.fc-daygrid-day:hover {
-    background-color: rgba(46, 204, 113, 0.1);
-    /* Light green tint */
-    cursor: pointer;
-}
-
-/* Hover effect on slots (Week View) */
-.fc-timegrid-slot-lane:hover {
-    background-color: rgba(46, 204, 113, 0.15);
-    cursor: pointer;
-}
-
-/* Highlight today */
-.fc-day-today {
-    background-color: rgba(46, 204, 113, 0.05) !important;
 }

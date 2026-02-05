@@ -80,9 +80,11 @@
                         <i class="fas fa-envelope"></i>
                         <input type="email" id="email" placeholder="Courriel administrateur" required>
                     </div>
-                    <div class="input-group">
+                    <div class="input-group" style="position: relative;">
                         <i class="fas fa-lock"></i>
                         <input type="password" id="password" placeholder="Mot de passe" required>
+                        <i class="fas fa-eye" id="toggle-password"
+                            style="left: auto; right: 15px; cursor: pointer; pointer-events: all;"></i>
                     </div>
                     <div class="auth-options" style="text-align: left; margin-bottom: 20px; font-size: 0.9rem;">
                         <div style="margin-bottom: 8px;">
@@ -95,9 +97,16 @@
                         </div>
                     </div>
                     <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt"></i> Connexion</button>
-                    <div style="margin-top: 15px;">
+                    <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
                         <a href="#" id="forgot-password" style="color: var(--primary); font-size: 0.9rem;">Mot de passe
                             oublié ?</a>
+                        <hr style="border: 0; border-top: 1px solid #eee; margin: 5px 0;">
+                        <a href="../index.html"
+                            style="color: #666; font-size: 0.9rem; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; transition: 0.3s;"
+                            onmouseover="this.style.background='#f9f9f9'"
+                            onmouseout="this.style.background='transparent'">
+                            <i class="fas fa-home"></i> Retour au site
+                        </a>
                     </div>
                     <p id="login-error" class="error-msg"></p>
                 </form>

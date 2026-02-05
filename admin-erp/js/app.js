@@ -87,6 +87,17 @@ const dashboardScreen = document.getElementById('dashboard-screen');
 const initLoader = document.getElementById('init-loader');
 const logoutBtn = document.getElementById('logout-btn');
 const loginError = document.getElementById('login-error');
+const togglePassword = document.getElementById('toggle-password');
+const passwordInput = document.getElementById('password');
+
+if (togglePassword && passwordInput) {
+    togglePassword.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        togglePassword.classList.toggle('fa-eye');
+        togglePassword.classList.toggle('fa-eye-slash');
+    });
+}
 
 // --- Custom Alert/Confirm Functions ---
 window.showAlert = function (message, type = 'info') {

@@ -25,9 +25,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Load players on page load
+    // Load players on page load if permission exists
     if (document.getElementById('players-directory-list')) {
-        loadPlayersDirectory('grid');
+        const checkAndLoad = () => {
+            if (window.currentPermissions && (window.currentPermissions.all === 'edit' || window.currentPermissions.Equipes)) {
+                loadPlayersDirectory('grid');
+            } else if (!window.currentPermissions) {
+                // Wait for permissions to be loaded
+                setTimeout(checkAndLoad, 500);
+            }
+        };
+        checkAndLoad();
     }
 });
 

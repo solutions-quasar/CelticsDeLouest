@@ -15,10 +15,12 @@ service cloud.firestore {
     // Helper: Check permissions for a specific module and level
     function hasPermission(module, level) {
       return isMasterAdmin() || (
+        request.auth != null && 
         exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) && (
-          get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.hasAny(["SuperAdmin", module + ":" + level]) ||
-          (level == "view" && get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.hasAny([module + ":edit"])) ||
-          (level == "edit" && get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.hasAny([module]))
+          "SuperAdmin" in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role ||
+          (module + ":" + level) in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role ||
+          (level == "view" && (module + ":edit") in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role) ||
+          (level == "edit" && module in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role)
         )
       );
     }
@@ -73,7 +75,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if isMasterAdmin() || (
         exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
-        get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role.hasAny(["SuperAdmin"])
+        "SuperAdmin" in get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.role
       );
     }
 
@@ -91,8 +93,12 @@ service cloud.firestore {
     
     // MATCHES
     match /matches/{matchId} {
-        allow read: if true;
-        allow write: if canEdit("Matchs");
+      allow read: if true;
+      allow create, delete: if canEdit("Matchs");
+      allow update: if canEdit("Matchs") || (
+        request.auth != null && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableRefs'])
+      );
     }
 
     // SPONSORS

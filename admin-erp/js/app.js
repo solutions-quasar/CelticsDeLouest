@@ -3607,6 +3607,19 @@ async function ensureBenjaminInDb() {
             });
             console.log("Benjamin auto-added to DB with email ID");
         }
+
+        // Also ensure referee profile
+        const qRef = query(collection(db, "referees"), where("email", "==", email));
+        const snapRef = await getDocs(qRef);
+        if (snapRef.empty) {
+            await addDoc(collection(db, "referees"), {
+                name: "Benjamin Sultan",
+                email: email,
+                visible: true,
+                unavails: ""
+            });
+            console.log("Benjamin referee profile created");
+        }
     } catch (e) {
         console.error("Auto-add Benjamin failed", e);
     }

@@ -158,10 +158,6 @@ export async function loadBilling() {
                 ]
             };
 
-            // Call Cloud Function
-            // Assuming this script runs in the same environment as inscription, or we hardcode URL
-            // Since this is ADMIN ERP, it might be same domain.
-            // Use window.stripeFunctionUrl if available or hardcode
             const url = 'https://us-central1-celticsdelouest.cloudfunctions.net/createManualInvoice';
 
             const res = await fetch(url, {
@@ -173,13 +169,15 @@ export async function loadBilling() {
 
             if (!res.ok || data.error) throw new Error(data.error || "Erreur inconnue");
 
-            alert("Facture envoyée avec succès !");
+            window.showAlert("Facture envoyée avec succès !", "success");
             document.getElementById('modal-new-invoice').classList.remove('active');
             e.target.reset();
-            refreshBillingData(); // Reload list
+            // refreshBillingData() will be called by real-time listener if invoice is added to Firestore
+            // but we call it here just in case or for immediate feedback if listener takes time
+            refreshBillingData();
 
         } catch (err) {
-            alert("Erreur: " + err.message);
+            window.showAlert("Erreur: " + err.message, "error");
         } finally {
             btn.disabled = false;
             btn.innerText = originalText;
@@ -187,113 +185,94 @@ export async function loadBilling() {
     };
 }
 
-async function refreshBillingData() {
-    const tbody = document.getElementById('invoices-table').querySelector('tbody');
-    const schedTbody = document.getElementById('scheduled-payments-table').querySelector('tbody');
+export async function refreshBillingData() {
+    const tbody = document.getElementById('invoices-table')?.querySelector('tbody');
+    const schedTbody = document.getElementById('scheduled-payments-table')?.querySelector('tbody');
 
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Chargement...</td></tr>';
-    schedTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Chargement...</td></tr>';
+    if (!tbody || !schedTbody) return;
 
     try {
-        // Fetch 'invoices', 'scheduled_payments', and 'registrations' collections
-        const [invSnap, schedSnap, regSnap] = await Promise.all([
-            window.getDocs(window.collection(window.db, "invoices")),
-            window.getDocs(window.collection(window.db, "scheduled_payments")),
-            window.getDocs(window.collection(window.db, "registrations"))
-        ]);
+        const invoices = Object.values(window.dataCache.invoices || {});
+        const scheduled = Object.values(window.dataCache.scheduled_payments || {});
 
-        // Map session IDs to Parent Names
-        const sessionNames = {};
-        regSnap.forEach(doc => {
-            const r = doc.data();
-            if (r.registrationSessionId) {
-                // Combine for display: "Parent Name (Email)"
-                sessionNames[r.registrationSessionId] = `${r.parent1Name || r.parentName || 'Parent'} (${r.parent1Email || r.parentEmail || ''})`;
-            }
-        });
+        // 1. RENDER INVOICES
+        tbody.innerHTML = '';
+        if (invoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Aucune facture trouvée.</td></tr>';
+        } else {
+            invoices.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).forEach(data => {
+                const date = data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toLocaleDateString() : new Date(data.createdAt.seconds * 1000).toLocaleDateString()) : '-';
+                const amount = ((data.amount || 0) / 100).toFixed(2);
 
+                let limitStatus = data.status || 'pending';
+                if (limitStatus === 'paid') limitStatus = 'Payé';
+                else if (limitStatus === 'pending') limitStatus = 'En attente';
+                else if (limitStatus === 'failed') limitStatus = 'Échoué';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${date}</td>
+                    <td><strong>${data.customerName || 'Inconnu'}</strong><br><small>${data.customerEmail}</small></td>
+                    <td>${amount} $</td>
+                    <td><span class="badge" style="background:${data.status === 'paid' ? '#2ecc71' : '#f39c12'}; color:white; padding:4px 8px; border-radius:4px;">${limitStatus}</span></td>
+                    <td>
+                        <a href="${data.invoiceUrl || '#'}" target="_blank" class="btn-action" style="padding:4px 8px; font-size:0.8rem;"><i class="fas fa-external-link-alt"></i> Voir</a>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 2. RENDER SCHEDULED PAYMENTS
+        schedTbody.innerHTML = '';
+        if (scheduled.length === 0) {
+            schedTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Aucun paiement planifié.</td></tr>';
+        } else {
+            scheduled.sort((a, b) => String(a.dueDate || '').localeCompare(String(b.dueDate || ''))).forEach(data => {
+                let dateStr = 'N/A';
+                if (data.dueDate) {
+                    if (data.dueDate.toDate) dateStr = data.dueDate.toDate().toLocaleDateString();
+                    else if (data.dueDate.seconds) dateStr = new Date(data.dueDate.seconds * 1000).toLocaleDateString();
+                    else dateStr = data.dueDate;
+                }
+
+                let sStatus = data.status || 'pending';
+                if (sStatus === 'paid') sStatus = 'Payé';
+                else if (sStatus === 'pending') sStatus = 'En attente';
+                else if (sStatus === 'failed') sStatus = 'Échoué';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${dateStr}</td>
+                    <td>${data.customerName || 'Client'}<br><small>${data.registrationId || ''}</small></td>
+                    <td>${((data.amount || 0) / 100).toFixed(2)} $</td>
+                    <td>${data.description || 'Paiement versement'}</td>
+                    <td><span class="badge" style="background:${data.status === 'paid' ? '#2ecc71' : '#eee'}; color:${data.status === 'paid' ? 'white' : '#333'}; padding:4px 8px; border-radius:4px;">${sStatus}</span></td>
+                `;
+                schedTbody.appendChild(tr);
+            });
+        }
+
+        // 3. UPDATE STATS
         let totalPaid = 0;
         let totalPending = 0;
-        let invoices = [];
+        let txCount = 0;
 
-        invSnap.forEach(doc => {
-            const d = doc.data();
-            d.id = doc.id;
-            invoices.push(d);
-
-            if (d.status === 'paid') {
-                totalPaid += (d.amountPaid || d.amount) / 100;
-            } else if (d.status === 'open' || d.status === 'draft') {
-                totalPending += (d.amount || 0) / 100;
-            }
-        });
-
-        // 1. Render Invoices
-        invoices.sort((a, b) => (b.created || 0) - (a.created || 0));
-        tbody.innerHTML = invoices.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Aucune facture.</td></tr>' : '';
         invoices.forEach(inv => {
-            const dateStr = inv.created ? new Date(inv.created * 1000).toLocaleDateString('fr-CA') : 'N/A';
-            const amountStr = ((inv.amount || 0) / 100).toFixed(2) + ' $';
-            let statusColor = inv.status === 'paid' ? 'green' : (inv.status === 'open' ? 'orange' : 'gray');
-
-            tbody.innerHTML += `
-                <tr>
-                    <td>${dateStr}</td>
-                    <td>
-                        <div style="font-weight:bold;">${inv.customerEmail || 'Inconnu'}</div>
-                        <small style="color:#666;">${inv.id}</small>
-                    </td>
-                    <td>${amountStr}</td>
-                    <td><span class="badge" style="background:${statusColor}; color:white; padding:4px 8px; border-radius:4px;">${inv.status}</span></td>
-                    <td>
-                        ${inv.hostedInvoiceUrl ? `<a href="${inv.hostedInvoiceUrl}" target="_blank" class="btn-icon" title="Voir"><i class="fas fa-external-link-alt"></i></a>` : ''}
-                        ${inv.pdfUrl ? `<a href="${inv.pdfUrl}" target="_blank" class="btn-icon" title="PDF"><i class="fas fa-file-pdf"></i></a>` : ''}
-                    </td>
-                </tr>
-            `;
-        });
-
-        // 2. Render Scheduled Payments
-        let scheduled = [];
-        schedSnap.forEach(doc => {
-            const d = doc.data();
-            d.id = doc.id;
-            scheduled.push(d);
-            if (d.status === 'pending') {
-                totalPending += (d.amount || 0) / 100;
+            if (inv.status === 'paid') {
+                totalPaid += (inv.amount || 0) / 100;
+                txCount++;
+            } else {
+                totalPending += (inv.amount || 0) / 100;
             }
         });
 
-        scheduled.sort((a, b) => (a.dueDate ? a.dueDate.seconds : 0) - (b.dueDate ? b.dueDate.seconds : 0));
-        schedTbody.innerHTML = scheduled.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Aucun versement planifié.</td></tr>' : '';
-
-        scheduled.forEach(s => {
-            const dateStr = s.dueDate ? new Date(s.dueDate.seconds * 1000).toLocaleDateString('fr-CA') : 'N/A';
-            const amountStr = ((s.amount || 0) / 100).toFixed(2) + ' $';
-            let statusColor = s.status === 'processed' ? 'green' : (s.status === 'pending' ? 'orange' : 'red');
-            const customerIdentity = sessionNames[s.sessionId] || s.customerId || 'Client Inconnu';
-
-            schedTbody.innerHTML += `
-                <tr>
-                    <td>${dateStr}</td>
-                    <td>
-                        <div style="font-weight:bold;">${customerIdentity}</div>
-                        <small style="color:#666; font-size:0.75rem;">ID Stripe: ${s.customerId || 'N/A'}</small>
-                    </td>
-                    <td>${amountStr}</td>
-                    <td>${s.description || 'Paiement versement'}</td>
-                    <td><span class="badge" style="background:${statusColor}; color:white; padding:4px 8px; border-radius:4px;">${s.status}</span></td>
-                </tr>
-            `;
-        });
-
-        // Update Stats
-        document.getElementById('bill-total-paid').innerText = totalPaid.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
-        document.getElementById('bill-total-pending').innerText = totalPending.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
-        document.getElementById('bill-tx-count').innerText = invoices.length + scheduled.length;
+        document.getElementById('bill-total-paid').textContent = `${totalPaid.toFixed(2)} $`;
+        document.getElementById('bill-total-pending').textContent = `${totalPending.toFixed(2)} $`;
+        document.getElementById('bill-tx-count').textContent = txCount;
 
     } catch (e) {
-        console.error("Billing Load Error:", e);
-        tbody.innerHTML = `<tr><td colspan="5" style="color:red;">Erreur: ${e.message}</td></tr>`;
+        console.error("Error refreshing billing data:", e);
+        tbody.innerHTML = `<tr><td colspan="5" style="color:red; text-align:center;">Erreur: ${e.message}</td></tr>`;
     }
 }

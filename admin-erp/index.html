@@ -139,8 +139,8 @@
                         <span>Campagnes</span></button>
                     <button class="nav-btn" data-target="view-teams"><i class="fas fa-users"></i> <span>Gestion
                             Équipes</span></button>
-                    <button class="nav-btn" data-target="view-matches"><i class="fas fa-futbol"></i>
-                        <span>Matchs</span></button>
+                    <button class="nav-btn" data-target="view-matches"><i class="fas fa-calendar-alt"></i>
+                        <span>Calendrier</span></button>
                     <button class="nav-btn" data-target="view-inventory"><i class="fas fa-clipboard-list"></i>
                         <span>Inventaire</span></button>
                     <button class="nav-btn" data-target="view-automations"><i class="fas fa-robot"></i>
@@ -514,6 +514,7 @@
                                                 <th>Date</th>
                                                 <th>Enfant</th>
                                                 <th>Programme</th>
+                                                <th>Statut</th>
                                                 <th>Parent</th>
                                                 <th>Actions</th>
                                             </tr>
@@ -562,7 +563,7 @@
                     <div id="view-matches" class="view">
                         <div class="card">
                             <div class="card-header">
-                                <h3>Calendrier des Matchs (Domicile)</h3>
+                                <h3>Calendrier</h3>
                                 <div class="header-actions-group">
                                     <button class="view-toggle-btn active" data-view="calendar"
                                         data-target="matches-view-container"><i
@@ -1347,15 +1348,15 @@
                 </div> <!-- End of inventory-modal-body -->
 
                 <div class="inventory-modal-footer"
-                    style="border-top: 1px solid #eee; padding-top: 20px; display: flex; gap: 15px; background: white; z-index: 100;">
-                    <button type="submit" class="btn-save" style="flex: 2; margin: 0;">Enregistrer les
-                        informations</button>
+                    style="border-top: 1px solid #ddd; padding-top: 20px; display: flex; flex-direction: column; gap: 10px; background: white; z-index: 100;">
+                    <button type="submit" class="btn-save"
+                        style="width: 100%; margin: 0; padding: 12px; font-weight: 600; font-size: 1rem;">Enregistrer</button>
                     <button type="button" id="btn-delete-batch" class="btn-save"
-                        style="background-color: var(--danger); display: none; flex: 1; margin: 0;">Supprimer tout le
-                        lot</button>
+                        style="background-color: var(--danger); display: none; width: 100%; margin: 0; padding: 12px; font-weight: 600; font-size: 1rem;">Supprimer
+                        tout le lot</button>
                     <button type="button" class="btn-close-custom"
                         onclick="document.getElementById('inventory-modal').classList.remove('active')" style="
-                        flex: 1;
+                        width: 100%;
                         padding: 12px;
                         background: white;
                         color: var(--primary);
@@ -1367,9 +1368,10 @@
                         transition: 0.3s;
                         margin: 0;
                         display: flex;
-                        align-items: center;
                         justify-content: center;
-                    ">Fermer la fenêtre</button>
+                        align-items: center;">
+                        Fermer
+                    </button>
                 </div>
             </form>
         </div>
@@ -1588,11 +1590,18 @@
     </div>
 
     <!-- BOARD MODAL -->
-    <div class="modal" id="board-modal">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>Membre du Conseil</h2>
-            <form id="board-form">
+    <div class="modal modal-full" id="board-modal" style="padding: 0;">
+        <div class="modal-content"
+            style="width: 100%; height: 100%; max-width: none; margin: 0; padding: 0; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: #f8f9fa;">
+            <div
+                style="background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10;">
+                <h2 style="margin: 0; font-size: 1.2rem; color: var(--primary);">Membre du Conseil</h2>
+                <span class="close-modal" style="position: static; font-size: 2rem; line-height: 1; color: #666;"
+                    onclick="document.getElementById('board-modal').classList.remove('active')">&times;</span>
+            </div>
+
+            <form id="board-form"
+                style="flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 150px; scroll-behavior: smooth;">
                 <input type="hidden" id="board-id">
                 <div class="form-group">
                     <label>Nom Complet</label>
@@ -1639,7 +1648,12 @@
                         <span>Afficher sur le site (Actif)</span>
                     </label>
                 </div>
-                <button type="submit" class="btn-save">Enregistrer</button>
+            </form>
+
+            <div
+                style="position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #ddd; box-shadow: 0 -4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; z-index: 100;">
+                <button type="submit" form="board-form" class="btn-save"
+                    style="width: 100%; margin: 0; padding: 12px; font-weight: 600; font-size: 1rem;">Enregistrer</button>
                 <button type="button" class="btn-close-custom"
                     onclick="document.getElementById('board-modal').classList.remove('active')" style="
                     width: 100%;
@@ -1650,11 +1664,10 @@
                     border-radius: 6px;
                     font-size: 1rem;
                     cursor: pointer;
-                    margin-top: 10px;
-                    font-weight: 600;
-                    transition: all 0.3s ease;
-                ">Fermer</button>
-            </form>
+                    font-weight: 600;">
+                    Fermer
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1750,11 +1763,19 @@
     </div>
 
     <!-- ADMIN MODAL (REGISTRATION) -->
-    <div class="modal" id="registration-modal">
-        <div class="modal-content" style="width: 95%; height: 95%; max-width: none; overflow-y: auto;">
-            <span class="close-modal">&times;</span>
-            <h2>Détails Inscription</h2>
-            <form id="registration-form-admin">
+    <div class="modal modal-full" id="registration-modal" style="padding: 0;">
+        <div class="modal-content"
+            style="width: 100%; height: 100%; max-width: none; margin: 0; padding: 0; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: #f8f9fa;">
+
+            <div
+                style="background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10;">
+                <h2 style="margin: 0; font-size: 1.2rem; color: var(--primary);">Détails Inscription</h2>
+                <span class="close-modal" style="position: static; font-size: 2rem; line-height: 1; color: #666;"
+                    onclick="document.getElementById('registration-modal').classList.remove('active')">&times;</span>
+            </div>
+
+            <form id="registration-form-admin"
+                style="flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 140px; scroll-behavior: smooth;">
                 <input type="hidden" id="reg-id">
 
                 <!-- 1. Enfant -->
@@ -1884,10 +1905,10 @@
                         <div class="form-group">
                             <label>Statut Paiement / Dossier</label>
                             <select id="reg-status">
-                                <option value="New">Nouveau</option>
-                                <option value="Paid">Payé</option>
-                                <option value="Completed">Terminé</option>
-                                <option value="Cancelled">Annulé</option>
+                                <option value="Nouveau">Nouveau</option>
+                                <option value="Payé">Payé</option>
+                                <option value="Annulé">Annulé</option>
+                                <option value="Migré">Migré</option>
                             </select>
                         </div>
                     </div>
@@ -1897,13 +1918,15 @@
                     </div>
                 </div>
 
-                <div class="form-actions" style="display:flex; justify-content:flex-end; gap:15px; margin-top:20px;">
+                <div class="form-actions"
+                    style="position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #ddd; box-shadow: 0 -4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; z-index: 100;">
+                    <button type="submit" class="btn-save"
+                        style="width: 100%; padding: 12px; font-weight: 600; font-size: 1rem;">Enregistrer</button>
                     <button type="button" class="btn-close-custom"
                         onclick="document.getElementById('registration-modal').classList.remove('active')"
-                        style="background:#6c757d; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">
+                        style="width: 100%; padding: 12px; border: 2px solid var(--primary); background: white; color: var(--primary); font-weight: 600; border-radius: 6px; cursor:pointer; font-size: 1rem;">
                         Fermer
                     </button>
-                    <button type="submit" class="btn-save" style="padding:10px 30px;">Enregistrer</button>
                 </div>
             </form>
         </div>
@@ -1950,13 +1973,6 @@
                                 style="display:flex; align-items:center; font-weight:bold; font-size:1rem; cursor:pointer; margin-bottom: 0;">
                                 <input type="checkbox" id="role-superadmin" value="SuperAdmin"
                                     style="width:20px; height:20px; margin-right:8px;"> Super Admin
-                            </label>
-
-                            <label
-                                style="display:flex; align-items:center; font-weight:600; font-size:0.9rem; cursor:pointer; color: var(--primary);">
-                                <input type="checkbox" id="is-referee-link"
-                                    style="width:20px; height:20px; margin-right:8px;"> Est aussi un Arbitre (Voir
-                                calendrier & dispo)
                             </label>
                         </div>
 
@@ -2043,11 +2059,18 @@
     </div>
 
     <!-- Coach Modal -->
-    <div class="modal" id="coach-modal">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>Entraîneur</h2>
-            <form id="coach-form">
+    <div class="modal modal-full" id="coach-modal" style="padding: 0;">
+        <div class="modal-content"
+            style="width: 100%; height: 100%; max-width: none; margin: 0; padding: 0; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: #f8f9fa;">
+            <div
+                style="background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10;">
+                <h2 style="margin: 0; font-size: 1.2rem; color: var(--primary);">Entraîneur</h2>
+                <span class="close-modal" style="position: static; font-size: 2rem; line-height: 1; color: #666;"
+                    onclick="document.getElementById('coach-modal').classList.remove('active')">&times;</span>
+            </div>
+
+            <form id="coach-form"
+                style="flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 150px; scroll-behavior: smooth;">
                 <input type="hidden" id="coach-id">
 
                 <div class="form-group">
@@ -2069,14 +2092,18 @@
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label>Expiration Filiation Policière</label>
-                        <input type="date" id="coach-police-expiry">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Expiration Filiation Policière</label>
+                            <input type="date" id="coach-police-expiry">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Formation Sport et Respect</label>
-                        <input type="date" id="coach-sport-respect-expiry">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Formation Sport et Respect</label>
+                            <input type="date" id="coach-sport-respect-expiry">
+                        </div>
                     </div>
                 </div>
 
@@ -2113,11 +2140,26 @@
                         <p style="color: #888; font-style: italic;">Fonctionnalité en développement.</p>
                     </div>
                 </div>
-
-                <button type="submit" class="btn-save">Enregistrer</button>
-                <button type="button" class="btn-secondary" id="close-coach-modal-btn"
-                    style="margin-top: 10px; width: 100%; background: white; border: 1px solid var(--primary, #00563B); color: var(--primary, #00563B);">Fermer</button>
             </form>
+
+            <div
+                style="position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #ddd; box-shadow: 0 -4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; z-index: 100;">
+                <button type="submit" form="coach-form" class="btn-save"
+                    style="width: 100%; margin: 0; padding: 12px; font-weight: 600; font-size: 1rem;">Enregistrer</button>
+                <button type="button" class="btn-close-custom"
+                    onclick="document.getElementById('coach-modal').classList.remove('active')" style="
+                    width: 100%;
+                    padding: 12px;
+                    background: white;
+                    color: var(--primary);
+                    border: 2px solid var(--primary);
+                    border-radius: 6px;
+                    font-size: 1rem;
+                    cursor: pointer;
+                    font-weight: 600;">
+                    Fermer
+                </button>
+            </div>
         </div>
     </div>
 
@@ -2164,107 +2206,162 @@
     </div>
 
     <!-- Match Modal -->
-    <div class="modal" id="match-modal">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>Détails du Match</h2>
-            <form id="match-form">
+    <div class="modal modal-full" id="match-modal" style="padding: 0;">
+        <div class="modal-content"
+            style="width: 100%; height: 100%; max-width: none; margin: 0; padding: 0; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: #f8f9fa;">
+
+            <div
+                style="background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10;">
+                <h2 style="margin: 0; font-size: 1.2rem; color: var(--primary);">Détails du Match</h2>
+                <span class="close-modal" style="position: static; font-size: 2rem; line-height: 1; color: #666;"
+                    onclick="document.getElementById('match-modal').classList.remove('active')">&times;</span>
+            </div>
+
+            <form id="match-form"
+                style="flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 220px; scroll-behavior: smooth;">
                 <input type="hidden" id="match-id">
-                <div class="form-group">
-                    <label>Date</label>
-                    <input type="date" id="match-date" required>
-                </div>
-                <div style="display: flex; gap: 15px;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Heure de début</label>
-                        <input type="time" id="match-time" required>
+
+                <!-- Tabs Header -->
+                <div style="display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px;">
+                    <div id="tab-match-general" onclick="
+                        document.getElementById('content-match-general').style.display='block';
+                        document.getElementById('content-match-referees').style.display='none';
+                        this.style.borderBottom='2px solid var(--primary)';
+                        this.style.color='var(--primary)';
+                        document.getElementById('tab-match-referees').style.borderBottom='none';
+                        document.getElementById('tab-match-referees').style.color='#666';
+                    "
+                        style="flex: 1; padding: 10px; text-align: center; cursor: pointer; font-weight: 600; color: var(--primary); border-bottom: 2px solid var(--primary);">
+                        <i class="fas fa-info-circle"></i> Détails
                     </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label>Heure de fin</label>
-                        <input type="time" id="match-end-time" required>
+                    <div id="tab-match-referees" onclick="
+                        document.getElementById('content-match-general').style.display='none';
+                        document.getElementById('content-match-referees').style.display='block';
+                        this.style.borderBottom='2px solid var(--primary)';
+                        this.style.color='var(--primary)';
+                        document.getElementById('tab-match-general').style.borderBottom='none';
+                        document.getElementById('tab-match-general').style.color='#666';
+                    "
+                        style="flex: 1; padding: 10px; text-align: center; cursor: pointer; font-weight: 600; color: #666;">
+                        <i class="fas fa-whistle"></i> Arbitres
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>Catégorie</label>
-                    <select id="match-category">
-                        <option value="U9">U9</option>
-                        <option value="U10">U10</option>
-                        <option value="U11">U11</option>
-                        <option value="U12">U12</option>
-                        <option value="U13">U13</option>
-                        <option value="U14">U14</option>
-                        <option value="U15">U15</option>
-                        <option value="U16">U16</option>
-                        <option value="U17">U17</option>
-                        <option value="U18">U18</option>
-                        <option value="Senior">Senior</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Adversaire</label>
-                    <input type="text" id="match-opponent" placeholder="Ex: CS Dieppe, Codiac..." required>
-                </div>
-                <div class="form-group">
-                    <label>Terrains</label>
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <select id="match-field-add-select" style="flex-grow: 1;">
-                            <option value="">Ajouter un terrain...</option>
+
+                <!-- Tab 1: General -->
+                <div id="content-match-general">
+                    <div class="form-group">
+                        <label>Type d'événement</label>
+                        <select id="match-type">
+                            <option value="match">Match</option>
+                            <option value="practice">Pratique</option>
+                            <option value="unavailable">Indisponible</option>
                         </select>
-                        <button type="button" class="btn-action" id="btn-add-match-field"><i
-                                class="fas fa-plus"></i></button>
                     </div>
-                    <div id="match-fields-list"
-                        style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; padding: 10px; border: 1px dashed #ccc; border-radius: 6px;">
-                        <!-- JS Will Populate Tags -->
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="match-date" required>
                     </div>
-                </div>
-                <hr style="margin: 15px 0;">
-                <h4>Assignation Arbitres</h4>
-                <div class="form-group">
-                    <label>Arbitre Central</label>
-                    <select id="match-ref-center">
-                        <option value="">-- Non assigné --</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Assistant 1</label>
-                    <select id="match-ref-asst1">
-                        <option value="">-- Non assigné --</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Assistant 2</label>
-                    <select id="match-ref-asst2">
-                        <option value="">-- Non assigné --</option>
-                    </select>
+                    <div style="display: flex; gap: 15px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Heure de début</label>
+                            <input type="time" id="match-time" required>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Heure de fin</label>
+                            <input type="time" id="match-end-time" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Catégorie</label>
+                        <select id="match-category">
+                            <option value="U9">U9</option>
+                            <option value="U10">U10</option>
+                            <option value="U11">U11</option>
+                            <option value="U12">U12</option>
+                            <option value="U13">U13</option>
+                            <option value="U14">U14</option>
+                            <option value="U15">U15</option>
+                            <option value="U16">U16</option>
+                            <option value="U17">U17</option>
+                            <option value="U18">U18</option>
+                            <option value="Senior">Senior</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Adversaire</label>
+                        <input type="text" id="match-opponent" placeholder="Ex: CS Dieppe, Codiac..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>Terrains</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <select id="match-field-add-select" style="flex-grow: 1;">
+                                <option value="">Ajouter un terrain...</option>
+                            </select>
+                            <button type="button" class="btn-action" id="btn-add-match-field"><i
+                                    class="fas fa-plus"></i></button>
+                        </div>
+                        <div id="match-fields-list"
+                            style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; padding: 10px; border: 1px dashed #ccc; border-radius: 6px;">
+                            <!-- JS Will Populate Tags -->
+                        </div>
+                    </div>
+
+                    <div class="form-group"
+                        style="background:#f9f9f9; padding:10px; border-radius:6px; margin-top:20px;">
+                        <label style="display:flex; align-items:center; cursor:pointer; margin-bottom:0;">
+                            <input type="checkbox" id="match-played"
+                                style="width:20px; height:20px; margin-right:10px;">
+                            <span>Match Joué (Terminé)</span>
+                        </label>
+                    </div>
                 </div>
 
-                <div class="form-group" style="background:#f9f9f9; padding:10px; border-radius:6px; margin-top:10px;">
-                    <label style="display:flex; align-items:center; cursor:pointer; margin-bottom:0;">
-                        <input type="checkbox" id="match-played" style="width:20px; height:20px; margin-right:10px;">
-                        <span>Match Joué</span>
-                    </label>
+                <!-- Tab 2: Referees -->
+                <div id="content-match-referees" style="display: none;">
+                    <div class="alert alert-info" style="margin-bottom: 15px; font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i> Assigner les arbitres pour ce match.
+                    </div>
+                    <div class="form-group">
+                        <label>Arbitre Central</label>
+                        <select id="match-ref-center">
+                            <option value="">-- Non assigné --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Assistant 1</label>
+                        <select id="match-ref-asst1">
+                            <option value="">-- Non assigné --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Assistant 2</label>
+                        <select id="match-ref-asst2">
+                            <option value="">-- Non assigné --</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button type="submit" class="btn-save" style="flex: 2; margin-top: 0;">Enregistrer</button>
+
+                <div
+                    style="position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #ddd; box-shadow: 0 -4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; z-index: 100;">
+                    <button type="submit" class="btn-save"
+                        style="width: 100%; margin: 0; padding: 12px; font-weight: 600; font-size: 1rem;">Enregistrer</button>
                     <button type="button" id="btn-delete-match"
-                        style="flex: 1; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: none;">Supprimer</button>
+                        style="width: 100%; margin: 0; padding: 12px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 1rem; display: none;">Supprimer</button>
+                    <button type="button" class="btn-close-custom"
+                        onclick="document.getElementById('match-modal').classList.remove('active')" style="
+                        width: 100%;
+                        padding: 12px;
+                        background: white;
+                        color: var(--primary);
+                        border: 2px solid var(--primary);
+                        border-radius: 6px;
+                        font-size: 1rem;
+                        cursor: pointer;
+                        font-weight: 600;">
+                        Fermer
+                    </button>
                 </div>
-                <button type="button" class="btn-close-custom"
-                    onclick="document.getElementById('match-modal').classList.remove('active')" style="
-                    width: 100%;
-                    padding: 12px;
-                    background: white;
-                    color: var(--primary);
-                    border: 2px solid var(--primary);
-                    border-radius: 6px;
-                    font-size: 1rem;
-                    cursor: pointer;
-                    margin-top: 10px;
-                    font-weight: 600;
-                    transition: all 0.3s ease;
-                ">Fermer</button>
             </form>
         </div>
     </div>
@@ -2389,7 +2486,22 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn-save">Enregistrer</button>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn-save" style="width: 100%; margin: 0;">Enregistrer</button>
+                    <button type="button" class="btn-close-custom"
+                        onclick="document.getElementById('team-modal').classList.remove('active')" style="
+                        width: 100%;
+                        padding: 12px;
+                        background: white;
+                        color: var(--primary);
+                        border: 2px solid var(--primary);
+                        border-radius: 6px;
+                        font-size: 1rem;
+                        cursor: pointer;
+                        font-weight: 600;">
+                        Fermer
+                    </button>
+                </div>
             </form>
         </div>
     </div>
@@ -2520,18 +2632,18 @@
 
     <!-- Main Logic -->
     <!-- GENERIC CONFIRM MODAL -->
-    <div id="generic-confirm-modal" class="modal">
+    <div id="custom-confirm-modal" class="modal">
         <div class="modal-content" style="max-width: 500px; text-align: center;">
             <div style="margin-bottom: 20px;">
                 <i class="fas fa-question-circle" style="font-size: 3rem; color: var(--primary);"></i>
             </div>
-            <h3 id="generic-confirm-title" style="margin-bottom: 15px;">Confirmation</h3>
-            <p id="generic-confirm-message" style="color: #666; margin-bottom: 25px; font-size: 1rem;"></p>
+            <h3 id="confirm-title" style="margin-bottom: 15px;">Confirmation</h3>
+            <p id="confirm-message" style="color: #666; margin-bottom: 25px; font-size: 1rem;"></p>
 
             <div class="modal-footer" style="justify-content: center; gap: 15px;">
-                <button class="btn-secondary" id="generic-confirm-cancel"
+                <button class="btn-secondary" id="confirm-cancel-btn"
                     style="background: #7f8c8d; border-color: #7f8c8d;">Annuler</button>
-                <button class="btn-action" id="generic-confirm-ok" style="background: var(--primary); color: white;">
+                <button class="btn-action" id="confirm-ok-btn" style="background: var(--primary); color: white;">
                     Confirmer
                 </button>
             </div>
@@ -2539,15 +2651,15 @@
     </div>
 
     <!-- GENERIC ALERT MODAL -->
-    <div id="generic-alert-modal" class="modal">
+    <div id="custom-alert-modal" class="modal">
         <div class="modal-content" style="max-width: 500px; text-align: center;">
             <div style="margin-bottom: 20px;">
-                <i class="fas fa-info-circle" style="font-size: 3rem; color: var(--secondary);"></i>
+                <i id="alert-icon" class="fas fa-info-circle" style="font-size: 3rem; color: var(--secondary);"></i>
             </div>
-            <h3 id="generic-alert-title" style="margin-bottom: 15px;">Information</h3>
-            <p id="generic-alert-message" style="color: #666; margin-bottom: 25px; font-size: 1rem;"></p>
+            <h3 id="alert-title" style="margin-bottom: 15px;">Information</h3>
+            <p id="alert-message" style="color: #666; margin-bottom: 25px; font-size: 1rem;"></p>
 
-            <button class="btn-action" id="generic-alert-ok"
+            <button class="btn-action" id="alert-ok-btn"
                 style="width: 100%; justify-content: center; background: var(--secondary);">
                 OK
             </button>
@@ -2620,6 +2732,7 @@
         </div>
     </div>
 
+    <script src="./js/ui-utils.js"></script>
     <script src="./js/players.js"></script>
     <script src="./js/search.js"></script>
     <script src="./js/email-campaigns.js"></script>

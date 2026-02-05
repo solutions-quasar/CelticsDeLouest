@@ -190,7 +190,7 @@ async function saveCampaign(targetStatus = 'draft') {
         audience.emails = raw.split(',').map(e => e.trim()).filter(e => e.includes('@'));
     }
 
-    if (!subject) return alert("Sujet requis !");
+    if (!subject) return showAlert("Sujet requis !", "warning");
 
     const data = {
         subject,
@@ -203,7 +203,7 @@ async function saveCampaign(targetStatus = 'draft') {
     };
 
     if (targetStatus === 'scheduled') {
-        if (!scheduleVal) return alert("Date de programmation requise !");
+        if (!scheduleVal) return showAlert("Date de programmation requise !", "warning");
         data.scheduledAt = window.Timestamp.fromDate(new Date(scheduleVal));
     } else if (!id && targetStatus === 'draft') {
         data.createdAt = window.serverTimestamp();
@@ -218,11 +218,11 @@ async function saveCampaign(targetStatus = 'draft') {
             document.getElementById('camp-id').value = ref.id; // set ID
         }
 
-        if (targetStatus === 'draft') alert("Brouillon sauvegardé !");
+        if (targetStatus === 'draft') showAlert("Brouillon sauvegardé !", "success");
         return true;
     } catch (e) {
         console.error(e);
-        alert("Erreur sauvegarde: " + e.message);
+        showAlert("Erreur sauvegarde: " + e.message, "error");
         return false;
     }
 }
@@ -231,7 +231,7 @@ async function confirmAndSend() {
     const scheduled = document.getElementById('camp-schedule-at').value;
     const action = scheduled ? "PROGRAMMER" : "ENVOYER IMMÉDIATEMENT";
 
-    if (!confirm(`Voulez-vous vraiment ${action} cette campagne ?`)) return;
+    if (!await showConfirm(`Voulez-vous vraiment ${action} cette campagne ?`)) return;
 
     if (await saveCampaign(scheduled ? 'scheduled' : 'sending')) {
         // If immediate send, call backend function
@@ -258,19 +258,19 @@ async function confirmAndSend() {
 
                 const result = await res.json();
                 if (result.success) {
-                    alert("Campagne envoyée avec succès !");
+                    showAlert("Campagne envoyée avec succès !", "success");
                     closeEditor();
                     loadCampaigns('sent');
                 } else {
-                    alert("Erreur lors de l'envoi: " + (result.error || result.message));
+                    showAlert("Erreur lors de l'envoi: " + (result.error || result.message), "error");
                 }
             } catch (e) {
-                alert("Erreur communication serveur: " + e.message);
+                showAlert("Erreur communication serveur: " + e.message, "error");
             } finally {
                 document.getElementById('btn-send-campaign').disabled = false;
             }
         } else {
-            alert("Campagne programmée !");
+            showAlert("Campagne programmée !", "success");
             closeEditor();
             loadCampaigns('scheduled');
         }
@@ -278,7 +278,7 @@ async function confirmAndSend() {
 }
 
 async function sendTestEmail() {
-    const email = prompt("Entrez l'email de test:", "votre@email.com");
+    const email = await window.showPrompt("Entrez l'email de test:", "votre@email.com");
     if (!email) return;
 
     const subject = document.getElementById('camp-subject').value;
@@ -300,33 +300,39 @@ async function sendTestEmail() {
             })
         });
         const result = await res.json();
-        if (result.success) alert("Test envoyé !");
-        else alert("Erreur test: " + result.error);
+        if (result.success) showAlert("Test envoyé !", "success");
+        else showAlert("Erreur test: " + result.error, "error");
     } catch (e) {
-        alert("Erreur: " + e.message);
+        showAlert("Erreur: " + e.message, "error");
     }
 }
 
 async function loadCampaigns(filter) {
     const container = document.getElementById('campaigns-list-container');
+    if (!container) return;
     container.innerHTML = '<p>Chargement...</p>';
 
-    let q = window.query(window.collection(window.db, "campaigns"), window.orderBy("createdAt", "desc"));
-    if (filter && filter !== 'all') {
-        q = window.query(window.collection(window.db, "campaigns"), window.where("status", "==", filter), window.orderBy("createdAt", "desc"));
-    }
-
     try {
-        const snap = await window.getDocs(q);
+        let campaigns = Object.values(window.dataCache.campaigns || {});
+
+        if (filter && filter !== 'all') {
+            campaigns = campaigns.filter(c => c.status === filter);
+        }
+
+        campaigns.sort((a, b) => {
+            const tA = a.createdAt?.seconds || 0;
+            const tB = b.createdAt?.seconds || 0;
+            return tB - tA;
+        });
+
         container.innerHTML = '';
-        if (snap.empty) {
+        if (campaigns.length === 0) {
             container.innerHTML = '<p>Aucune campagne trouvée.</p>';
             return;
         }
 
-        snap.forEach(doc => {
-            const data = doc.data();
-            const date = data.createdAt ? data.createdAt.toDate().toLocaleDateString() : '?';
+        campaigns.forEach(data => {
+            const date = data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toLocaleDateString() : new Date(data.createdAt.seconds * 1000).toLocaleDateString()) : '?';
             const stats = data.stats || { sentCount: 0, openCount: 0 };
 
             // Calculate open rate
@@ -350,20 +356,13 @@ async function loadCampaigns(filter) {
             `;
 
             card.addEventListener('click', () => {
-                if (data.status === 'sent') {
-                    // Maybe show read-only or stats view? for now open editor
-                    // Ideally we should have a "View Report" mode.
-                    // Let's just open editor for now but maybe warn
-                    openCampaignEditor({ id: doc.id, ...data });
-                } else {
-                    openCampaignEditor({ id: doc.id, ...data });
-                }
+                openCampaignEditor(data);
             });
 
             container.appendChild(card);
         });
     } catch (e) {
-        console.error(e);
+        console.error("Error loading campaigns:", e);
         container.innerHTML = '<p style="color:red">Erreur chargement.</p>';
     }
 }

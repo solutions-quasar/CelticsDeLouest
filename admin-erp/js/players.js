@@ -40,33 +40,32 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Load Players Directory Function
-async function loadPlayersDirectory(viewMode = 'grid') {
+window.loadPlayersDirectory = async function (viewMode = 'grid') {
     const gridContainer = document.getElementById('players-directory-list');
     const tbody = document.getElementById('players-directory-tbody');
 
     if (!gridContainer && !tbody) return;
 
     try {
-        const playersSnapshot = await window.getDocs(window.collection(window.db, "players"));
-
-        // Refresh Cache - Clear old entries so deleted players don't persist
-        window.dataCache.players = {};
-        playersSnapshot.forEach(doc => {
-            window.dataCache.players[doc.id] = { id: doc.id, ...doc.data() };
-        });
+        // Use global cache updated by real-time listener
+        const players = Object.values(window.dataCache.players || {});
 
         if (viewMode === 'grid' && gridContainer) {
             gridContainer.innerHTML = '';
 
-            playersSnapshot.forEach(doc => {
-                const player = doc.data();
+            if (players.length === 0) {
+                gridContainer.innerHTML = '<p style="text-align: center; padding: 20px; grid-column: 1/-1;">Aucun joueur trouvé.</p>';
+                return;
+            }
+
+            players.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '')).forEach(player => {
                 const teamName = player.teamId && window.dataCache.teams[player.teamId] ? window.dataCache.teams[player.teamId].name : 'Non assigné';
                 const birthDate = player.birthDate || '-';
                 const parentName = player.parentName || (player.parentFirstName && player.parentLastName ? player.parentFirstName + ' ' + player.parentLastName : '-');
 
                 const card = document.createElement('div');
                 card.className = 'product-card-admin';
-                card.setAttribute('data-id', doc.id);
+                card.setAttribute('data-id', player.id);
                 card.style.cursor = 'pointer';
 
                 const initials = (player.firstName?.[0] || '?').toUpperCase() + (player.lastName?.[0] || '?').toUpperCase();
@@ -80,8 +79,8 @@ async function loadPlayersDirectory(viewMode = 'grid') {
                     '<i class="fas fa-user" style="width: 16px; margin-right: 5px;"></i> ' + parentName +
                     '</p>' +
                     '<div class="product-actions" style="margin-top: 15px; display: flex; gap: 8px; justify-content: center;">' +
-                    '<button class="btn-action edit-player" data-id="' + doc.id + '" title="Modifier"><i class="fas fa-edit"></i></button>' +
-                    '<button class="btn-danger delete-player" data-id="' + doc.id + '" title="Supprimer"><i class="fas fa-trash"></i></button>' +
+                    '<button class="btn-action edit-player" data-id="' + player.id + '" title="Modifier"><i class="fas fa-edit"></i></button>' +
+                    '<button class="btn-danger delete-player" data-id="' + player.id + '" title="Supprimer"><i class="fas fa-trash"></i></button>' +
                     '</div>';
 
                 gridContainer.appendChild(card);
@@ -90,14 +89,18 @@ async function loadPlayersDirectory(viewMode = 'grid') {
         } else if (viewMode === 'list' && tbody) {
             tbody.innerHTML = '';
 
-            playersSnapshot.forEach(doc => {
-                const player = doc.data();
+            if (players.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Aucun joueur trouvé.</td></tr>';
+                return;
+            }
+
+            players.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '')).forEach(player => {
                 const teamName = player.teamId && window.dataCache.teams[player.teamId] ? window.dataCache.teams[player.teamId].name : 'Non assigné';
                 const birthDate = player.birthDate || '-';
                 const parentName = player.parentName || (player.parentFirstName && player.parentLastName ? player.parentFirstName + ' ' + player.parentLastName : '-');
 
                 const row = document.createElement('tr');
-                row.setAttribute('data-id', doc.id);
+                row.setAttribute('data-id', player.id);
                 row.style.cursor = 'pointer';
 
                 row.innerHTML =
@@ -107,8 +110,8 @@ async function loadPlayersDirectory(viewMode = 'grid') {
                     '<td>' + birthDate + '</td>' +
                     '<td>' + parentName + '</td>' +
                     '<td class="actions-cell">' +
-                    '<button class="btn-action edit-player" data-id="' + doc.id + '" title="Modifier"><i class="fas fa-edit"></i></button>' +
-                    '<button class="btn-danger delete-player" data-id="' + doc.id + '" title="Supprimer" onclick="event.stopPropagation()"><i class="fas fa-trash"></i></button>' +
+                    '<button class="btn-action edit-player" data-id="' + player.id + '" title="Modifier"><i class="fas fa-edit"></i></button>' +
+                    '<button class="btn-danger delete-player" data-id="' + player.id + '" title="Supprimer" onclick="event.stopPropagation()"><i class="fas fa-trash"></i></button>' +
                     '</td>';
 
                 tbody.appendChild(row);
@@ -116,17 +119,12 @@ async function loadPlayersDirectory(viewMode = 'grid') {
         }
 
     } catch (error) {
-        console.error("Error loading players:", error);
-        if (viewMode === 'grid' && gridContainer) {
-            gridContainer.innerHTML = '<p style="text-align: center; padding: 20px;">Erreur de chargement</p>';
-        } else if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Erreur de chargement</td></tr>';
-        }
+        console.error("Error rendering players:", error);
     }
 }
 
 // Add click handlers for edit and delete buttons
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
     // List View Row OR Grid View Card Click
     const clickableItem = e.target.closest('#players-directory-tbody tr') || e.target.closest('.product-card-admin');
     if (clickableItem && !e.target.closest('button') && !e.target.closest('.btn-action') && !e.target.closest('.btn-danger')) {
@@ -173,19 +171,18 @@ document.addEventListener('click', (e) => {
         const btn = e.target.closest('.delete-player');
         const playerId = btn.dataset.id;
 
-        if (confirm('Êtes-vous sûr de vouloir supprimer ce joueur ?')) {
-            window.deleteDoc(window.doc(window.db, 'players', playerId))
-                .then(() => {
-                    alert('Joueur supprimé avec succès');
-                    // Reload the current view
-                    const gridContainer = document.getElementById('players-directory-list');
-                    const isGridView = gridContainer && gridContainer.style.display !== 'none';
-                    loadPlayersDirectory(isGridView ? 'grid' : 'list');
-                })
-                .catch(error => {
-                    console.error('Error deleting player:', error);
-                    alert('Erreur lors de la suppression du joueur');
-                });
+        const confirmed = await window.showConfirm('Êtes-vous sûr de vouloir supprimer ce joueur ?');
+        if (confirmed) {
+            try {
+                await window.deleteDoc(window.doc(window.db, 'players', playerId));
+                // Reload the current view
+                const gridContainer = document.getElementById('players-directory-list');
+                const isGridView = gridContainer && gridContainer.style.display !== 'none';
+                loadPlayersDirectory(isGridView ? 'grid' : 'list');
+            } catch (error) {
+                console.error('Error deleting player:', error);
+                window.showAlert('Erreur lors de la suppression du joueur', 'error');
+            }
         }
     }
 });
@@ -275,12 +272,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (id) {
                     // Update
                     await window.updateDoc(window.doc(window.db, 'players', id), data);
-                    alert('Joueur mis à jour avec succès');
+                    window.showAlert('Joueur mis à jour avec succès', 'success');
                 } else {
                     // Create
                     data.createdAt = window.serverTimestamp();
                     await window.addDoc(window.collection(window.db, 'players'), data);
-                    alert('Joueur créé avec succès');
+                    window.showAlert('Joueur créé avec succès', 'success');
                 }
 
                 if (playerModal) playerModal.classList.remove('active');
@@ -292,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             } catch (error) {
                 console.error("Error saving player:", error);
-                alert("Erreur lors de l'enregistrement: " + error.message);
+                window.showAlert("Erreur lors de l'enregistrement: " + error.message, 'error');
             }
         });
     }

@@ -1,7 +1,7 @@
 // Firebase Configuration
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp, onSnapshot } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { loadBilling } from "./billing.js";
@@ -38,6 +38,10 @@ const dataCache = {
     sponsors: {},
     seasons: {},
     admins: {},
+    matches: {},
+    settings: {}, // Global settings like current_season, boutique
+    campaigns: {},
+    invoices: {},
     currentSeason: null
 };
 
@@ -96,61 +100,6 @@ if (togglePassword && passwordInput) {
         passwordInput.setAttribute('type', type);
         togglePassword.classList.toggle('fa-eye');
         togglePassword.classList.toggle('fa-eye-slash');
-    });
-}
-
-// --- Custom Alert/Confirm Functions ---
-window.showAlert = function (message, type = 'info') {
-    const modal = document.getElementById('custom-alert-modal');
-    const messageEl = document.getElementById('alert-message');
-    const iconEl = document.getElementById('alert-icon');
-
-    messageEl.textContent = message;
-
-    // Change icon based on type
-    if (type === 'success') {
-        iconEl.className = 'fas fa-check-circle';
-        iconEl.style.color = 'var(--success)';
-    } else if (type === 'error') {
-        iconEl.className = 'fas fa-exclamation-circle';
-        iconEl.style.color = 'var(--danger)';
-    } else if (type === 'warning') {
-        iconEl.className = 'fas fa-exclamation-triangle';
-        iconEl.style.color = 'var(--warning)';
-    } else {
-        iconEl.className = 'fas fa-info-circle';
-        iconEl.style.color = 'var(--primary)';
-    }
-
-    modal.classList.add('active');
-}
-
-window.showConfirm = function (message) {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('custom-confirm-modal');
-        const messageEl = document.getElementById('confirm-message');
-        const okBtn = document.getElementById('confirm-ok-btn');
-        const cancelBtn = document.getElementById('confirm-cancel-btn');
-
-        messageEl.textContent = message;
-
-        const cleanup = () => {
-            modal.classList.remove('active');
-            okBtn.onclick = null;
-            cancelBtn.onclick = null;
-        };
-
-        okBtn.onclick = () => {
-            cleanup();
-            resolve(true);
-        };
-
-        cancelBtn.onclick = () => {
-            cleanup();
-            resolve(false);
-        };
-
-        modal.classList.add('active');
     });
 }
 
@@ -366,7 +315,7 @@ function setupDeleteButton(btnClass, collectionName, callback) {
     document.querySelectorAll(btnClass).forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (confirm('Voulez-vous vraiment supprimer cet élément ?')) {
+            if (await showConfirm('Voulez-vous vraiment supprimer cet élément ?')) {
                 const id = e.target.closest('button').getAttribute('data-id');
                 await deleteDoc(doc(db, collectionName, id));
                 callback();
@@ -400,6 +349,129 @@ async function uploadAndSave(collectionName, id, data, imageFile) {
     } else {
         await addDoc(collection(db, collectionName), data);
     }
+}
+
+// --- REAL-TIME SYNCHRONIZATION ---
+let activeUnsubscribes = [];
+
+function syncCollection(collectionName, cacheKey, refreshCallback) {
+    const q = collection(db, collectionName);
+    const unsub = onSnapshot(q, (snapshot) => {
+        dataCache[cacheKey] = {};
+        snapshot.forEach(doc => {
+            dataCache[cacheKey][doc.id] = { id: doc.id, ...doc.data() };
+        });
+        if (refreshCallback) refreshCallback();
+    }, (error) => {
+        console.error(`Error syncing ${collectionName}:`, error);
+    });
+    activeUnsubscribes.push(unsub);
+}
+
+function initRealTimeListeners() {
+    // Clear old listeners if any
+    activeUnsubscribes.forEach(unsub => unsub());
+    activeUnsubscribes = [];
+
+    // Setup Sync for each collection
+    syncCollection("players", "players", () => {
+        const view = document.getElementById('view-players');
+        if (view && view.classList.contains('active')) loadPlayersDirectory();
+        if (typeof updateStats === 'function') updateStats();
+    });
+
+    syncCollection("teams", "teams", () => {
+        const view = document.getElementById('view-teams');
+        if (view && view.classList.contains('active')) loadTeams();
+    });
+
+    syncCollection("matches", "matches", () => {
+        const view = document.getElementById('view-matches');
+        if (view && view.classList.contains('active')) loadMatches();
+        if (window.calendarAPI && document.getElementById('calendar-view')?.style.display !== 'none') {
+            window.calendarAPI.refetchEvents();
+        }
+    });
+
+    syncCollection("fields", "fields", () => {
+        const view = document.getElementById('view-fields');
+        if (view && view.classList.contains('active')) loadFields();
+
+        // Also refresh matches view if active, as calendar depends on fields
+        const matchesView = document.getElementById('view-matches');
+        if (matchesView && matchesView.classList.contains('active') && typeof loadMatches === 'function') {
+            loadMatches();
+        }
+    });
+
+    syncCollection("seasons", "seasons", () => {
+        const view = document.getElementById('view-seasons');
+        if (view && view.classList.contains('active')) loadSeasons();
+        if (typeof loadTeamFilterSeasons === 'function') loadTeamFilterSeasons();
+    });
+
+    syncCollection("settings", "settings", () => {
+        const view = document.getElementById('view-settings');
+        if (view && view.classList.contains('active')) loadSettings();
+    });
+
+    syncCollection("coaches", "coaches", () => {
+        const view = document.getElementById('view-coaches');
+        if (view && view.classList.contains('active')) loadCoaches();
+    });
+
+    syncCollection("referees", "referees", () => {
+        const view = document.getElementById('view-referees');
+        if (view && view.classList.contains('active')) loadReferees();
+    });
+
+    syncCollection("board_members", "board", () => {
+        const view = document.getElementById('view-board');
+        if (view && view.classList.contains('active')) loadBoard();
+    });
+
+    syncCollection("sponsors", "sponsors", () => {
+        const view = document.getElementById('view-sponsors');
+        if (view && view.classList.contains('active')) loadSponsors();
+    });
+
+    syncCollection("inventory", "inventory", () => {
+        const view = document.getElementById('view-inventory');
+        if (view && view.classList.contains('active')) loadInventory();
+        if (typeof updateStats === 'function') updateStats();
+    });
+
+    syncCollection("products", "products", () => {
+        const view = document.getElementById('view-boutique');
+        if (view && view.classList.contains('active')) loadBoutiqueSettings(); // loadProducts is part of it
+        if (typeof updateStats === 'function') updateStats();
+    });
+
+    syncCollection("registrations", "registrations", () => {
+        const view = document.getElementById('view-registrations');
+        if (view && view.classList.contains('active')) loadRegistrations();
+    });
+
+    syncCollection("campaigns", "campaigns", () => {
+        const view = document.getElementById('view-email-campaigns');
+        if (view && view.classList.contains('active') && typeof window.loadCampaigns === 'function') {
+            window.loadCampaigns('all');
+        }
+    });
+
+    syncCollection("invoices", "invoices", () => {
+        const view = document.getElementById('view-billing');
+        if (view && view.classList.contains('active')) loadBilling();
+    });
+
+    syncCollection("scheduled_payments", "scheduled_payments", () => {
+        const view = document.getElementById('view-billing');
+        if (view && view.classList.contains('active')) loadBilling();
+    });
+
+    syncCollection("admins", "admins", () => {
+        if (typeof loadAdmins === 'function') loadAdmins();
+    });
 }
 
 // --- Auth Logic ---
@@ -438,12 +510,12 @@ if (loginForm) {
         forgotBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
-            if (!email) return alert("Entrez votre courriel ci-dessus.");
+            if (!email) return showAlert("Entrez votre courriel ci-dessus.", "warning");
             try {
                 await sendPasswordResetEmail(auth, email);
-                alert("Courriel de réinitialisation envoyé.");
+                showAlert("Courriel de réinitialisation envoyé.", "success");
             } catch (error) {
-                alert("Erreur: " + error.message);
+                showAlert("Erreur: " + error.message, "error");
             }
         });
     }
@@ -470,6 +542,9 @@ onAuthStateChanged(auth, async (user) => {
         if (window.checkAdminAndSetupUI) await window.checkAdminAndSetupUI(user);
 
         document.getElementById('user-email').textContent = user.email;
+
+        // Initialize Real-time Listeners
+        initRealTimeListeners();
 
         // Restore last view
         const lastView = localStorage.getItem('celtics_admin_last_view');
@@ -648,11 +723,11 @@ function setupClickableCard(cardSelector, cacheKey, modalId, idFieldId, populate
                     modal.classList.add('active');
                 } catch (err) {
                     console.error("Error opening modal:", err);
-                    alert("Erreur lors de l'ouverture du détail: " + err.message);
+                    showAlert("Erreur lors de l'ouverture du détail: " + err.message, "error");
                 }
             } else {
                 console.error("DATA NOT FOUND IN CACHE FOR ID:", id);
-                alert("Erreur: Données introuvables en cache pour ID " + id);
+                showAlert("Erreur: Données introuvables en cache pour ID " + id, "error");
             }
         });
     });
@@ -687,7 +762,7 @@ function setupImagePreview(inputId, previewId) {
             if (file) {
                 // Check size immediately on selection for better UX
                 if (file.size > 5 * 1024 * 1024) {
-                    alert("L'image est trop volumineuse (Max 5MB).");
+                    showAlert("L'image est trop volumineuse (Max 5MB).", "warning");
                     this.value = ''; // clear input
                     preview.innerHTML = '';
                     return;
@@ -758,7 +833,7 @@ document.getElementById('board-form')?.addEventListener('submit', async (e) => {
         loadBoard();
     } catch (err) {
         console.error(err);
-        alert("Erreur lors de l'enregistrement :\n" + (err.message || err));
+        showAlert("Erreur lors de l'enregistrement :\n" + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -766,16 +841,11 @@ document.getElementById('board-form')?.addEventListener('submit', async (e) => {
 
 async function loadBoard() {
     const list = document.getElementById('board-list');
+    if (!list) return;
     if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
-    list.innerHTML = '<p>Chargement...</p>';
-
-    const q = query(collection(db, "board_members"), orderBy("order", "asc"));
-    const snapshot = await getDocs(q);
     list.innerHTML = '';
-    const boardList = [];
-    snapshot.forEach(doc => {
-        boardList.push({ id: doc.id, ...doc.data() });
-    });
+
+    const boardList = Object.values(dataCache.board || {});
 
     const sortBy = document.getElementById('board-sort')?.value || 'name';
 
@@ -863,7 +933,7 @@ document.getElementById('referee-form')?.addEventListener('submit', async (e) =>
         loadReferees();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -872,19 +942,15 @@ document.getElementById('referee-form')?.addEventListener('submit', async (e) =>
 async function loadReferees() {
     const list = document.getElementById('referees-list');
     if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
-    list.innerHTML = '<p>Chargement...</p>';
 
-    const q = query(collection(db, "referees"), orderBy("name", "asc"));
-    const snapshot = await getDocs(q);
+    const refList = Object.values(dataCache.referees || {});
+    const matches = Object.values(dataCache.matches || {});
 
-    // Fetch all matches to calculate stats
-    const matchSnap = await getDocs(collection(db, "matches"));
     const refCounts = {};
     dataCache.allMatches = []; // Store for modal
 
-    matchSnap.forEach(mDoc => {
-        const m = mDoc.data();
-        dataCache.allMatches.push({ id: mDoc.id, ...m });
+    matches.forEach(m => {
+        dataCache.allMatches.push({ id: m.id, ...m });
 
         // Filter by current season for stats
         if (dataCache.currentSeason && m.seasonId !== dataCache.currentSeason) {
@@ -901,12 +967,11 @@ async function loadReferees() {
     });
 
     list.innerHTML = '';
-    dataCache.referees = {};
 
-    const refList = [];
-    snapshot.forEach(doc => {
-        refList.push({ id: doc.id, ...doc.data() });
-    });
+    if (refList.length === 0) {
+        list.innerHTML = '<p>Aucun arbitre.</p>';
+        return;
+    }
 
     const sortBy = document.getElementById('ref-sort')?.value || 'name';
 
@@ -923,8 +988,6 @@ async function loadReferees() {
     });
 
     refList.forEach(data => {
-        dataCache.referees[data.id] = data;
-
         const count = refCounts[data.id] || 0;
         const isInactive = data.visible === false;
         const displayName = isInactive ? `${data.name} <small style="color:red">(Inactif)</small>` : data.name;
@@ -1013,7 +1076,7 @@ async function loadReferees() {
             const matchId = matchSelect.value;
             const role = document.getElementById('ref-assign-role-select').value;
 
-            if (!matchId) return alert("Veuillez choisir un match.");
+            if (!matchId) return showAlert("Veuillez choisir un match.", "warning");
 
             const match = dataCache.allMatches.find(m => m.id === matchId);
             if (!match) return;
@@ -1022,7 +1085,7 @@ async function loadReferees() {
             if ((match.refCenter === refId && role !== 'refCenter') ||
                 (match.refAsst1 === refId && role !== 'refAsst1') ||
                 (match.refAsst2 === refId && role !== 'refAsst2')) {
-                if (!confirm("Cet arbitre est déjà assigné à ce match dans un autre rôle. Voulez-vous changer son rôle ?")) return;
+                if (!await showConfirm("Cet arbitre est déjà assigné à ce match dans un autre rôle. Voulez-vous changer son rôle ?")) return;
             }
 
             try {
@@ -1044,10 +1107,10 @@ async function loadReferees() {
                 });
 
                 renderMatchesList();
-                alert("Match assigné avec succès !");
+                showAlert("Match assigné avec succès !", "success");
             } catch (e) {
                 console.error(e);
-                alert("Erreur lors de l'assignation : " + e.message);
+                showAlert("Erreur lors de l'assignation : " + e.message, "error");
             }
         };
 
@@ -1091,7 +1154,7 @@ document.getElementById('product-form')?.addEventListener('submit', async (e) =>
         updateStats();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -1099,18 +1162,16 @@ document.getElementById('product-form')?.addEventListener('submit', async (e) =>
 
 async function loadProducts() {
     const list = document.getElementById('products-list');
+    if (!list) return;
     if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
-    list.innerHTML = '<p>Chargement...</p>';
-
-    const snapshot = await getDocs(collection(db, "products"));
     list.innerHTML = '';
-    dataCache.products = {};
 
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        dataCache.products[doc.id] = data;
-        const card = createCard(data.imageUrl, data.name, `$${data.price}`, doc.id, 'edit-prod', 'delete-prod');
-        card.setAttribute('data-id', doc.id);
+    const products = Object.values(dataCache.products || {});
+
+    products.forEach(data => {
+        const id = data.id;
+        const card = createCard(data.imageUrl, data.name, `$${data.price}`, id, 'edit-prod', 'delete-prod');
+        card.setAttribute('data-id', id);
         card.classList.add('prod-card');
         list.appendChild(card);
     });
@@ -1150,23 +1211,16 @@ async function populateCoachSelect(selectId, selectedId = null) {
     const sel = document.getElementById(selectId);
     if (!sel) return;
 
-    if (!dataCache.coaches || Object.keys(dataCache.coaches).length === 0) {
-        const cSnap = await getDocs(collection(db, "coaches"));
-        dataCache.coaches = {};
-        cSnap.forEach(doc => dataCache.coaches[doc.id] = doc.data());
-    }
+    const coaches = Object.values(dataCache.coaches || {});
 
     sel.innerHTML = '<option value="">-- Aucun --</option>';
 
-    const items = [];
-    Object.keys(dataCache.coaches).forEach(key => {
-        const c = dataCache.coaches[key];
-        const displayName = c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Inconnu';
-        items.push({ id: key, name: displayName });
-    });
-    items.sort((a, b) => a.name.localeCompare(b.name));
+    const items = coaches.map(c => ({
+        id: c.id,
+        name: c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Inconnu'
+    }));
 
-    items.forEach(c => {
+    items.sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.id;
         opt.textContent = c.name;
@@ -1179,21 +1233,16 @@ async function populateSeasonSelect(selectId, selectedId = null) {
     const sel = document.getElementById(selectId);
     if (!sel) return;
 
-    if (!dataCache.seasons || Object.keys(dataCache.seasons).length === 0) {
-        const snapshot = await getDocs(collection(db, "seasons"));
-        dataCache.seasons = {};
-        snapshot.forEach(doc => dataCache.seasons[doc.id] = doc.data());
-    }
+    const seasons = Object.values(dataCache.seasons || {});
 
     sel.innerHTML = '<option value="">-- Choisir une saison --</option>';
 
-    const items = [];
-    Object.keys(dataCache.seasons).forEach(key => {
-        items.push({ id: key, name: dataCache.seasons[key].name || 'Saison Sans Nom' });
-    });
-    items.sort((a, b) => a.name.localeCompare(b.name));
+    const items = seasons.map(s => ({
+        id: s.id,
+        name: s.name || `${s.type || ''} ${s.year || ''}` || 'Saison Sans Nom'
+    }));
 
-    items.forEach(s => {
+    items.sort((a, b) => b.name.localeCompare(a.name)).forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.id;
         opt.textContent = s.name;
@@ -1253,12 +1302,15 @@ document.getElementById('team-form')?.addEventListener('submit', async (e) => {
         let finalName = baseName;
 
         // Handle duplicates (Equipe 1, 2...)
-        const qDup = query(collection(db, "teams"), where("seasonId", "==", seasonId), where("category", "==", category), where("gender", "==", gender));
-        const snapDup = await getDocs(qDup);
+        const snapDup = Object.values(dataCache.teams || {}).filter(t =>
+            t.seasonId === seasonId &&
+            t.category === category &&
+            t.gender === gender
+        );
 
         let countSame = 0;
-        snapDup.forEach(doc => {
-            if (doc.id !== id) countSame++;
+        snapDup.forEach(t => {
+            if (t.id !== id) countSame++;
         });
 
         if (countSame > 0) {
@@ -1283,7 +1335,7 @@ document.getElementById('team-form')?.addEventListener('submit', async (e) => {
         loadTeams();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -1295,18 +1347,19 @@ const teamFilterSeason = document.getElementById('team-filter-season');
 async function loadTeamFilterSeasons() {
     if (!teamFilterSeason) return;
 
+    const currentVal = teamFilterSeason.value;
     teamFilterSeason.innerHTML = '<option value="">Toutes les saisons</option>';
 
     try {
-        const q = query(collection(db, "seasons"), orderBy("year", "desc"));
-        const snapshot = await getDocs(q);
-
-        snapshot.forEach(doc => {
-            const season = doc.data();
+        const seasons = Object.values(dataCache.seasons || {});
+        seasons.sort((a, b) => (b.year || 0) - (a.year || 0)).forEach(season => {
             const option = document.createElement('option');
-            option.value = doc.id;
+            option.value = season.id;
             option.textContent = season.name || `${season.type === 'summer' ? 'Été' : 'Hiver'} ${season.year}`;
-            if (season.active) {
+
+            if (currentVal) {
+                if (season.id === currentVal) option.selected = true;
+            } else if (season.active) {
                 option.selected = true;
             }
             teamFilterSeason.appendChild(option);
@@ -1334,50 +1387,36 @@ async function loadTeams() {
     list.innerHTML = '<p>Chargement...</p>';
 
     try {
-        // Load filter seasons first
-        await loadTeamFilterSeasons();
-
         const selectedSeason = teamFilterSeason?.value || '';
 
-        let q;
+        // Filter from cache
+        let teamsArr = Object.values(dataCache.teams);
         if (selectedSeason) {
-            // Filter by season only, sort client-side to avoid composite index requirement
-            q = query(collection(db, "teams"), where("seasonId", "==", selectedSeason));
-        } else {
-            q = query(collection(db, "teams"));
+            teamsArr = teamsArr.filter(t => t.seasonId === selectedSeason);
         }
-
-        const snapshot = await getDocs(q);
-
-        // Load coaches and seasons for display
-        const coachesSnap = await getDocs(collection(db, "coaches"));
-        const seasonsSnap = await getDocs(collection(db, "seasons"));
 
         const coachesMap = {};
         const seasonsMap = {};
 
-        coachesSnap.forEach(doc => {
-            const coach = doc.data();
-            coachesMap[doc.id] = (coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`).trim() || 'Inconnu';
+        Object.values(dataCache.coaches).forEach(coach => {
+            coachesMap[coach.id] = (coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`).trim() || 'Inconnu';
         });
 
-        seasonsSnap.forEach(doc => {
-            const season = doc.data();
-            seasonsMap[doc.id] = season.name || `${season.type === 'summer' ? 'Été' : 'Hiver'} ${season.year}`;
+        Object.values(dataCache.seasons).forEach(season => {
+            seasonsMap[season.id] = season.name || `${season.type === 'summer' ? 'Été' : 'Hiver'} ${season.year}`;
         });
 
         list.innerHTML = '';
-        dataCache.teams = {};
 
-        if (snapshot.empty) {
+        if (teamsArr.length === 0) {
             list.innerHTML = '<p>Aucune équipe trouvée.</p>';
             return;
         }
 
         // Convert to array
         let teams = [];
-        snapshot.forEach(doc => {
-            teams.push({ id: doc.id, data: doc.data() });
+        teamsArr.forEach(t => {
+            teams.push({ id: t.id, data: t });
         });
 
         // Define Category Order
@@ -1431,8 +1470,6 @@ async function loadTeams() {
             col.appendChild(cardsContainer);
 
             groupTeams.forEach(({ id, data }) => {
-                dataCache.teams[id] = data;
-
                 let coachNames = 'Non assigné';
                 if (data.coachIds && Array.isArray(data.coachIds) && data.coachIds.length > 0) {
                     coachNames = data.coachIds.map(cid => coachesMap[cid] || 'N/A').join(', ');
@@ -1495,21 +1532,10 @@ async function populateTeamPlayerSelect(selectId) {
     const sel = document.getElementById(selectId);
     if (!sel) return;
 
-    sel.innerHTML = '<option value="">Chargement...</option>';
+    sel.innerHTML = '<option value="">Sélectionner un joueur...</option>';
 
     try {
-        // Fetch all players to filter client-side (more flexible for "unassigned")
-        const q = query(collection(db, "players"));
-        const snapshot = await getDocs(q);
-
-        const players = [];
-        snapshot.forEach(doc => {
-            const p = doc.data();
-            // Only include players NOT assigned to a team
-            if (!p.teamId) {
-                players.push({ id: doc.id, ...p });
-            }
-        });
+        const players = Object.values(dataCache.players || {}).filter(p => !p.teamId);
 
         // Sort by name
         players.sort((a, b) => {
@@ -1540,8 +1566,8 @@ document.getElementById('btn-add-player-to-team')?.addEventListener('click', asy
     const playerSelect = document.getElementById('team-add-player-select');
     const playerId = playerSelect.value;
 
-    if (!teamId) return alert("Aucune équipe sélectionnée.");
-    if (!playerId) return alert("Veuillez sélectionner un joueur.");
+    if (!teamId) return showAlert("Aucune équipe sélectionnée.", "warning");
+    if (!playerId) return showAlert("Veuillez sélectionner un joueur.", "warning");
 
     const btn = document.getElementById('btn-add-player-to-team');
     const originalIcon = btn.innerHTML;
@@ -1556,7 +1582,7 @@ document.getElementById('btn-add-player-to-team')?.addEventListener('click', asy
         playerSelect.value = '';
     } catch (e) {
         console.error("Error adding player to team:", e);
-        alert("Erreur: " + e.message);
+        showAlert("Erreur: " + e.message, "error");
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalIcon;
@@ -1567,21 +1593,15 @@ async function loadTeamPlayers(teamId) {
     const container = document.getElementById('team-players-list');
     if (!container || !teamId) return;
 
-    container.innerHTML = '<p>Chargement...</p>';
+    container.innerHTML = '';
 
     try {
-        const q = query(collection(db, "players"), where("teamId", "==", teamId));
-        const snapshot = await getDocs(q);
+        const players = Object.values(dataCache.players || {}).filter(p => p.teamId === teamId);
 
-        container.innerHTML = '';
-
-        if (snapshot.empty) {
+        if (players.length === 0) {
             container.innerHTML = '<p style="color:#888; font-style:italic;">Aucun joueur assigné.</p>';
             return;
         }
-
-        const players = [];
-        snapshot.forEach(doc => players.push({ id: doc.id, ...doc.data() }));
 
         // Sort by name
         players.sort((a, b) => {
@@ -1608,14 +1628,14 @@ async function loadTeamPlayers(teamId) {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const playerId = btn.getAttribute('data-player-id');
-                if (confirm('Retirer ce joueur de l\'équipe?')) {
+                if (await showConfirm('Retirer ce joueur de l\'équipe?')) {
                     try {
                         await updateDoc(doc(db, "players", playerId), { teamId: null });
                         loadTeamPlayers(teamId);
                         populateTeamPlayerSelect('team-add-player-select'); // Make available again
                     } catch (error) {
                         console.error("Error removing player:", error);
-                        alert("Erreur: " + error.message);
+                        showAlert("Erreur: " + error.message, "error");
                     }
                 }
             });
@@ -1630,125 +1650,6 @@ async function loadTeamPlayers(teamId) {
 
 
 
-async function loadPlayersDirectory(searchTerm = '') {
-    const tbody = document.getElementById('players-directory-tbody');
-    if (!tbody) return;
-
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Chargement...</td></tr>';
-
-    // Ensure teams are cached for team name display
-    if (!dataCache.teams || Object.keys(dataCache.teams).length === 0) {
-        try {
-            const teamsSnap = await getDocs(collection(db, "teams"));
-            dataCache.teams = {};
-            teamsSnap.forEach(doc => {
-                dataCache.teams[doc.id] = doc.data();
-            });
-        } catch (e) {
-            console.error("Error pre-loading teams for player directory:", e);
-        }
-    }
-
-    try {
-        // Fetch all players to avoid index issues or missing fields
-        const q = query(collection(db, "players"));
-        const snapshot = await getDocs(q);
-        // Clear cache and repopulate to avoid stale/deleted players
-        dataCache.players = {};
-        console.log("Fetched players count:", snapshot.size);
-
-        tbody.innerHTML = '';
-        const term = (searchTerm || document.getElementById('player-search')?.value || '').toLowerCase();
-
-        if (snapshot.empty) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Aucun joueur trouvé.</td></tr>';
-            return;
-        }
-
-        const docs = [];
-        snapshot.forEach(doc => docs.push(doc));
-
-        // Sort by name (fallback to lastName)
-        docs.sort((a, b) => {
-            const dA = a.data();
-            const dB = b.data();
-            const nA = (dA.name || dA.lastName || '').toLowerCase();
-            const nB = (dB.name || dB.lastName || '').toLowerCase();
-            return nA.localeCompare(nB);
-        });
-
-        let count = 0;
-        docs.forEach(doc => {
-            const data = doc.data();
-            dataCache.players[doc.id] = { id: doc.id, ...data }; // Cache player with ID
-
-            // Filter client-side
-            const fullName = (data.name || `${data.firstName || ''} ${data.lastName || ''}`).toLowerCase();
-            if (term && !fullName.includes(term)) return;
-
-            count++;
-            const teamName = data.teamId && dataCache.teams[data.teamId] ? dataCache.teams[data.teamId].name : 'Non assigné';
-
-            // Handle name splitting for display if only 'name' exists
-            let fName = data.firstName || '';
-            let lName = data.lastName || '';
-            if (!fName && !lName && data.name) {
-                const parts = data.name.split(' ');
-                if (parts.length > 0) fName = parts[0];
-                if (parts.length > 1) lName = parts.slice(1).join(' ');
-            }
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${lName}</td>
-                <td>${fName}</td>
-                <td>${teamName}</td>
-                <td>${data.birthDate || data.birthYear || '-'}</td>
-                <td>${data.parentEmail || '-'}</td>
-                <td>
-                    <button class="btn-action edit-player-dir" data-id="${doc.id}" style="background:var(--primary); color:white; padding:4px 8px; border-radius:4px; border:none; cursor:pointer;"><i class="fas fa-edit"></i></button>
-                    <button class="btn-action delete-player-dir" data-id="${doc.id}" style="background:#e74c3c; color:white; padding:4px 8px; border-radius:4px; border:none; cursor:pointer;"><i class="fas fa-trash"></i></button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        if (count === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Aucun résultat pour cette recherche.</td></tr>';
-        }
-
-        // Setup Actions
-        document.querySelectorAll('.edit-player-dir').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.target.closest('button').getAttribute('data-id');
-                // Ensure openPlayerModal is defined (it is below)
-                if (typeof openPlayerModal === 'function') openPlayerModal(id);
-                else {
-                    // Fallback if not yet defined/hoisted (though function declarations are hoisted)
-                    console.warn("openPlayerModal not ready");
-                }
-            });
-        });
-
-        document.querySelectorAll('.delete-player-dir').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                if (!confirm("Supprimer ce joueur ?")) return;
-                const id = e.target.closest('button').getAttribute('data-id');
-                try {
-                    await deleteDoc(doc(db, "players", id));
-                    loadPlayersDirectory(term);
-                } catch (err) {
-                    alert("Erreur: " + err.message);
-                }
-            });
-        });
-
-    } catch (error) {
-        console.error("Error loading players directory:", error);
-        tbody.innerHTML = `<tr><td colspan="6" style="color:red; text-align:center;">Erreur: ${error.message}</td></tr>`;
-    }
-}
-
 // --- PLAYERS LOGIC ---
 const playerModal = document.getElementById('player-modal');
 const openPlayerModalBtn = document.getElementById('open-player-modal');
@@ -1758,12 +1659,7 @@ async function populateTeamSelect(selectedId = null) {
     const sel = document.getElementById('player-team');
     if (!sel) return;
 
-    // ensure teams loaded
-    if (!dataCache.teams || Object.keys(dataCache.teams).length === 0) {
-        const snap = await getDocs(collection(db, "teams"));
-        dataCache.teams = {};
-        snap.forEach(d => dataCache.teams[d.id] = d.data());
-    }
+    const teamsArr = Object.values(dataCache.teams || {});
 
     sel.innerHTML = '<option value="">-- Aucune --</option>';
     const items = [];
@@ -1836,7 +1732,7 @@ document.getElementById('player-form')?.addEventListener('submit', async (e) => 
         if (typeof updateStats === 'function') updateStats();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -1857,18 +1753,12 @@ async function loadPlayers() {
     }
     if (!targetList) return;
 
-    targetList.innerHTML = '<p>Chargement...</p>';
-    const snapshot = await getDocs(collection(db, "players"));
     targetList.innerHTML = '';
-    window.allPlayers = [];
-    dataCache.players = {};
+    const players = Object.values(dataCache.players || {});
 
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        window.allPlayers.push({ id: doc.id, ...data });
-        dataCache.players[doc.id] = data;
-
-        const subtitle = `Niveau: ${data.skill} | ${data.pos}`;
+    players.forEach(data => {
+        const id = data.id;
+        const subtitle = `Niveau: ${data.skill || '?'} | ${data.pos || '?'}`;
 
         const card = createCard(data.imageUrl, data.name, subtitle, doc.id, 'edit-player', 'delete-player', 'fa-user-graduate');
         card.setAttribute('data-id', doc.id);
@@ -1934,16 +1824,8 @@ function switchToInventoryStockTab() {
 }
 
 async function ensurePeopleData() {
-    if (!dataCache.players || Object.keys(dataCache.players).length === 0) {
-        const pSnap = await getDocs(collection(db, "players"));
-        dataCache.players = {};
-        pSnap.forEach(doc => dataCache.players[doc.id] = { id: doc.id, ...doc.data() });
-    }
-    if (!dataCache.coaches || Object.keys(dataCache.coaches).length === 0) {
-        const cSnap = await getDocs(collection(db, "coaches"));
-        dataCache.coaches = {};
-        cSnap.forEach(doc => dataCache.coaches[doc.id] = doc.data());
-    }
+    // dataCache is handled by real-time listeners
+    return Promise.resolve();
 }
 
 if (openInvModalBtn) openInvModalBtn.addEventListener('click', () => {
@@ -2017,7 +1899,7 @@ document.getElementById('inventory-batch-form')?.addEventListener('submit', asyn
     let actualCount = 0;
     const totalCount = endNum - startNum + 1;
 
-    if (!confirm(`Vous allez créer environ ${totalCount} articles (moins les exclusions éventuelles). Continuer ?`)) return;
+    if (!await showConfirm(`Vous allez créer environ ${totalCount} articles (moins les exclusions éventuelles). Continuer ?`)) return;
 
     const batchId = 'batch_' + Date.now();
     setLoading(form, true);
@@ -2111,7 +1993,7 @@ document.getElementById('inventory-form')?.addEventListener('submit', async (e) 
         updateStats();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -2131,19 +2013,14 @@ async function loadInventory() {
     }
     if (!targetList) return;
 
-    targetList.innerHTML = '<p>Chargement...</p>';
-    await ensurePeopleData();
-
-    const snapshot = await getDocs(collection(db, "inventory"));
+    // Use Cache
+    const items = Object.values(dataCache.inventory || {});
     targetList.innerHTML = '';
-    dataCache.inventory = {};
-    const items = [];
-    snapshot.forEach(doc => {
-        const d = doc.data();
-        d.id = doc.id;
-        items.push(d);
-        dataCache.inventory[doc.id] = d;
-    });
+
+    if (items.length === 0) {
+        targetList.innerHTML = '<p style="text-align:center; padding: 20px;">Aucun article inventorié.</p>';
+        return;
+    }
 
     // --- RENDER SINGLES & BATCHES AS ITEMS ---
     // We group by CATEGORY now
@@ -2308,7 +2185,7 @@ async function loadInventory() {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const bid = btn.getAttribute('data-id');
-            if (confirm("Supprimer tout ce lot d'articles ? Cette action est irréversible.")) {
+            if (await showConfirm("Supprimer tout ce lot d'articles ? Cette action est irréversible.")) {
                 try {
                     const toDelete = items.filter(item => item.batchId === bid);
                     for (const item of toDelete) {
@@ -2335,7 +2212,7 @@ async function loadInventory() {
             const allItems = Object.values(dataCache.inventory);
             const batchItems = allItems.filter(item => item.batchId === batchId);
 
-            if (batchItems.length === 0) return alert("Erreur: Lot vide.");
+            if (batchItems.length === 0) return showAlert("Erreur: Lot vide.", "error");
 
             batchItems.sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0));
             const first = batchItems[0];
@@ -2378,7 +2255,7 @@ async function loadInventory() {
                 delBatchBtn.parentNode.replaceChild(newBtn, delBatchBtn);
 
                 newBtn.addEventListener('click', async () => {
-                    if (confirm("Voulez-vous vraiment supprimer tout ce lot (" + batchItems.length + " articles) ? Cette action est irréversible.")) {
+                    if (await showConfirm("Voulez-vous vraiment supprimer tout ce lot (" + batchItems.length + " articles) ? Cette action est irréversible.")) {
                         try {
                             setLoading(document.getElementById('inventory-form'), true);
                             for (const item of batchItems) {
@@ -2481,7 +2358,7 @@ async function loadInventory() {
             });
 
             card.querySelector('.btn-delete-individual').addEventListener('click', async () => {
-                if (confirm(`Supprimer définitivement l'article n°${item.number} de ce lot ?`)) {
+                if (await showConfirm(`Supprimer définitivement l'article n°${item.number} de ce lot ?`)) {
                     try {
                         const row = card.closest('.batch-item-row');
                         row.style.opacity = '0.5';
@@ -2793,7 +2670,7 @@ document.getElementById('registration-form-admin')?.addEventListener('submit', a
         loadRegistrations();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -2806,33 +2683,25 @@ async function loadRegistrations() {
     // Filter values
     const searchText = document.getElementById('reg-search')?.value.toLowerCase() || '';
 
-    tbody.innerHTML = '<tr><td colspan="5">Chargement...</td></tr>';
-
-    // Ensure teams loaded for filter dropdown
-    if (!dataCache.teams || Object.keys(dataCache.teams).length === 0) {
-        const tSnap = await getDocs(collection(db, 'teams'));
-        dataCache.teams = {};
-        tSnap.forEach(d => dataCache.teams[d.id] = d.data());
-    }
-
-
-    // Ensure seasons loaded for header display
-    if (!dataCache.seasons || Object.keys(dataCache.seasons).length === 0) {
-        const sSnap = await getDocs(collection(db, 'seasons'));
-        dataCache.seasons = {};
-        sSnap.forEach(d => dataCache.seasons[d.id] = d.data());
-    }
-
-    const q = query(collection(db, "registrations"), orderBy("timestamp", "desc"));
-    const snapshot = await getDocs(q);
-
     tbody.innerHTML = '';
-    dataCache.registrations = {};
+
+    const regs = Object.values(dataCache.registrations || {});
+
+    if (regs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">Aucune inscription trouvée.</td></tr>';
+        return;
+    }
+
+    // Sort by timestamp desc
+    regs.sort((a, b) => {
+        const tA = a.timestamp?.seconds || 0;
+        const tB = b.timestamp?.seconds || 0;
+        return tB - tA;
+    });
 
     let count = 0;
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        dataCache.registrations[doc.id] = data;
+    regs.forEach(data => {
+        const id = data.id;
 
 
         const fullName = `${data.childFirstName} ${data.childLastName}`.toLowerCase();
@@ -2843,8 +2712,24 @@ async function loadRegistrations() {
 
         const row = document.createElement('tr');
         row.style.cursor = 'pointer';
-        row.setAttribute('data-id', doc.id);
+        row.setAttribute('data-id', id);
         row.className = 'reg-row';
+
+        let s = data.status || 'Nouveau';
+        // Translate legacy English values for display
+        if (s === 'New') s = 'Nouveau';
+        if (s === 'Migrated') s = 'Migré';
+        if (s === 'Paid') s = 'Payé';
+        if (s === 'Confirmed') s = 'Confirmé';
+        if (s === 'Completed') s = 'Terminé';
+        if (s === 'Cancelled') s = 'Annulé';
+
+        let statusHtml = '';
+        let color = '#7f8c8d';
+        if (s === 'Migré') color = '#27ae60'; // Green
+        else if (s === 'Payé') color = '#f39c12'; // Orange
+        else if (s === 'Nouveau') color = '#3498db'; // Blue
+        statusHtml = `<span style="padding: 2px 8px; border-radius: 12px; background: ${color}; color: white; font-size: 0.75rem; font-weight: bold;">${s}</span>`;
 
         // Get active season info if needed
         let seasonText = '';
@@ -2855,7 +2740,7 @@ async function loadRegistrations() {
 
         const headerEl = document.getElementById('reg-view-header');
         if (headerEl) {
-            headerEl.innerHTML = `Demandes d'inscription <span style="font-size:0.9rem; color:#666; font-weight:normal;">(${seasonText} - ${snapshot.size} inscrits)</span>`;
+            headerEl.innerHTML = `Demandes d'inscription <span style="font-size:0.9rem; color:#666; font-weight:normal;">(${seasonText} - ${regs.length} inscrits)</span>`;
         }
 
         row.innerHTML = `<td>${date}</td>
@@ -2866,10 +2751,11 @@ async function loadRegistrations() {
                 `<strong>${data.program || data.programCat || ''}</strong>`
             }
                          </td>
+                         <td>${statusHtml}</td>
                          <td>${data.parentFirstName} ${data.parentLastName}</td>
                          <td class="actions-cell">
                              <a href="mailto:${data.email}" class="btn-action" title="Envoyer courriel" onclick="event.stopPropagation()"><i class="fas fa-envelope"></i></a>
-                             <button class="delete-reg" data-id="${doc.id}" title="Supprimer" onclick="event.stopPropagation()"><i class="fas fa-trash"></i></button>
+                             <button class="delete-reg" data-id="${id}" title="Supprimer" onclick="event.stopPropagation()"><i class="fas fa-trash"></i></button>
                          </td>`;
         tbody.appendChild(row);
         count++;
@@ -2885,6 +2771,14 @@ async function loadRegistrations() {
         document.getElementById('reg-dob').value = data.dob || '';
         document.getElementById('reg-gender').value = data.gender || 'M';
         document.getElementById('reg-medical').value = data.medical || '';
+        document.getElementById('reg-price').value = data.price || '';
+
+        let s = data.status || 'Nouveau';
+        if (s === 'New') s = 'Nouveau';
+        if (s === 'Migrated') s = 'Migré';
+        if (s === 'Paid') s = 'Payé';
+        if (s === 'Confirmed') s = 'Confirmé';
+        document.getElementById('reg-status').value = s;
 
         // Parents
         document.getElementById('reg-parent1-name').value = data.parent1Name || `${data.parentFirstName || ''} ${data.parentLastName || ''}`.trim();
@@ -2927,58 +2821,8 @@ if (migrateBtn) {
     console.error("Migrate button NOT FOUND");
 }
 
-// --- HELPER WRAPPERS FOR CUSTOM MODALS ---
-function showConfirm(message, title = "Confirmation") {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('generic-confirm-modal');
-        document.getElementById('generic-confirm-title').innerText = title;
-        document.getElementById('generic-confirm-message').innerText = message;
-
-        modal.classList.add('active');
-
-        const btnOk = document.getElementById('generic-confirm-ok');
-        const btnCancel = document.getElementById('generic-confirm-cancel');
-
-        // Clone to remove old listeners
-        const newBtnOk = btnOk.cloneNode(true);
-        const newBtnCancel = btnCancel.cloneNode(true);
-        btnOk.parentNode.replaceChild(newBtnOk, btnOk);
-        btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
-
-        newBtnOk.addEventListener('click', () => {
-            modal.classList.remove('active');
-            resolve(true);
-        });
-
-        newBtnCancel.addEventListener('click', () => {
-            modal.classList.remove('active');
-            resolve(false);
-        });
-    });
-}
-
-function showAlert(message, title = "Information") {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('generic-alert-modal');
-        document.getElementById('generic-alert-title').innerText = title;
-        document.getElementById('generic-alert-message').innerText = message;
-
-        modal.classList.add('active');
-
-        const btnOk = document.getElementById('generic-alert-ok');
-        const newBtnOk = btnOk.cloneNode(true);
-        btnOk.parentNode.replaceChild(newBtnOk, btnOk);
-
-        newBtnOk.addEventListener('click', () => {
-            modal.classList.remove('active');
-            resolve(true);
-        });
-
-        // Also close on x close-modal (if present, usually generic class handles hiding but we need resolve)
-        // For safety we can rely on just btnOk or adding a generic listener that resolves.
-        // But for "Alert" simple click OK is enough.
-    });
-}
+// --- REUSE GLOBAL UTILS ---
+// (Logic here now uses window.showAlert and window.showConfirm from ui-utils.js)
 
 async function migrateRegistrations() {
     if (!await showConfirm("Voulez-vous lancer l'analyse pour la migration des inscriptions vers la base de joueurs ?", "Démarrer Migration")) return;
@@ -2987,52 +2831,40 @@ async function migrateRegistrations() {
     setLoading(container, true);
 
     try {
-        // 1. Fetch Candidates (New, Confirmed, Paid)
-        const qReg = query(collection(db, "registrations"), where("status", "in", ["New", "Confirmed", "Paid"]));
-        const snapReg = await getDocs(qReg);
+        // 1. Use Cache for Candidates (Payé only as requested)
+        const candidates = Object.values(dataCache.registrations || {}).filter(r => r.status === "Payé");
 
-        if (snapReg.empty) {
-            await showAlert("Aucune inscription éligible (New, Confirmed, Paid) trouvée.");
+        if (candidates.length === 0) {
+            await showAlert("Aucune inscription éligible (Payée) trouvée.");
             setLoading(container, false);
             return;
         }
 
         // 2a. Fetch Active Season & Teams (Auto-Assign Logic)
-        console.log("Fetching active season and teams...");
+        console.log("Using active season and teams from cache...");
         let activeTeams = [];
-        try {
-            // Find active season
-            const qSeason = query(collection(db, "seasons"), where("active", "==", true));
-            const snapSeason = await getDocs(qSeason);
-            if (!snapSeason.empty) {
-                const seasonId = snapSeason.docs[0].id;
-                const qTeams = query(collection(db, "teams"), where("seasonId", "==", seasonId));
-                const snapTeams = await getDocs(qTeams);
-                snapTeams.forEach(t => activeTeams.push({ id: t.id, ...t.data() }));
-            }
-        } catch (e) {
-            console.error("Error fetching teams for auto-assign:", e);
+        const activeSeason = Object.values(dataCache.seasons || {}).find(s => s.active);
+        if (activeSeason) {
+            const seasonId = activeSeason.id;
+            activeTeams = Object.values(dataCache.teams || {}).filter(t => t.seasonId === seasonId);
         }
 
         // 2b. Fetch Existing Players (for dedupe)
-        console.log("Fetching existing players for deduplication...");
-        const snapPlayers = await getDocs(collection(db, "players"));
-        const players = [];
-        snapPlayers.forEach(d => {
-            const data = d.data();
+        console.log("Using existing players from cache for deduplication...");
+        const playersArr = Object.values(dataCache.players || {});
+        const players = playersArr.map(data => {
             // Normalize for comparison
             const name = (data.name || `${data.firstName || ''} ${data.lastName || ''}`).toLowerCase().trim();
             const parent = (data.parentName || data.parentFirstName || '').toLowerCase().trim();
-            players.push({ id: d.id, name, parent });
+            return { id: data.id, name, parent };
         });
 
         // 3. Analyze
         const conflicts = [];
         const toMigrate = [];
 
-        snapReg.forEach(doc => {
-            const r = doc.data();
-            const rId = doc.id;
+        candidates.forEach(r => {
+            const rId = r.id;
 
             const rFirst = (r.childFirstName || '').trim();
             const rLast = (r.childLastName || '').trim();
@@ -3068,13 +2900,14 @@ async function migrateRegistrations() {
             showMigrationConflictModal(conflicts, toMigrate, activeTeams);
         } else {
             if (await showConfirm(`${toMigrate.length} joueurs prêts à être migrés. Confirmer ?`)) {
-                await executeMigration(toMigrate, activeTeams);
+                const listWithAction = toMigrate.map(x => ({ ...x, action: 'migrate' }));
+                await executeMigration(listWithAction, activeTeams);
             }
         }
 
     } catch (e) {
         console.error("Migration Error:", e);
-        await showAlert("Erreur lors de l'analyse: " + e.message, "Erreur");
+        await showAlert("Erreur lors de l'analyse: " + e.message, "error");
         setLoading(container, false);
     }
 }
@@ -3097,7 +2930,7 @@ function showMigrationConflictModal(conflicts, cleanList, activeTeams) {
             </td>
             <td>
                 <select class="form-control migration-decision" data-id="${c.regId}" style="font-size:0.9rem; padding: 5px;">
-                    <option value="skip">Ignorer (Déjà fait)</option>
+                    <option value="skip">Marquer comme déjà migré</option>
                     <option value="force">Forcer la création (Homonyme)</option>
                 </select>
             </td>
@@ -3121,20 +2954,24 @@ function showMigrationConflictModal(conflicts, cleanList, activeTeams) {
 
     newBtn.addEventListener('click', async () => {
         // Gather decisions
-        const finalToMigrate = [...cleanList];
+        const finalToMigrate = cleanList.map(x => ({ ...x, action: 'migrate' }));
         const selects = document.querySelectorAll('.migration-decision');
         selects.forEach(sel => {
             const val = sel.value;
             const rid = sel.getAttribute('data-id');
+            const c = conflicts.find(x => x.regId === rid);
+            if (!c) return;
+
             if (val === 'force') {
-                const c = conflicts.find(x => x.regId === rid);
-                if (c) finalToMigrate.push({ id: rid, data: c.regData });
+                finalToMigrate.push({ id: rid, data: c.regData, action: 'migrate' });
+            } else if (val === 'skip') {
+                finalToMigrate.push({ id: rid, data: c.regData, action: 'statusOnly' });
             }
         });
 
         modal.classList.remove('active');
         if (finalToMigrate.length === 0) {
-            await showAlert("Aucune migration effectuée.");
+            await showAlert("Aucune action effectuée.");
             return;
         }
 
@@ -3154,75 +2991,78 @@ async function executeMigration(list, activeTeams = []) {
     try {
         for (const item of list) {
             const r = item.data;
+            const rid = item.id;
 
-            // Auto-Assign Logic
-            let assignedTeamId = '';
-            if (activeTeams.length > 0) {
-                const regCat = (r.programCat || r.program || '').trim();
-                const regGender = (r.gender || '').trim();
+            if (item.action === 'migrate') {
+                // Auto-Assign Logic
+                let assignedTeamId = '';
+                if (activeTeams.length > 0) {
+                    const regCat = (r.programCat || r.program || '').trim();
+                    const regGender = (r.gender || '').trim();
 
-                // Find matching team
-                const match = activeTeams.find(t =>
-                    (t.category === regCat) &&
-                    (t.gender === regGender)
-                );
+                    // Find matching team
+                    const match = activeTeams.find(t =>
+                        (t.category === regCat) &&
+                        (t.gender === regGender)
+                    );
 
-                if (match) assignedTeamId = match.id;
+                    if (match) assignedTeamId = match.id;
+                }
+
+                // Map Fields
+                const newPlayer = {
+                    firstName: r.childFirstName,
+                    lastName: r.childLastName,
+                    name: `${r.childFirstName} ${r.childLastName}`,
+                    dob: r.dob || '',
+                    year: r.dob ? parseInt(r.dob.split('-')[0]) : (r.yearOfBirth || new Date().getFullYear()),
+                    gender: r.gender || '',
+                    medical: r.medical || '',
+
+                    parentName: r.parent1Name || '',
+                    parentFirstName: r.parentFirstName || (r.parent1Name ? r.parent1Name.split(' ')[0] : ''),
+                    parentLastName: r.parentLastName || (r.parent1Name ? r.parent1Name.split(' ').slice(1).join(' ') : ''),
+                    parentEmail: r.parent1Email || r.email || '',
+                    phone: r.phoneFamily || r.phone || '',
+
+                    address: r.addressLine || '',
+                    city: r.city || '',
+                    postalCode: r.postalCode || '',
+
+                    jerseySize: r.jerseySize || '',
+                    shortSize: r.shortSize || '',
+                    socksSize: r.socksSize || '',
+
+                    teamId: assignedTeamId || r.teamId || '',
+                    photoAuth: r.photoAuth || '',
+
+                    sourceRegistrationId: rid,
+                    createdAt: new Date(),
+                    skill: 1, // Default to lowest skill or unrated
+                    pos: 'TBD', // Default pos
+                    status: 'Active'
+                };
+
+                // Add to Players
+                await addDoc(collection(db, "players"), newPlayer);
             }
 
-            // Map Fields
-            const newPlayer = {
-                firstName: r.childFirstName,
-                lastName: r.childLastName,
-                name: `${r.childFirstName} ${r.childLastName}`,
-                dob: r.dob || '',
-                year: r.dob ? parseInt(r.dob.split('-')[0]) : (r.yearOfBirth || new Date().getFullYear()),
-                gender: r.gender || '',
-                medical: r.medical || '',
-
-                parentName: r.parent1Name || '',
-                parentFirstName: r.parentFirstName || (r.parent1Name ? r.parent1Name.split(' ')[0] : ''),
-                parentLastName: r.parentLastName || (r.parent1Name ? r.parent1Name.split(' ').slice(1).join(' ') : ''),
-                parentEmail: r.parent1Email || r.email || '',
-                phone: r.phoneFamily || r.phone || '',
-
-                address: r.addressLine || '',
-                city: r.city || '',
-                postalCode: r.postalCode || '',
-
-                jerseySize: r.jerseySize || '',
-                shortSize: r.shortSize || '',
-                socksSize: r.socksSize || '',
-
-                teamId: assignedTeamId || r.teamId || '',
-                photoAuth: r.photoAuth || '',
-
-                sourceRegistrationId: item.id,
-                createdAt: new Date(),
-                skill: 1, // Default to lowest skill or unrated
-                pos: 'TBD', // Default pos
-                status: 'Active'
-            };
-
-            // Add to Players
-            await addDoc(collection(db, "players"), newPlayer);
-
-            // Update Registration
-            await updateDoc(doc(db, "registrations", item.id), {
-                status: 'Migrated'
+            // Update Registration Status to Migré for both 'migrate' and 'statusOnly'
+            await updateDoc(doc(db, "registrations", rid), {
+                status: 'Migré'
             });
 
             processed++;
         }
 
-        await showAlert(`Migration terminée avec succès ! ${processed} joueurs créés.`, "Succès");
+        await showAlert(`Migration terminée avec succès ! ${processed} joueurs créés.`, "success");
         loadRegistrations(); // Refresh UI
         // Refresh Players if needed (e.g. if we add a notification)
         updateStats();
 
     } catch (e) {
         console.error(e);
-        await showAlert(`Erreur partielle après ${processed} éléments : ${e.message}`, "Erreur");
+        await showAlert(`Erreur partielle après ${processed} éléments : ${e.message}`, "error");
     } finally {
         setLoading(container, false);
     }
@@ -3233,11 +3073,15 @@ async function executeMigration(list, activeTeams = []) {
 
 // --- Rest of General Logic ---
 async function updateStats() {
-    const list = ['products', 'players', 'inventory'];
-    for (const c of list) {
-        const snap = await getDocs(collection(db, c));
-        const el = document.getElementById(`stat-${c}`);
-        if (el) el.innerText = snap.size;
+    const list = {
+        'products': 'products',
+        'players': 'players',
+        'inventory': 'inventory'
+    };
+    for (const [key, cacheKey] of Object.entries(list)) {
+        const count = Object.keys(dataCache[cacheKey] || {}).length;
+        const el = document.getElementById(`stat-${key}`);
+        if (el) el.innerText = count;
     }
 }
 
@@ -3261,13 +3105,12 @@ async function loadDashboardData() {
     // Run updateStats in background
     updateStats().catch(err => console.error("Stats Update Error:", err));
 
-    // 1. Season Task (Needed for some but let's not block other widgets)
+    // 1. Season Task
     const seasonTask = wrap("Season", async () => {
         if (!dataCache.currentSeason) {
-            const qActive = query(collection(db, "seasons"), where("active", "==", true));
-            const snapActive = await getDocs(qActive);
-            if (!snapActive.empty) {
-                dataCache.currentSeason = snapActive.docs[0].id;
+            const activeSeason = Object.values(dataCache.seasons || {}).find(s => s.active);
+            if (activeSeason) {
+                dataCache.currentSeason = activeSeason.id;
             }
         }
     });
@@ -3275,11 +3118,8 @@ async function loadDashboardData() {
     // 2. Players Task
     const playersTask = wrap("Players", async () => {
         const playersCountEl = document.getElementById('dash-players-count');
-        const qPlayers = query(collection(db, "players"));
-        const snapPlayers = await getDocs(qPlayers);
-        dataCache.players = {};
-        snapPlayers.forEach(doc => dataCache.players[doc.id] = doc.data());
-        if (playersCountEl) playersCountEl.textContent = `${snapPlayers.size} joueurs au total`;
+        const playersCount = Object.keys(dataCache.players || {}).length;
+        if (playersCountEl) playersCountEl.textContent = `${playersCount} joueurs au total`;
     });
 
     // 3. Coaches Task
@@ -3287,19 +3127,14 @@ async function loadDashboardData() {
         const coachContainer = document.getElementById('dash-coach-alerts');
         if (!coachContainer) return;
 
-        coachContainer.innerHTML = '<p style="text-align:center;">Analyse des données...</p>';
-        const snapCoaches = await getDocs(collection(db, "coaches"));
-        dataCache.coaches = {};
-        snapCoaches.forEach(doc => dataCache.coaches[doc.id] = doc.data());
-
         coachContainer.innerHTML = '';
+        const coaches = Object.values(dataCache.coaches || {});
         const now = new Date();
         const sixMonthsFromNow = new Date();
         sixMonthsFromNow.setMonth(now.getMonth() + 6);
 
         let alertCount = 0;
-        snapCoaches.forEach(doc => {
-            const c = doc.data();
+        coaches.forEach(c => {
             const expiry = c.policeExpiry ? new Date(c.policeExpiry) : null;
             const displayName = c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Inconnu';
 
@@ -3324,26 +3159,20 @@ async function loadDashboardData() {
         if (!refTbody) return;
 
         refTbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Calcul...</td></tr>';
-        const [snapMatches, snapRefs] = await Promise.all([
-            getDocs(collection(db, "matches")),
-            getDocs(collection(db, "referees"))
-        ]);
 
-        dataCache.referees = {};
-        snapRefs.forEach(doc => dataCache.referees[doc.id] = doc.data());
+        const matches = Object.values(dataCache.matches || {});
+        const referees = Object.values(dataCache.referees || {});
 
         const refCounts = {};
-        snapMatches.forEach(doc => {
-            const m = doc.data();
+        matches.forEach(m => {
             [m.refCenter, m.refAsst1, m.refAsst2].forEach(id => {
                 if (id) refCounts[id] = (refCounts[id] || 0) + 1;
             });
         });
 
         refTbody.innerHTML = '';
-        snapRefs.forEach(doc => {
-            const r = doc.data();
-            const count = refCounts[doc.id] || 0;
+        referees.forEach(r => {
+            const count = refCounts[r.id] || 0;
             const fullName = r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Inconnu';
             refTbody.innerHTML += `<tr><td>${fullName}</td><td style="text-align:center; font-weight:bold;">${count}</td></tr>`;
         });
@@ -3365,7 +3194,6 @@ if (openAdminModalBtn) openAdminModalBtn.addEventListener('click', () => {
     document.getElementById('admin-form').reset();
     document.getElementById('admin-id').value = '';
     document.getElementById('admin-preset-roles').value = 'custom';
-    document.getElementById('is-referee-link').checked = false;
     setLoading(document.getElementById('admin-form'), false);
     adminModal.classList.add('active');
 });
@@ -3400,24 +3228,6 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
             });
         }
 
-        // Handle Referee Linkage
-        const isReferee = document.getElementById('is-referee-link').checked;
-        if (isReferee) {
-            // Check if already in referees collection
-            const qRef = query(collection(db, "referees"), where("email", "==", email));
-            const snapRef = await getDocs(qRef);
-            if (snapRef.empty) {
-                // Auto-create referee profile
-                await addDoc(collection(db, "referees"), {
-                    name: name,
-                    email: email,
-                    visible: true,
-                    unavails: ""
-                });
-                console.log("Auto-created referee profile for", email);
-            }
-        }
-
         if (roles.length === 0) throw new Error("Veuillez sélectionner au moins une permission ou le rôle Super Admin.");
 
         const data = { email, name, role: roles };
@@ -3433,7 +3243,7 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
         loadAdmins();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -3446,7 +3256,6 @@ document.getElementById('admin-preset-roles')?.addEventListener('change', (e) =>
     // Reset all to none
     document.querySelectorAll('.permissions-grid input[value="none"]').forEach(r => r.checked = true);
     document.getElementById('role-superadmin').checked = false;
-    document.getElementById('is-referee-link').checked = false;
 
     const setPerm = (mod, level) => {
         const rad = document.querySelector(`input[name="perm-${mod}"][value="${level}"]`);
@@ -3467,7 +3276,6 @@ document.getElementById('admin-preset-roles')?.addEventListener('change', (e) =>
             break;
         case 'arbitre-general':
             setPerm('Matchs', 'view');
-            document.getElementById('is-referee-link').checked = true;
             break;
         case 'tresorier':
             setPerm('Facturation', 'edit');
@@ -3480,21 +3288,17 @@ async function loadAdmins() {
     const table = document.getElementById('admins-table')?.querySelector('tbody');
     if (!table) return;
 
-    table.innerHTML = '<tr><td colspan="4">Chargement...</td></tr>';
-
     try {
-        // Fetch Firestore Admins
-        const snapshot = await getDocs(collection(db, "admins"));
+        const admins = Object.values(dataCache.admins || {});
         table.innerHTML = '';
-        dataCache.admins = {};
 
-        if (snapshot.empty) {
+        if (admins.length === 0) {
             table.innerHTML = '<tr><td colspan="4">Aucun administrateur trouvé.</td></tr>';
+            return;
         }
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            dataCache.admins[doc.id] = data;
+        admins.forEach(data => {
+            const id = data.id;
             const row = document.createElement('tr');
 
             // Handle legacy strings vs modern arrays
@@ -3516,8 +3320,8 @@ async function loadAdmins() {
                 <td>${data.name}</td>
                 <td>${rolesHtml}</td>
                 <td>
-                    <button class="btn-icon edit-admin" data-id="${doc.id}" style="margin-right:8px;"><i class="fas fa-edit"></i></button>
-                    <button class="btn-icon delete-admin" data-id="${doc.id}" style="color:red;"><i class="fas fa-trash"></i></button>
+                    <button class="btn-icon edit-admin" data-id="${data.id}" style="margin-right:8px;"><i class="fas fa-edit"></i></button>
+                    <button class="btn-icon delete-admin" data-id="${data.id}" style="color:red;"><i class="fas fa-trash"></i></button>
                 </td>
             `;
             table.appendChild(row);
@@ -3536,7 +3340,6 @@ async function loadAdmins() {
 
                     // Reset Checks & Radios
                     document.getElementById('role-superadmin').checked = false;
-                    document.getElementById('is-referee-link').checked = false;
                     document.querySelectorAll('.permissions-grid input[value="none"]').forEach(r => r.checked = true);
 
                     const rolesArray = Array.isArray(data.role) ? data.role : [data.role];
@@ -3558,13 +3361,6 @@ async function loadAdmins() {
                         });
                     }
 
-                    // Check if referee profile exists
-                    const qRef = query(collection(db, "referees"), where("email", "==", data.email));
-                    const snapRef = await getDocs(qRef);
-                    if (!snapRef.empty) {
-                        document.getElementById('is-referee-link').checked = true;
-                    }
-
                     adminModal.classList.add('active');
                 }
             });
@@ -3573,13 +3369,13 @@ async function loadAdmins() {
         // Setup Delete
         table.querySelectorAll('.delete-admin').forEach(btn => {
             btn.addEventListener('click', async () => {
-                if (confirm("Supprimer cet administrateur ?")) {
+                if (await showConfirm("Supprimer cet administrateur ?")) {
                     const id = btn.getAttribute('data-id');
                     try {
                         await deleteDoc(doc(db, "admins", id));
                         loadAdmins();
                     } catch (e) {
-                        alert("Erreur: " + e.message);
+                        showAlert("Erreur: " + e.message, "error");
                     }
                 }
             });
@@ -3591,21 +3387,21 @@ async function loadAdmins() {
 }
 
 async function getUserRole(email) {
-    // 1. Hardcoded SuperAdmins (God Mode)
+    if (!email) return [];
     const lowerEmail = email.toLowerCase();
     const hardcodedSuperAdmins = ['admin@celtics.com', 'celtics.portneuf@gmail.com', 'bensult78@gmail.com'];
     if (hardcodedSuperAdmins.includes(lowerEmail)) return ['SuperAdmin'];
 
-    // 2. Check Firestore
+    // 2. Check Cache
     try {
-        const q = query(collection(db, "admins"), where("email", "==", lowerEmail));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-            const roleData = snapshot.docs[0].data().role;
+        const admins = Object.values(dataCache.admins || {});
+        const admin = admins.find(a => a.email && a.email.toLowerCase() === lowerEmail);
+        if (admin) {
+            const roleData = admin.role;
             return Array.isArray(roleData) ? roleData : [roleData]; // Always array
         }
     } catch (e) {
-        console.warn("Error checking admin role:", e);
+        console.warn("Error checking admin roles from cache:", e);
     }
     return []; // No roles
 }
@@ -3614,29 +3410,18 @@ async function getUserRole(email) {
 async function ensureBenjaminInDb() {
     const email = "bensult78@gmail.com";
     try {
-        // Use email as doc ID for easier FireStore Rules lookup
-        const benRef = doc(db, "admins", email);
-        const snap = await getDoc(benRef);
-        if (!snap.exists()) {
-            await setDoc(benRef, {
-                email: email,
-                name: "Benjamin Sultan",
-                role: ["SuperAdmin"]
-            });
-            console.log("Benjamin auto-added to DB with email ID");
+        const admins = Object.values(dataCache.admins || {});
+        const benAdmin = admins.find(a => a.email === email);
+        if (!benAdmin) {
+            // Still need to write to DB if missing
+            const benRef = doc(db, "admins", email);
+            await setDoc(benRef, { email, name: "Benjamin Sultan", role: ["SuperAdmin"] });
         }
 
-        // Also ensure referee profile
-        const qRef = query(collection(db, "referees"), where("email", "==", email));
-        const snapRef = await getDocs(qRef);
-        if (snapRef.empty) {
-            await addDoc(collection(db, "referees"), {
-                name: "Benjamin Sultan",
-                email: email,
-                visible: true,
-                unavails: ""
-            });
-            console.log("Benjamin referee profile created");
+        const referees = Object.values(dataCache.referees || {});
+        const benRefProfile = referees.find(r => r.email === email);
+        if (!benRefProfile) {
+            await addDoc(collection(db, "referees"), { name: "Benjamin Sultan", email, visible: true, unavails: "" });
         }
     } catch (e) {
         console.error("Auto-add Benjamin failed", e);
@@ -3661,10 +3446,10 @@ window.checkAdminAndSetupUI = async (user) => {
     // Also check if user is a referee
     window.currentUserRefereeId = null;
     try {
-        const qr = query(collection(db, "referees"), where("email", "==", user.email));
-        const refSnap = await getDocs(qr);
-        if (!refSnap.empty) {
-            window.currentUserRefereeId = refSnap.docs[0].id;
+        const referees = Object.values(dataCache.referees || {});
+        const refEntry = referees.find(r => r.email && r.email.toLowerCase() === user.email.toLowerCase());
+        if (refEntry) {
+            window.currentUserRefereeId = refEntry.id;
             console.log("Logged in as Referee:", window.currentUserRefereeId);
         } else {
             console.log("Not recognized as a Referee for email:", user.email);
@@ -3837,7 +3622,7 @@ document.getElementById('coach-form')?.addEventListener('submit', async (e) => {
         loadCoaches();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -3847,23 +3632,11 @@ async function loadCoaches() {
     const list = document.getElementById('coaches-list');
     if (!list) return;
 
-    list.innerHTML = '<p>Chargement...</p>';
     if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) {
         list.classList.add('view-grid');
     }
 
-    const q = query(collection(db, "coaches"));
-    const snapshot = await getDocs(q);
-    list.innerHTML = '';
-    dataCache.coaches = {};
-
-    const coachesList = [];
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        dataCache.coaches[doc.id] = data;
-        coachesList.push({ id: doc.id, ...data });
-    });
-
+    const coachesList = Object.values(dataCache.coaches || {});
     const sortBy = document.getElementById('coach-sort')?.value || 'name';
 
     // Sorting Logic
@@ -3926,14 +3699,11 @@ async function loadCoaches() {
         // Load assigned inventory
         const invList = document.getElementById('coach-inventory-list');
         if (invList) {
-            invList.innerHTML = '<p>Chargement...</p>';
+            invList.innerHTML = '';
             try {
-                const qInv = query(collection(db, "inventory"), where("assignedTo", "==", coachId), where("assignedType", "==", "coach"));
-                const snapInv = await getDocs(qInv);
-                invList.innerHTML = '';
-                if (snapInv.empty) invList.innerText = "Aucun inventaire assigné.";
-                snapInv.forEach(d => {
-                    const item = d.data();
+                const items = Object.values(dataCache.inventory || {}).filter(item => item.assignedTo === coachId && item.assignedType === "coach");
+                if (items.length === 0) invList.innerText = "Aucun inventaire assigné.";
+                items.forEach(item => {
                     const div = document.createElement('div');
                     div.style.borderBottom = "1px solid #eee"; div.style.padding = "4px";
                     div.innerHTML = `<strong>${item.name}</strong> <small>(Qté: 1)</small>`;
@@ -3942,26 +3712,16 @@ async function loadCoaches() {
             } catch (e) { console.error(e); invList.innerText = "Erreur chargement inventaire."; }
         }
 
-        // Load assigned teams (Support array-contains for coachIds)
+        // Load assigned teams
         const teamList = document.getElementById('coach-teams-list');
         if (teamList) {
-            teamList.innerHTML = '<p>Chargement...</p>';
+            teamList.innerHTML = '';
             try {
-                const qTeam = query(collection(db, "teams"), where("coachIds", "array-contains", coachId));
-                const snapTeam = await getDocs(qTeam);
-
-                // Fallback for legacy single coachId if needed, but array-contains is safer if we migrated
-                // If we want to be super safe we could do two queries or client filter, but let's stick to new standard.
-
-                teamList.innerHTML = '';
-                if (snapTeam.empty) {
+                const teams = Object.values(dataCache.teams || {}).filter(t => t.coachIds && t.coachIds.includes(coachId));
+                if (teams.length === 0) {
                     teamList.innerText = "Aucune équipe.";
-
-                    // Optional: Check legacy field if array query failed to find anything? 
-                    // Unlikely needed if we save correctly.
                 } else {
-                    snapTeam.forEach(d => {
-                        const t = d.data();
+                    teams.forEach(t => {
                         const div = document.createElement('div');
                         div.innerHTML = `<strong>${t.name}</strong> <small>(${t.category})</small>`;
                         div.style.borderBottom = "1px solid #eee"; div.style.padding = "4px";
@@ -4010,10 +3770,10 @@ if (saveBoutiqueBtn) {
                 description: quillBoutique ? quillBoutique.root.innerHTML : ''
             };
             await setDoc(doc(db, "settings", "boutique"), data);
-            alert("Configuration boutique sauvegardée !");
+            showAlert("Configuration boutique sauvegardée !", "success");
         } catch (e) {
             console.error(e);
-            alert("Erreur: " + e.message);
+            showAlert("Erreur: " + e.message, "error");
         } finally {
             saveBoutiqueBtn.disabled = false;
             saveBoutiqueBtn.innerHTML = '<i class="fas fa-save"></i> Sauvegarder';
@@ -4036,10 +3796,13 @@ function addPriceRow(data) {
     const cat = data ? data.category : "Timbits";
     const price = data ? data.price : 75;
 
+    const inputStyle = 'width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:6px; outline:none; font-size: 0.95rem;';
+    const smallInputStyle = 'width:100px; padding:8px 12px; border:1px solid #ddd; border-radius:6px; outline:none; font-size: 0.95rem;';
+
     tr.innerHTML = `
-        <td><input type="text" class="price-year" value="${year}" style="width:80px;"></td>
-        <td><input type="text" class="price-cat" value="${cat}"></td>
-        <td><input type="number" class="price-val" value="${price}" style="width:80px;"></td>
+        <td><input type="text" class="price-year" value="${year}" style="${smallInputStyle}"></td>
+        <td><input type="text" class="price-cat" value="${cat}" style="${inputStyle}"></td>
+        <td><input type="number" class="price-val" value="${price}" style="${smallInputStyle}"></td>
         <td><button class="btn-icon text-danger remove-row"><i class="fas fa-trash"></i></button></td>
     `;
 
@@ -4060,7 +3823,7 @@ if (saveSettingsBtn) {
             const targetYear = document.getElementById('reg-target-year').value;
 
             if (regOpen) {
-                if (!confirm(`CONFIRMATION REQUISE :\n\nVous êtes sur le point d'OUVRIR les inscriptions pour la saison :\n${targetSeason} ${targetYear}\n\nConfirmez-vous cette action ?`)) {
+                if (!await showConfirm(`CONFIRMATION REQUISE :\n\nVous êtes sur le point d'OUVRIR les inscriptions pour la saison :\n${targetSeason} ${targetYear}\n\nConfirmez-vous cette action ?`)) {
                     saveSettingsBtn.disabled = false;
                     saveSettingsBtn.innerHTML = '<i class="fas fa-save"></i> Sauvegarder Tout';
                     return;
@@ -4102,7 +3865,7 @@ if (saveSettingsBtn) {
                     if (statusEl) statusEl.innerHTML = '<span style="color:green"><i class="fas fa-check"></i> Fichier prêt</span>';
                 } catch (err) {
                     console.error("Size Guide Upload Failed:", err);
-                    alert("Erreur lors de l'envoi du guide de tailles: " + err.message);
+                    showAlert("Erreur lors de l'envoi du guide de tailles: " + err.message, "error");
                     if (statusEl) statusEl.innerHTML = '<span style="color:red">Échec de l\'envoi</span>';
                     saveSettingsBtn.disabled = false;
                     saveSettingsBtn.innerHTML = '<i class="fas fa-save"></i> Sauvegarder Tout';
@@ -4121,11 +3884,11 @@ if (saveSettingsBtn) {
             document.getElementById('setting-size-guide').value = '';
 
             await loadSettings(); // REFRESH UI
-            alert("Configuration sauvegardée avec succès !");
+            showAlert("Configuration sauvegardée avec succès !", "success");
 
         } catch (e) {
             console.error(e);
-            alert("Erreur de sauvegarde: " + e.message);
+            showAlert("Erreur de sauvegarde: " + e.message, "error");
         } finally {
             saveSettingsBtn.disabled = false;
             saveSettingsBtn.innerHTML = '<i class="fas fa-save"></i> Sauvegarder Tout';
@@ -4135,11 +3898,9 @@ if (saveSettingsBtn) {
 
 async function loadSettings() {
     try {
-        const docRef = doc(db, "settings", "current_season");
-        const docSnap = await getDoc(docRef);
+        const data = dataCache.settings?.current_season;
 
-        if (docSnap.exists()) {
-            const data = docSnap.data();
+        if (data) {
             document.getElementById('reg-status-toggle').checked = data.registrationOpen || false;
             document.getElementById('reg-target-season').value = data.targetSeason || 'Été';
             document.getElementById('reg-target-year').value = data.targetYear || '2025';
@@ -4225,7 +3986,7 @@ if (btnDeleteMatch) {
         const id = document.getElementById('match-id').value;
         if (!id) return;
 
-        if (confirm("Êtes-vous sûr de vouloir supprimer ce match ? Cette action est irréversible.")) {
+        if (await showConfirm("Êtes-vous sûr de vouloir supprimer ce match ? Cette action est irréversible.")) {
             try {
                 setLoading(btnDeleteMatch.parentElement, true);
                 await deleteDoc(doc(db, "matches", id));
@@ -4233,7 +3994,7 @@ if (btnDeleteMatch) {
                 loadMatches();
             } catch (err) {
                 console.error("Error deleting match:", err);
-                alert("Erreur lors de la suppression: " + err.message);
+                showAlert("Erreur lors de la suppression: " + err.message, "error");
             } finally {
                 setLoading(btnDeleteMatch.parentElement, false);
             }
@@ -4261,18 +4022,14 @@ async function loadFieldsIntoAddSelect() {
     if (!sel) return;
 
     try {
-        const q = query(collection(db, "fields"), orderBy("name", "asc"));
-        const snapshot = await getDocs(q);
+        const fieldsData = Object.values(dataCache.fields || {});
 
-        // Store fields in cache for later use
-        if (!dataCache.fields) dataCache.fields = {};
+        fieldsData.sort((a, b) => a.name.localeCompare(b.name));
 
         sel.innerHTML = '<option value="">Ajouter un terrain...</option>';
-        snapshot.forEach(doc => {
-            const f = doc.data();
-            dataCache.fields[doc.id] = f;
+        fieldsData.forEach(f => {
             const opt = document.createElement('option');
-            opt.value = doc.id;
+            opt.value = f.id;
             opt.textContent = f.name + (f.location ? ` (${f.location})` : '');
             sel.appendChild(opt);
         });
@@ -4319,12 +4076,12 @@ document.getElementById('btn-add-match-field')?.addEventListener('click', () => 
     const fieldId = sel.value;
 
     if (!fieldId) {
-        alert('Veuillez sélectionner un terrain');
+        showAlert('Veuillez sélectionner un terrain', 'warning');
         return;
     }
 
     if (selectedMatchFields.includes(fieldId)) {
-        alert('Ce terrain est déjà ajouté');
+        showAlert('Ce terrain est déjà ajouté', 'warning');
         return;
     }
 
@@ -4335,8 +4092,9 @@ document.getElementById('btn-add-match-field')?.addEventListener('click', () => 
 
 async function loadRefereesIntoSelects(matchData = null) {
     // Populate the 3 selects with referee names
-    const q = query(collection(db, "referees"), orderBy("name", "asc"));
-    const snapshot = await getDocs(q);
+    const refereesData = Object.values(dataCache.referees || {});
+
+    refereesData.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     // Get list of available refs for this match
     const availableRefs = matchData?.availableRefs || [];
@@ -4347,13 +4105,12 @@ async function loadRefereesIntoSelects(matchData = null) {
         if (!sel) return;
         // Keep first option
         sel.innerHTML = '<option value="">-- Non assigné --</option>';
-        snapshot.forEach(doc => {
-            const r = doc.data();
+        refereesData.forEach(r => {
             const opt = document.createElement('option');
-            opt.value = doc.id; // Store ID
+            opt.value = r.id; // Store ID
 
             let name = r.name;
-            if (availableRefs.includes(doc.id)) {
+            if (availableRefs.includes(r.id)) {
                 name += " (DISPO)";
             }
             opt.textContent = name;
@@ -4384,6 +4141,7 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
             date: document.getElementById('match-date').value,
             time: document.getElementById('match-time').value,
             endTime: document.getElementById('match-end-time').value,
+            type: document.getElementById('match-type').value,
             category: document.getElementById('match-category').value,
             opponent: document.getElementById('match-opponent').value,
             fieldIds: selectedMatchFields, // Array of field IDs
@@ -4416,7 +4174,7 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
 
             if (conflicts.length > 0) {
                 const conflictMsg = conflicts.map(c => `- ${c.time}-${c.endTime || c.time} : ${c.category} vs ${c.opponent}`).join('\n');
-                if (!confirm(`⚠️ CONFLIT D'HORAIRE !\n\nIl y a déjà des matchs sur ces terrains :\n${conflictMsg}\n\nSauvegarder quand même ?`)) {
+                if (!await showConfirm(`⚠️ CONFLIT D'HORAIRE !\n\nIl y a déjà des matchs sur ces terrains :\n${conflictMsg}\n\nSauvegarder quand même ?`)) {
                     setLoading(form, false);
                     return;
                 }
@@ -4434,7 +4192,7 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
         loadMatches();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -4446,32 +4204,10 @@ async function loadMatches(skipFetch = false) {
 
     if (!calEl) return;
 
-    if (!skipFetch) {
-        // Reset view + Spinner only if NOT skipping fetch
-        calEl.innerHTML = '<div style="padding: 20px; text-align: center;"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Chargement du calendrier...</div>';
-
-        try {
-            // 1. Fetch Data
-            const matchesSnap = await getDocs(collection(db, "matches"));
-            const refereesSnap = await getDocs(collection(db, "referees"));
-            const fieldsSnap = await getDocs(collection(db, "fields"));
-
-            dataCache.matches = {};
-            matchesSnap.forEach(d => dataCache.matches[d.id] = { id: d.id, ...d.data() });
-
-            dataCache.referees = {};
-            refereesSnap.forEach(d => dataCache.referees[d.id] = { id: d.id, ...d.data() });
-
-            dataCache.fields = {};
-            fieldsSnap.forEach(d => dataCache.fields[d.id] = { id: d.id, ...d.data() });
-        } catch (e) {
-            console.error("Error loading matches:", e);
-            calEl.innerHTML = `<div class="alert alert-danger">Erreur: ${e.message}</div>`;
-            return;
-        }
-    }
-
     try {
+        // We rely on dataCache.matches, dataCache.referees, dataCache.fields being populated
+        // by the centralized onSnapshot listeners in initRealTimeListeners.
+
         const activeFields = Object.values(dataCache.fields).filter(f => f.active !== false);
         activeFields.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -4511,7 +4247,7 @@ async function loadMatches(skipFetch = false) {
             document.getElementById('match-time').value = data.time;
             document.getElementById('match-category').value = data.category;
             document.getElementById('match-opponent').value = data.opponent;
-            window.selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
+            selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
             renderMatchFieldTags();
             document.getElementById('match-ref-center').value = data.refCenter || '';
             document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
@@ -4618,9 +4354,38 @@ function renderDaySection(container, date, fields) {
                     evt.style.height = `calc(${heightFactor} * 100% - 4px)`;
                     evt.style.minHeight = `calc(100% - 4px)`;
 
+                    // Color based on type
+                    const mType = match.type || 'match';
+                    if (mType === 'practice') {
+                        evt.style.background = '#e67e22'; // Orange
+                        evt.style.borderLeft = '4px solid #d35400';
+                        evt.style.color = 'white';
+                    } else if (mType === 'unavailable') {
+                        evt.style.background = '#7f8c8d'; // Gray
+                        evt.style.borderLeft = '4px solid #2c3e50';
+                        evt.style.color = 'white';
+                        evt.style.opacity = '0.9';
+                    } else {
+                        // Match (default) - uses standard green/primary or existing CSS
+                        evt.style.background = 'var(--primary)';
+                        evt.style.borderLeft = '4px solid #1e8449';
+                        evt.style.color = 'white';
+                    }
+
+                    let eventTitle = `${match.category} vs ${match.opponent}`;
+                    let eventMeta = `<i class="fas fa-user"></i> ${match.refCenter ? 'Arbitres OK' : 'Pas d\'arbitre'}`;
+
+                    if (mType === 'practice') {
+                        eventTitle = `Pratique (${match.category})`;
+                        eventMeta = '<i class="fas fa-running"></i> Entraînement';
+                    } else if (mType === 'unavailable') {
+                        eventTitle = 'Indisponible';
+                        eventMeta = '<i class="fas fa-ban"></i> Fermé';
+                    }
+
                     evt.innerHTML = `
-                        <div class="grid-event-title">${match.category} vs ${match.opponent}</div>
-                        <div class="grid-event-meta"><i class="fas fa-user"></i> ${match.refCenter ? 'Arbitres OK' : 'Pas d\'arbitre'}</div>
+                        <div class="grid-event-title">${eventTitle}</div>
+                        <div class="grid-event-meta">${eventMeta}</div>
                         <div class="resize-handle"></div>
                     `;
 
@@ -4825,15 +4590,17 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
         document.getElementById('match-date').value = data.date;
         document.getElementById('match-time').value = data.time;
         document.getElementById('match-end-time').value = data.endTime || '';
+        document.getElementById('match-type').value = data.type || 'match';
         document.getElementById('match-category').value = data.category;
         document.getElementById('match-opponent').value = data.opponent;
-        window.selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
+        selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
         document.getElementById('match-ref-center').value = data.refCenter || '';
         document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
         document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
         document.getElementById('match-played').checked = data.played || false;
     } else {
         document.getElementById('match-date').value = date || '';
+        document.getElementById('match-type').value = 'match';
         document.getElementById('match-time').value = time || '18:00';
 
         // Default end time using settings
@@ -4848,7 +4615,7 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
             document.getElementById('match-end-time').value = minutesToTime(endMins);
         }
 
-        window.selectedMatchFields = fieldId ? [fieldId] : [];
+        selectedMatchFields = fieldId ? [fieldId] : [];
     }
 
     loadRefereesIntoSelects(data).then(() => {
@@ -4893,7 +4660,7 @@ async function toggleMatchAvailability(matchId) {
         loadMatches(); // Refresh UI
     } catch (e) {
         console.error("Error toggling availability:", e);
-        alert("Erreur lors de la mise à jour de la disponibilité.");
+        showAlert("Erreur lors de la mise à jour de la disponibilité.", "error");
     }
 }
 
@@ -4977,7 +4744,7 @@ document.getElementById('sponsor-form')?.addEventListener('submit', async (e) =>
         loadSponsors();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -4985,43 +4752,42 @@ document.getElementById('sponsor-form')?.addEventListener('submit', async (e) =>
 
 async function loadSponsors() {
     const list = document.getElementById('sponsors-list');
-    if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
-    list.innerHTML = '<p>Chargement...</p>';
+    if (!list) return;
 
-    try {
-        const q = query(collection(db, "sponsors"), orderBy("name", "asc"));
-        const snapshot = await getDocs(q);
-        list.innerHTML = '';
-        dataCache.sponsors = {};
-
-        if (snapshot.empty) {
-            list.innerHTML = '<p>Aucun commanditaire.</p>';
-            return;
-        }
-
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            dataCache.sponsors[doc.id] = data;
-
-            const subtitle = data.visible ? '<span style="color:green">Visible</span>' : '<span style="color:red">Caché</span>';
-            const card = createCard(data.imageUrl, data.name, subtitle, doc.id, 'edit-sponsor', 'delete-sponsor', 'fa-handshake', true);
-            card.classList.add('sponsor-card');
-            card.setAttribute('data-id', doc.id);
-            list.appendChild(card);
-        });
-
-        setupClickableCard('.sponsor-card', 'sponsors', 'sponsor-modal', 'sponsor-id', (data) => {
-            document.getElementById('sponsor-name').value = data.name;
-            document.getElementById('sponsor-url').value = data.url || '';
-            document.getElementById('sponsor-visible').checked = data.visible !== false;
-            setExistingPreview('sponsor-image-preview', data.imageUrl);
-        });
-        setupDeleteButton('.delete-sponsor', 'sponsors', () => loadSponsors());
-
-    } catch (e) {
-        console.error(e);
-        list.innerHTML = '<p style="color:red">Erreur lors du chargement.</p>';
+    if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) {
+        list.classList.add('view-grid');
     }
+
+    const sponsors = Object.values(dataCache.sponsors || {});
+
+    list.innerHTML = '';
+
+    if (sponsors.length === 0) {
+        list.innerHTML = '<p>Aucun commanditaire.</p>';
+        return;
+    }
+
+    sponsors.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(data => {
+        const id = data.id;
+        const subtitle = data.visible !== false ? '<span style="color:green">Visible</span>' : '<span style="color:red">Caché</span>';
+        const card = createCard(data.imageUrl, data.name, subtitle, id, 'edit-sponsor', 'delete-sponsor', 'fa-handshake', true);
+
+        // Ensure strictly sponsor-card class
+        card.classList.add('sponsor-card');
+        card.classList.remove('team-card'); // Prevent conflicting listeners
+
+        card.setAttribute('data-id', id);
+        list.appendChild(card);
+    });
+
+    // Use specific selector to avoid global interference
+    setupClickableCard('#sponsors-list .sponsor-card', 'sponsors', 'sponsor-modal', 'sponsor-id', (data) => {
+        document.getElementById('sponsor-name').value = data.name;
+        document.getElementById('sponsor-url').value = data.url || '';
+        document.getElementById('sponsor-visible').checked = data.visible !== false;
+        setExistingPreview('sponsor-image-preview', data.imageUrl);
+    });
+    setupDeleteButton('.delete-sponsor', 'sponsors', () => loadSponsors());
 }
 
 // --- SEASONS LOGIC ---
@@ -5102,7 +4868,7 @@ document.getElementById('season-form')?.addEventListener('submit', async (e) => 
         loadSeasons();
     } catch (err) {
         console.error(err);
-        alert("Erreur: " + (err.message || err));
+        showAlert("Erreur: " + (err.message || err), "error");
     } finally {
         setLoading(form, false);
     }
@@ -5111,186 +4877,164 @@ document.getElementById('season-form')?.addEventListener('submit', async (e) => 
 async function loadSeasons() {
     const list = document.getElementById('seasons-list');
     if (!list) return;
+
     if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
-    list.innerHTML = '<p>Chargement...</p>';
 
-    try {
-        const q = query(collection(db, "seasons"), orderBy("year", "desc"));
-        const snapshot = await getDocs(q);
+    const seasons = Object.values(dataCache.seasons || {});
 
-        list.innerHTML = '';
-        dataCache.seasons = {};
+    list.innerHTML = '';
 
-        if (snapshot.empty) {
-            list.innerHTML = '<p>Aucune saison trouvée.</p>';
-            return;
-        }
+    if (seasons.length === 0) {
+        list.innerHTML = '<p>Aucune saison trouvée.</p>';
+        return;
+    }
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            dataCache.seasons[doc.id] = data;
+    seasons.sort((a, b) => (b.year || 0) - (a.year || 0)).forEach(data => {
 
-            const icon = data.type === 'summer' ? 'fa-sun' : 'fa-snowflake';
-            const color = data.type === 'summer' ? '#f39c12' : '#3498db';
-            const status = data.active ? '<span style="color:var(--success); font-weight:bold;">Active</span>' : 'Terminée';
+        const icon = data.type === 'summer' ? 'fa-sun' : 'fa-snowflake';
+        const color = data.type === 'summer' ? '#f39c12' : '#3498db';
+        const status = data.active ? '<span style="color:var(--success); font-weight:bold;">Active</span>' : 'Terminée';
 
-            const subtitle = `
+        const subtitle = `
                 <span style="color:${color}"><i class="fas ${icon}"></i> ${data.type === 'summer' ? 'Été' : 'Hiver'}</span><br>
                 ${data.start} - ${data.end}<br>
                 ${status}
             `;
 
-            // We assume createCard handles null image URL by showing the iconClass
-            const card = createCard(null, data.name, subtitle, doc.id, 'edit-season', 'delete-season', 'fa-calendar-alt');
-            card.setAttribute('data-id', doc.id);
-            // Override styles for season card specifically
-            const imgDiv = card.firstElementChild;
-            if (imgDiv) {
-                imgDiv.style.width = '100%';
-                imgDiv.style.height = '100px';
-                imgDiv.style.borderRadius = '8px 8px 0 0';
-                imgDiv.style.margin = '0 0 10px 0';
-                imgDiv.style.backgroundColor = color;
-                imgDiv.style.display = 'flex';
-                imgDiv.style.alignItems = 'center';
-                imgDiv.style.justifyContent = 'center';
-                imgDiv.innerHTML = `<i class="fas ${icon}" style="font-size:3rem; color:white;"></i>`;
-            }
+        // We assume createCard handles null image URL by showing the iconClass
+        const card = createCard(null, data.name, subtitle, data.id, 'edit-season', 'delete-season', 'fa-calendar-alt');
+        card.setAttribute('data-id', data.id);
+        // Override styles for season card specifically
+        const imgDiv = card.firstElementChild;
+        if (imgDiv) {
+            imgDiv.style.width = '100%';
+            imgDiv.style.height = '100px';
+            imgDiv.style.borderRadius = '8px 8px 0 0';
+            imgDiv.style.margin = '0 0 10px 0';
+            imgDiv.style.backgroundColor = color;
+            imgDiv.style.display = 'flex';
+            imgDiv.style.alignItems = 'center';
+            imgDiv.style.justifyContent = 'center';
+            imgDiv.innerHTML = `<i class="fas ${icon}" style="font-size:3rem; color:white;"></i>`;
+        }
 
-            card.classList.add('season-card');
-            list.appendChild(card);
-        });
+        card.classList.add('season-card');
+        list.appendChild(card);
+    });
 
-        setupClickableCard('.season-card', 'seasons', 'season-modal', 'season-id', (data) => {
-            document.getElementById('season-type').value = data.type;
-            document.getElementById('season-year').value = data.year;
-            document.getElementById('season-name').value = data.name;
-            document.getElementById('season-start').value = data.start;
-            document.getElementById('season-end').value = data.end;
-            document.getElementById('season-active').checked = data.active;
+    setupClickableCard('.season-card', 'seasons', 'season-modal', 'season-id', (data) => {
+        document.getElementById('season-type').value = data.type;
+        document.getElementById('season-year').value = data.year;
+        document.getElementById('season-name').value = data.name;
+        document.getElementById('season-start').value = data.start;
+        document.getElementById('season-end').value = data.end;
+        document.getElementById('season-active').checked = data.active;
 
-            resetSeasonModalTabs();
+        resetSeasonModalTabs();
 
-            const statsContainer = document.getElementById('season-stats-container');
-            const seasonId = document.getElementById('season-id').value;
+        const statsContainer = document.getElementById('season-stats-container');
+        const seasonId = document.getElementById('season-id').value;
 
-            if (statsContainer && seasonId) {
-                statsContainer.style.display = 'block';
+        if (statsContainer && seasonId) {
+            statsContainer.style.display = 'block';
 
-                // Load teams and calculate stats for this season
-                const renderSeasonData = async () => {
-                    const teamsListEl = document.getElementById('season-teams-list');
-                    teamsListEl.innerHTML = '<p>Chargement des données...</p>';
+            // Load teams and calculate stats for this season
+            const renderSeasonData = async () => {
+                const teamsListEl = document.getElementById('season-teams-list');
+                teamsListEl.innerHTML = '<p>Chargement des données...</p>';
+
+                try {
+                    // Get Teams for this season from cache
+                    const teams = Object.values(dataCache.teams || {}).filter(t => t.seasonId === seasonId);
+
+                    teamsListEl.innerHTML = '';
+                    let playerCount = 0;
+                    let teamIds = [];
+
+                    if (teams.length === 0) {
+                        teamsListEl.innerHTML = '<p style="color:#888; font-style:italic;">Aucune équipe pour cette saison.</p>';
+                        document.getElementById('season-stats-teams').textContent = "0";
+                        document.getElementById('season-team-count-badge').textContent = "0 équipes";
+                        document.getElementById('season-stats-players').textContent = "0";
+                    } else {
+                        document.getElementById('season-stats-teams').textContent = teams.length;
+                        document.getElementById('season-team-count-badge').textContent = `${teams.length} équipes`;
+
+                        teams.forEach(tData => {
+                            const tDocId = tData.id;
+                            teamIds.push(tDocId);
+                            const div = document.createElement('div');
+                            div.style.padding = '8px 12px';
+                            div.style.borderBottom = '1px solid #eee';
+                            div.style.background = '#fff';
+                            div.style.marginBottom = '5px';
+                            div.style.borderRadius = '6px';
+                            div.innerHTML = `<strong><i class="fas fa-shield-alt"></i> ${tData.name}</strong> <span style="font-size:0.8rem; color:#888; margin-left:10px;">${tData.category}</span>`;
+                            teamsListEl.appendChild(div);
+                        });
+
+                        // Calculate Player Count from cache
+                        const players = Object.values(dataCache.players || {});
+                        const seasonPlayers = players.filter(p => teamIds.includes(p.teamId)).length;
+                        document.getElementById('season-stats-players').textContent = seasonPlayers;
+                    }
+
+                    // Matches stats & Preview
+                    const matchesListEl = document.getElementById('season-matches-list');
+                    matchesListEl.innerHTML = '<p>Recherche des matchs...</p>';
 
                     try {
-                        // Get Teams for this season
-                        const qTeams = query(collection(db, "teams"), where("seasonId", "==", seasonId));
-                        const tSnap = await getDocs(qTeams);
+                        // Filter matches from cache by date Range
+                        const matches = Object.values(dataCache.matches || {}).filter(m =>
+                            m.date >= data.start && m.date <= data.end
+                        );
+                        matchesListEl.innerHTML = '';
 
-                        teamsListEl.innerHTML = '';
-                        let playerCount = 0;
-                        let teamIds = [];
-
-                        if (tSnap.empty) {
-                            teamsListEl.innerHTML = '<p style="color:#888; font-style:italic;">Aucune équipe pour cette saison.</p>';
-                            document.getElementById('season-stats-teams').textContent = "0";
-                            document.getElementById('season-team-count-badge').textContent = "0 équipes";
-                            document.getElementById('season-stats-players').textContent = "0";
+                        if (matches.length === 0) {
+                            matchesListEl.innerHTML = '<p style="color:#888; font-style:italic;">Aucun match trouvé pour ces dates.</p>';
+                            document.getElementById('season-stats-matches').textContent = "0";
+                            document.getElementById('season-stats-progress').textContent = "0%";
                         } else {
-                            document.getElementById('season-stats-teams').textContent = tSnap.size;
-                            document.getElementById('season-team-count-badge').textContent = `${tSnap.size} équipes`;
+                            document.getElementById('season-stats-matches').textContent = matches.length;
 
-                            tSnap.forEach(tDoc => {
-                                const tData = tDoc.data();
-                                teamIds.push(tDoc.id);
+                            // Calculate progress (matches with score vs total)
+                            let playedCount = 0;
+                            matches.forEach(mData => {
+                                if (mData.scoreHome !== undefined && mData.scoreAway !== undefined) playedCount++;
+
                                 const div = document.createElement('div');
                                 div.style.padding = '8px 12px';
                                 div.style.borderBottom = '1px solid #eee';
                                 div.style.background = '#fff';
                                 div.style.marginBottom = '5px';
                                 div.style.borderRadius = '6px';
-                                div.innerHTML = `<strong><i class="fas fa-shield-alt"></i> ${tData.name}</strong> <span style="font-size:0.8rem; color:#888; margin-left:10px;">${tData.category}</span>`;
-                                teamsListEl.appendChild(div);
-                            });
-
-                            // Calculate Player Count (simplified estimate or full fetch)
-                            // For accuracy, we'd need to fetch players with teamId in teamIds
-                            // But Firestore doesn't support 'in' with more than 30 values easily in some contexts.
-                            // We'll do a quick probe of the players collection if possible or just use a placeholder
-                            document.getElementById('season-stats-players').textContent = "...";
-
-                            const qPlayers = query(collection(db, "players")); // We fetch all then filter for count if we want to be safe but slow
-                            const pSnap = await getDocs(qPlayers);
-                            let seasonPlayers = 0;
-                            pSnap.forEach(pDoc => {
-                                if (teamIds.includes(pDoc.data().teamId)) seasonPlayers++;
-                            });
-                            document.getElementById('season-stats-players').textContent = seasonPlayers;
-                        }
-
-                        // Matches stats & Preview
-                        const matchesListEl = document.getElementById('season-matches-list');
-                        matchesListEl.innerHTML = '<p>Recherche des matchs...</p>';
-
-                        try {
-                            const qMatches = query(collection(db, "matches"),
-                                where("date", ">=", data.start),
-                                where("date", "<=", data.end)
-                            );
-                            const mSnap = await getDocs(qMatches);
-                            matchesListEl.innerHTML = '';
-
-                            if (mSnap.empty) {
-                                matchesListEl.innerHTML = '<p style="color:#888; font-style:italic;">Aucun match trouvé pour ces dates.</p>';
-                                document.getElementById('season-stats-matches').textContent = "0";
-                                document.getElementById('season-stats-progress').textContent = "0%";
-                            } else {
-                                document.getElementById('season-stats-matches').textContent = mSnap.size;
-
-                                // Calculate progress (matches with score vs total)
-                                let playedCount = 0;
-                                mSnap.forEach(mDoc => {
-                                    const mData = mDoc.data();
-                                    if (mData.scoreHome !== undefined && mData.scoreAway !== undefined) playedCount++;
-
-                                    const div = document.createElement('div');
-                                    div.style.padding = '8px 12px';
-                                    div.style.borderBottom = '1px solid #eee';
-                                    div.style.background = '#fff';
-                                    div.style.marginBottom = '5px';
-                                    div.style.borderRadius = '6px';
-                                    div.style.fontSize = '0.9rem';
-                                    div.innerHTML = `
+                                div.style.fontSize = '0.9rem';
+                                div.innerHTML = `
                                         <strong>${mData.date}</strong> - ${mData.homeTeam} vs ${mData.awayTeam} 
                                         ${mData.scoreHome !== undefined ? `<span class="badge" style="background:#eee; color:#333; margin-left:10px;">${mData.scoreHome} - ${mData.scoreAway}</span>` : '<span class="badge" style="background:var(--primary); color:white; padding:2px 6px; border-radius:4px;">À venir</span>'}
                                     `;
-                                    matchesListEl.appendChild(div);
-                                });
+                                matchesListEl.appendChild(div);
+                            });
 
-                                const progress = Math.round((playedCount / mSnap.size) * 100);
-                                document.getElementById('season-stats-progress').textContent = `${progress}%`;
-                            }
-                        } catch (errMatch) {
-                            console.error(errMatch);
-                            matchesListEl.innerHTML = '<p style="color:#888;">Impossible de charger les matchs par date.</p>';
+                            const progress = matches.length > 0 ? Math.round((playedCount / matches.length) * 100) : 0;
+                            document.getElementById('season-stats-progress').textContent = `${progress}%`;
                         }
-
-                    } catch (e) {
-                        console.error(e);
-                        teamsListEl.innerHTML = '<p style="color:red">Erreur lors du chargement des statistiques.</p>';
+                    } catch (errMatch) {
+                        console.error(errMatch);
+                        matchesListEl.innerHTML = '<p style="color:#888;">Impossible de charger les matchs par date.</p>';
                     }
-                };
 
-                renderSeasonData();
-            }
-        });
+                } catch (e) {
+                    console.error(e);
+                    teamsListEl.innerHTML = '<p style="color:red">Erreur lors du chargement des statistiques.</p>';
+                }
+            };
 
-        setupDeleteButton('.delete-season', 'seasons', () => loadSeasons());
+            renderSeasonData();
+        }
+    });
 
-    } catch (e) {
-        console.error(e);
-        list.innerHTML = `<p style="color:red">Erreur: ${e.message}</p>`;
-    }
+    setupDeleteButton('.delete-season', 'seasons', () => loadSeasons());
 }
 
 // --- FIELDS LOGIC ---
@@ -5302,13 +5046,12 @@ async function populateFieldSelect(selectedId = null) {
 
     select.innerHTML = '<option value="">Sélectionner un terrain...</option>';
 
-    const snapshot = await getDocs(collection(db, "fields"));
-    snapshot.forEach(doc => {
-        const data = doc.data();
+    const fields = Object.values(dataCache.fields || {});
+    fields.forEach(data => {
         const option = document.createElement('option');
-        option.value = doc.id;
+        option.value = data.id;
         option.textContent = data.name;
-        if (selectedId && doc.id === selectedId) option.selected = true;
+        if (selectedId && data.id === selectedId) option.selected = true;
         select.appendChild(option);
     });
 }
@@ -5346,7 +5089,7 @@ document.getElementById('field-form')?.addEventListener('submit', async (e) => {
         loadFields();
     } catch (err) {
         console.error("Error saving field:", err);
-        alert("Erreur lors de l'enregistrement: " + err.message);
+        showAlert("Erreur lors de l'enregistrement: " + err.message, "error");
     } finally {
         setLoading(form, false);
     }
@@ -5356,23 +5099,21 @@ document.getElementById('field-form')?.addEventListener('submit', async (e) => {
 async function loadFields() {
     const list = document.getElementById('fields-list');
     if (!list) return;
+
     if (!list.classList.contains('view-grid') && !list.classList.contains('view-list')) list.classList.add('view-grid');
-    list.innerHTML = '<p>Chargement...</p>';
 
     try {
-        const s = await getDocs(collection(db, "fields"));
+        const fields = Object.values(dataCache.fields || {});
         list.innerHTML = '';
-        dataCache.fields = {};
 
-        if (s.empty) {
-            list.innerHTML = '<p>Aucun terrain.</p>';
+        if (fields.length === 0) {
+            list.innerHTML = '<p>Aucun terrain configuré.</p>';
             return;
         }
 
-        s.forEach(doc => {
-            const d = doc.data();
-            dataCache.fields[doc.id] = d;
-            const card = createCard(null, d.name, `${d.type || '-'} <br> <small>${d.location || ''}</small>`, doc.id, 'edit-field', 'delete-field', 'fa-map-marker-alt');
+        fields.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(data => {
+            const id = data.id;
+            const card = createCard(null, data.name, `${data.type || '-'} <br> <small>${data.location || ''}</small>`, id, 'edit-field', 'delete-field', 'fa-map-marker-alt');
             list.appendChild(card);
         });
 
@@ -5458,31 +5199,23 @@ const dashboardPlayersCard = document.getElementById('dashboard-players-card');
 const playersListModal = document.getElementById('players-list-modal');
 
 if (dashboardPlayersCard && playersListModal) {
-    dashboardPlayersCard.addEventListener('click', async () => {
+    dashboardPlayersCard.addEventListener('click', () => {
         playersListModal.classList.add('active');
         const buffer = document.getElementById('modal-players-list');
-        buffer.innerHTML = '<tr><td colspan="4" style="text-align:center;">Chargement...</td></tr>';
+        buffer.innerHTML = '';
 
         try {
-            // Remove orderBy to avoid index issues with missing fields
-            const qPlayers = query(collection(db, "players"));
-            const snapPlayers = await getDocs(qPlayers);
-
-            buffer.innerHTML = '';
+            const players = Object.values(dataCache.players || {});
             let count = 0;
 
-            // Client-side sort
-            const sortedDocs = snapPlayers.docs.sort((a, b) => {
-                const pA = a.data();
-                const pB = b.data();
-                const nA = (pA.name || pA.lastName || '').toLowerCase();
-                const nB = (pB.name || pB.lastName || '').toLowerCase();
+            // Sort
+            players.sort((a, b) => {
+                const nA = (a.name || a.lastName || '').toLowerCase();
+                const nB = (b.name || b.lastName || '').toLowerCase();
                 return nA.localeCompare(nB);
             });
 
-            sortedDocs.forEach(doc => {
-                const p = doc.data();
-
+            players.forEach(p => {
                 // Extract firstName/lastName from 'name' if necessary
                 let fName = p.firstName || '';
                 let lName = p.lastName || '';

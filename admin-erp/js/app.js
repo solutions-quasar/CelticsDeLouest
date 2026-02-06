@@ -530,6 +530,40 @@ if (loginForm) {
     }
 }
 
+// Password reset function for admins
+window.resetAdminPassword = async function (email) {
+    const confirmed = await showConfirm(
+        `Envoyer un lien de réinitialisation à ${email} ?`,
+        'Le lien sera valide pendant 1 heure.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+        const idToken = await auth.currentUser.getIdToken();
+        const response = await fetch('https://us-central1-celticsdelouest.cloudfunctions.net/sendAdminPasswordReset', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({ email })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Erreur inconnue');
+        }
+
+        showAlert(`Email de réinitialisation envoyé à ${email}`, 'success');
+
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('Erreur: ' + error.message, 'error');
+    }
+};
+
+
 if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
         localStorage.removeItem('celtics_admin_last_view'); // Clear view state on logout
@@ -3901,6 +3935,7 @@ async function loadAdmins() {
                 <td>${rolesHtml}</td>
                 <td>
                     <button class="btn-icon edit-admin" data-id="${data.id}" style="margin-right:8px;"><i class="fas fa-edit"></i></button>
+                    <button class="btn-icon" onclick="resetAdminPassword('${data.email}')" title="Réinitialiser mot de passe" style="margin-right:8px; color: var(--secondary);"><i class="fas fa-key"></i></button>
                     <button class="btn-icon delete-admin" data-id="${data.id}" style="color:red;"><i class="fas fa-trash"></i></button>
                 </td>
             `;

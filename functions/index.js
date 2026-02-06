@@ -829,3 +829,97 @@ exports.inviteAdmin = onRequest({ cors: true }, async (req, res) => {
     }
 });
 
+
+// --- PASSWORD RESET: SEND ADMIN PASSWORD RESET EMAIL ---
+exports.sendAdminPasswordReset = onRequest({ cors: true }, async (req, res) => {
+    try {
+        await authenticateAdmin(req);
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ error: "Email required" });
+        }
+
+        // Verify user exists
+        let user;
+        try {
+            user = await admin.auth().getUserByEmail(email);
+        } catch (error) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Generate Firebase password reset link with custom redirect
+        const actionCodeSettings = {
+            url: 'https://celticsdelouest.web.app/admin-erp/reset-password.html',
+            handleCodeInApp: false
+        };
+
+        const resetLink = await admin.auth().generatePasswordResetLink(
+            email,
+            actionCodeSettings
+        );
+
+        // Send email via Resend
+        await resend.emails.send({
+            from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+            to: email,
+            subject: "Réinitialisation de votre mot de passe administrateur",
+            html: getPasswordResetEmailTemplate(resetLink, email)
+        });
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error("Error sending password reset:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+function getPasswordResetEmailTemplate(resetLink, email) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #27ae60; margin: 0;">Celtics de l'Ouest</h1>
+                <p style="color: #666; margin: 5px 0;">Administration ERP</p>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #27ae60; margin-top: 0;">Réinitialisation de mot de passe</h2>
+                <p>Bonjour,</p>
+                <p>Une demande de réinitialisation de mot de passe a été effectuée pour votre compte administrateur (<strong>${email}</strong>).</p>
+                <p>Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe :</p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${resetLink}" 
+                   style="display: inline-block; background: #27ae60; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+                    Réinitialiser mon mot de passe
+                </a>
+            </div>
+            
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0; font-size: 14px; color: #856404;">
+                    <strong>⚠️ Important :</strong> Ce lien est valide pendant <strong>1 heure</strong>.
+                </p>
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 14px; color: #666;">
+                <p>Si vous n'avez pas demandé cette réinitialisation, ignorez cet email en toute sécurité.</p>
+                <p style="margin-top: 15px;">
+                    <em>Si le bouton ne fonctionne pas, copiez-collez ce lien dans votre navigateur :</em><br>
+                    <a href="${resetLink}" style="color: #27ae60; word-break: break-all;">${resetLink}</a>
+                </p>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999;">
+                <p>© ${new Date().getFullYear()} Celtics de l'Ouest - Tous droits réservés</p>
+            </div>
+        </body>
+        </html>
+    `;
+}

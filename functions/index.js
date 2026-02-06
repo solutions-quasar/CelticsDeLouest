@@ -561,9 +561,13 @@ exports.sendCampaign = onRequest({ cors: true }, async (req, res) => {
         // Loop for now (simple), optimized later for bulk.
 
         // Using BCC for efficiency if generic content
+        // Using BCC for efficiency if generic content
+        // We must provide a 'to' field for Resend/SMTP standards.
+        // Usually, we send TO the sender or a generic address.
         const { data, error } = await resend.emails.send({
             from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
             reply_to: "celtics.portneuf@gmail.com",
+            to: ["celtics.portneuf@gmail.com"], // Required field
             bcc: recipients,
             subject: campaign.subject,
             html: getEmailTemplate(campaign.content, campaign.subject),

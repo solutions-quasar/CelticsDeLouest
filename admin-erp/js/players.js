@@ -70,9 +70,12 @@ window.loadPlayersDirectory = async function (viewMode = 'grid') {
 
                 const initials = (player.firstName?.[0] || '?').toUpperCase() + (player.lastName?.[0] || '?').toUpperCase();
 
+                // Photo consent indicator
+                const photoWarning = player.noPhotoConsent ? '<span style="display: inline-block; background: #e74c3c; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; margin-left: 8px; font-weight: 600;"><i class="fas fa-camera-slash"></i> Pas de photos</span>' : '';
+
                 card.innerHTML =
                     '<div class="admin-card-img circle-img" style="background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: bold;">' + initials + '</div>' +
-                    '<h4 style="margin: 10px 0 5px 0; font-size: 1.1rem; color: var(--text-dark);">' + (player.firstName || '') + ' ' + (player.lastName || '') + '</h4>' +
+                    '<h4 style="margin: 10px 0 5px 0; font-size: 1.1rem; color: var(--text-dark);">' + (player.firstName || '') + ' ' + (player.lastName || '') + photoWarning + '</h4>' +
                     '<p style="margin: 5px 0; color: var(--text-light); font-size: 0.85rem; line-height: 1.6;">' +
                     '<i class="fas fa-users" style="width: 16px; margin-right: 5px;"></i> ' + teamName + '<br>' +
                     '<i class="fas fa-birthday-cake" style="width: 16px; margin-right: 5px;"></i> ' + birthDate + '<br>' +
@@ -99,12 +102,15 @@ window.loadPlayersDirectory = async function (viewMode = 'grid') {
                 const birthDate = player.birthDate || '-';
                 const parentName = player.parentName || (player.parentFirstName && player.parentLastName ? player.parentFirstName + ' ' + player.parentLastName : '-');
 
+                // Photo consent indicator
+                const photoIcon = player.noPhotoConsent ? ' <i class="fas fa-camera-slash" style="color: #e74c3c;" title="Pas de diffusion de photos"></i>' : '';
+
                 const row = document.createElement('tr');
                 row.setAttribute('data-id', player.id);
                 row.style.cursor = 'pointer';
 
                 row.innerHTML =
-                    '<td>' + (player.lastName || '') + '</td>' +
+                    '<td>' + (player.lastName || '') + photoIcon + '</td>' +
                     '<td>' + (player.firstName || '') + '</td>' +
                     '<td>' + teamName + '</td>' +
                     '<td>' + birthDate + '</td>' +
@@ -138,31 +144,13 @@ document.addEventListener('click', async (e) => {
         const btn = e.target.closest('.edit-player');
         const playerId = btn.dataset.id;
 
-        // Find the player modal and populate it
-        const modal = document.getElementById('player-modal');
-        const playerIdInput = document.getElementById('player-id');
-
-        if (modal && playerIdInput && window.dataCache.players && window.dataCache.players[playerId]) {
+        if (window.dataCache.players && window.dataCache.players[playerId]) {
             const player = window.dataCache.players[playerId];
-
-            // Load teams first
-            loadTeamsIntoPlayerSelect();
-
-            document.getElementById('player-modal-title').textContent = 'Modifier le Joueur';
-
-            // Populate the form
-            playerIdInput.value = playerId;
-            if (document.getElementById('player-first-name')) document.getElementById('player-first-name').value = player.firstName || '';
-            if (document.getElementById('player-last-name')) document.getElementById('player-last-name').value = player.lastName || '';
-            if (document.getElementById('player-birth-date')) document.getElementById('player-birth-date').value = player.birthDate || '';
-            if (document.getElementById('player-team')) document.getElementById('player-team').value = player.teamId || '';
-            if (document.getElementById('player-parent-first-name')) document.getElementById('player-parent-first-name').value = player.parentFirstName || '';
-            if (document.getElementById('player-parent-last-name')) document.getElementById('player-parent-last-name').value = player.parentLastName || '';
-            if (document.getElementById('player-parent-email')) document.getElementById('player-parent-email').value = player.parentEmail || '';
-            if (document.getElementById('player-parent-phone')) document.getElementById('player-parent-phone').value = player.parentPhone || '';
-
-            // Open modal
-            modal.classList.add('active');
+            if (typeof window.openPlayerModal === 'function') {
+                window.openPlayerModal(player);
+            } else {
+                console.error("openPlayerModal function not found on window object.");
+            }
         }
     }
 
@@ -184,113 +172,5 @@ document.addEventListener('click', async (e) => {
                 window.showAlert('Erreur lors de la suppression du joueur', 'error');
             }
         }
-    }
-});
-
-// Load teams into select
-function loadTeamsIntoPlayerSelect() {
-    const teamSelect = document.getElementById('player-team');
-    if (!teamSelect) return;
-
-    // Clear existing options (keep the first one)
-    while (teamSelect.options.length > 1) {
-        teamSelect.remove(1);
-    }
-
-    if (window.dataCache && window.dataCache.teams) {
-        const teams = Object.entries(window.dataCache.teams).map(([id, team]) => ({ id, ...team }));
-        teams.sort((a, b) => a.name.localeCompare(b.name));
-
-        teams.forEach(team => {
-            const option = document.createElement('option');
-            option.value = team.id;
-            option.textContent = team.name + (team.category ? ' (' + team.category + ')' : '');
-            teamSelect.appendChild(option);
-        });
-    }
-}
-
-// Add Player Modal Handlers
-document.addEventListener('DOMContentLoaded', () => {
-    // Add Player Button
-    const addPlayerBtn = document.getElementById('open-player-modal-directory');
-    if (addPlayerBtn) {
-        addPlayerBtn.addEventListener('click', () => {
-            const form = document.getElementById('player-form');
-            if (form) form.reset();
-
-            const idInput = document.getElementById('player-id');
-            if (idInput) idInput.value = '';
-
-            const title = document.getElementById('player-modal-title');
-            if (title) title.textContent = 'Ajouter un Joueur';
-
-            loadTeamsIntoPlayerSelect();
-            const modal = document.getElementById('player-modal');
-            if (modal) modal.classList.add('active');
-        });
-    }
-
-    // Close Modal Button
-    const playerModal = document.getElementById('player-modal');
-    if (playerModal) {
-        const closeBtns = playerModal.querySelectorAll('.close-modal, .close-modal-btn');
-        closeBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                playerModal.classList.remove('active');
-            });
-        });
-
-        // Close on click outside
-        window.addEventListener('click', (e) => {
-            if (e.target === playerModal) {
-                playerModal.classList.remove('active');
-            }
-        });
-    }
-
-    // Form Submit
-    const playerForm = document.getElementById('player-form');
-    if (playerForm) {
-        playerForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const id = document.getElementById('player-id').value;
-            const data = {
-                firstName: document.getElementById('player-first-name').value,
-                lastName: document.getElementById('player-last-name').value,
-                birthDate: document.getElementById('player-birth-date').value,
-                teamId: document.getElementById('player-team').value,
-                parentFirstName: document.getElementById('player-parent-first-name').value,
-                parentLastName: document.getElementById('player-parent-last-name').value,
-                parentEmail: document.getElementById('player-parent-email').value,
-                parentPhone: document.getElementById('player-parent-phone').value,
-                updatedAt: window.serverTimestamp()
-            };
-
-            try {
-                if (id) {
-                    // Update
-                    await window.updateDoc(window.doc(window.db, 'players', id), data);
-                    window.showAlert('Joueur mis à jour avec succès', 'success');
-                } else {
-                    // Create
-                    data.createdAt = window.serverTimestamp();
-                    await window.addDoc(window.collection(window.db, 'players'), data);
-                    window.showAlert('Joueur créé avec succès', 'success');
-                }
-
-                if (playerModal) playerModal.classList.remove('active');
-
-                // Refresh list
-                const gridContainer = document.getElementById('players-directory-list');
-                const isGridView = gridContainer && gridContainer.style.display !== 'none';
-                loadPlayersDirectory(isGridView ? 'grid' : 'list');
-
-            } catch (error) {
-                console.error("Error saving player:", error);
-                window.showAlert("Erreur lors de l'enregistrement: " + error.message, 'error');
-            }
-        });
     }
 });

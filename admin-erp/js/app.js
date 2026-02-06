@@ -59,6 +59,7 @@ window.dataCache = dataCache;
 
 // Make Firebase functions globally accessible for other scripts
 window.db = db;
+window.auth = auth;
 window.getDocs = getDocs;
 window.collection = collection;
 window.deleteDoc = deleteDoc;
@@ -721,8 +722,6 @@ document.querySelectorAll('.view-toggle-btn').forEach(btn => {
 function setupClickableCard(cardSelector, cacheKey, modalId, idFieldId, populateCallback) {
     document.querySelectorAll(cardSelector).forEach(card => {
         card.addEventListener('click', async (e) => {
-            console.log("Card clicked:", card, "Target:", e.target);
-
             if (e.target.closest('.btn-delete') ||
                 e.target.closest('.delete-board') ||
                 e.target.closest('.delete-ref') ||
@@ -737,16 +736,12 @@ function setupClickableCard(cardSelector, cacheKey, modalId, idFieldId, populate
                 e.target.closest('.btn-action') ||
                 e.target.closest('button') ||
                 e.target.closest('a')) {
-                console.log("Click ignored due to exclusion");
                 return;
             }
 
             const id = card.getAttribute('data-id');
-            console.log("Card ID:", id);
-            console.log("Cache Key:", cacheKey);
-            console.log("Full Cache:", dataCache);
             const data = dataCache[cacheKey][id];
-            console.log("Data found:", data);
+
 
             if (data) {
                 try {
@@ -1321,6 +1316,361 @@ document.getElementById('btn-add-team-coach')?.addEventListener('click', () => {
     }
 });
 
+// --- TEAM GENERATION & VISUAL EDITOR ---
+
+const btnGenerateTeams = document.getElementById('btn-generate-teams');
+const teamGenModal = document.getElementById('team-gen-confirm-modal');
+const btnConfirmGenerate = document.getElementById('btn-confirm-generate');
+const btnCancelGenerate = document.getElementById('btn-cancel-generate');
+const btnOpenVisualEditor = document.getElementById('btn-open-visual-editor');
+const teamVisualModal = document.getElementById('team-visual-modal');
+const btnCloseVisual = document.getElementById('btn-close-visual');
+const btnVisualAssignments = document.getElementById('btn-visual-assignments');
+const visualContainer = document.getElementById('visual-teams-container');
+
+// --- GENERATION LOGIC ---
+if (btnGenerateTeams) {
+    btnGenerateTeams.addEventListener('click', async () => {
+        const seasonId = document.getElementById('team-filter-season').value;
+        if (!seasonId) return showAlert("Veuillez sélectionner une saison.", "warning");
+
+        const players = Object.values(dataCache.players || {}).filter(p => p.seasonId === seasonId && !p.teamId);
+
+        document.getElementById('gen-unassigned-count').textContent = players.length;
+
+        if (players.length === 0) {
+            showAlert("Tous les joueurs ont déjà une équipe !", "info");
+            return;
+        }
+
+        teamGenModal.classList.add('active');
+    });
+}
+
+if (btnCancelGenerate) btnCancelGenerate.addEventListener('click', () => teamGenModal.classList.remove('active'));
+if (teamGenModal) teamGenModal.querySelector('.close-modal').addEventListener('click', () => teamGenModal.classList.remove('active'));
+
+if (btnConfirmGenerate) {
+    btnConfirmGenerate.addEventListener('click', async () => {
+        const seasonId = document.getElementById('team-filter-season').value;
+        if (!seasonId) return;
+
+        setLoading(btnConfirmGenerate.parentElement, true);
+
+        try {
+            const players = Object.values(dataCache.players || {}).filter(p => p.seasonId === seasonId && !p.teamId);
+
+            // Group by Category and Gender
+            const groups = {};
+            players.forEach(p => {
+                const key = `${p.category || 'Inconnu'}_${p.gender || 'X'}`;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(p);
+            });
+
+            const batch = writeBatch(db);
+            let opCount = 0;
+            const MAX_BATCH = 450;
+
+            // Create Teams and Assign
+            for (const key of Object.keys(groups)) {
+                const [cat, gender] = key.split('_');
+                const groupPlayers = groups[key];
+
+                // Create Team
+                const teamRef = doc(collection(db, "teams"));
+                const teamName = `Équipe ${cat} ${gender === 'M' ? 'Gars' : (gender === 'F' ? 'Filles' : 'Mixte')}`;
+
+                batch.set(teamRef, {
+                    name: teamName,
+                    category: cat,
+                    gender: gender,
+                    seasonId: seasonId,
+                    createdAt: serverTimestamp()
+                });
+                opCount++;
+
+                // Assign Players
+                groupPlayers.forEach(p => {
+                    const pRef = doc(db, "players", p.id);
+                    batch.update(pRef, { teamId: teamRef.id });
+                    opCount++;
+
+                    if (opCount >= MAX_BATCH) {
+                        // In a real app we'd commit and start new, but here simplified
+                    }
+                });
+            }
+
+            await batch.commit();
+            showAlert("Équipes générées avec succès !", "success");
+            teamGenModal.classList.remove('active');
+            // Refresh logic will happen via listeners
+        } catch (e) {
+            console.error(e);
+            showAlert("Erreur: " + e.message, "error");
+        } finally {
+            setLoading(btnConfirmGenerate.parentElement, false);
+        }
+    });
+}
+
+// --- VISUAL EDITOR LOGIC ---
+
+let visualEditorMode = false; // false = view, true = reassign
+let visualSelectedTeams = new Set();
+
+if (btnOpenVisualEditor) {
+    btnOpenVisualEditor.addEventListener('click', () => {
+        const seasonId = document.getElementById('team-filter-season').value;
+        if (!seasonId) return showAlert("Veuillez sélectionner une saison.", "warning");
+
+        visualEditorMode = false;
+        visualSelectedTeams.clear();
+        updateVisualEditorUI();
+        renderVisualTeams();
+        teamVisualModal.style.display = 'flex';
+        // Populate filters
+        populateVisualFilters();
+    });
+}
+
+if (btnCloseVisual) btnCloseVisual.addEventListener('click', () => teamVisualModal.style.display = 'none');
+
+if (btnVisualAssignments) {
+    btnVisualAssignments.addEventListener('click', () => {
+        if (visualSelectedTeams.size === 0) return showAlert("Sélectionnez au moins une équipe.", "warning");
+        visualEditorMode = !visualEditorMode;
+        updateVisualEditorUI();
+        renderVisualTeams();
+    });
+}
+
+function updateVisualEditorUI() {
+    if (visualEditorMode) {
+        btnVisualAssignments.innerHTML = '<i class="fas fa-check"></i> Terminer';
+        btnVisualAssignments.style.background = '#2ecc71';
+        document.getElementById('visual-filter-category').disabled = true;
+        document.getElementById('visual-filter-gender').disabled = true;
+    } else {
+        btnVisualAssignments.innerHTML = '<i class="fas fa-exchange-alt"></i> Modifier l\'assignation';
+        btnVisualAssignments.style.background = 'var(--primary)';
+        document.getElementById('visual-filter-category').disabled = false;
+        document.getElementById('visual-filter-gender').disabled = false;
+    }
+}
+
+function populateVisualFilters() {
+    const catSel = document.getElementById('visual-filter-category');
+    const genderSel = document.getElementById('visual-filter-gender');
+
+    // Extract unique categories from visible teams
+    const seasonId = document.getElementById('team-filter-season').value;
+    const teams = Object.values(dataCache.teams || {}).filter(t => t.seasonId === seasonId);
+    const cats = [...new Set(teams.map(t => t.category))].sort();
+
+    // Populate Categories
+    catSel.innerHTML = '<option value="">Toutes Catégories</option>';
+    cats.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        catSel.appendChild(opt);
+    });
+
+    // Populate Gender (Ensure logic matches)
+    if (genderSel) {
+        genderSel.innerHTML = `
+            <option value="">Tous Sexes</option>
+            <option value="Masculin">Masculin</option>
+            <option value="Féminin">Féminin</option>
+            <option value="Mixte">Mixte</option>
+        `;
+        genderSel.onchange = renderVisualTeams;
+    }
+
+    catSel.onchange = renderVisualTeams;
+}
+
+function renderVisualTeams() {
+    visualContainer.innerHTML = '';
+    const seasonId = document.getElementById('team-filter-season').value;
+    let teams = Object.values(dataCache.teams || {}).filter(t => t.seasonId === seasonId);
+
+    // Filters
+    if (!visualEditorMode) {
+        const catFilter = document.getElementById('visual-filter-category').value;
+        const genderFilter = document.getElementById('visual-filter-gender').value;
+
+        if (catFilter) teams = teams.filter(t => t.category === catFilter);
+
+        if (genderFilter) {
+            teams = teams.filter(t => {
+                const g = t.gender || 'Mixte';
+                if (genderFilter === 'Masculin') return g === 'Masculin' || g === 'M';
+                if (genderFilter === 'Féminin') return g === 'Féminin' || g === 'F';
+                return g === genderFilter;
+            });
+        }
+    } else {
+        // Edit mode: only show selected
+        teams = teams.filter(t => visualSelectedTeams.has(t.id));
+    }
+
+    teams.sort((a, b) => a.name.localeCompare(b.name));
+
+    teams.forEach(team => {
+        const players = Object.values(dataCache.players || {}).filter(p => p.teamId === team.id);
+        const isSelected = visualSelectedTeams.has(team.id);
+
+        const card = document.createElement('div');
+        card.className = 'visual-team-card';
+        card.style.cssText = 'border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; height: ' + (visualEditorMode ? '600px' : 'auto') + '; transition: all 0.3s;';
+
+        if (visualEditorMode) {
+            card.style.border = '2px solid var(--primary)';
+            card.style.background = 'white';
+        } else {
+            card.style.border = isSelected ? '2px solid #ffb74d' : '1px solid transparent';
+            card.style.background = isSelected ? '#fff3e0' : 'white';
+        }
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = 'padding: 15px; background: inherit; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; cursor: pointer;';
+
+        const checkHtml = visualEditorMode ? '' : `<input type="checkbox" class="team-select-cb" value="${team.id}" ${isSelected ? 'checked' : ''} style="transform: scale(1.2); cursor: pointer;">`;
+
+        header.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                ${checkHtml}
+                <div>
+                    <h4 style="margin: 0; font-size: 1.1rem;">${team.name}</h4>
+                    <div style="font-size: 0.85rem; color: #666;">${team.category} • ${players.length} Joueurs</div>
+                </div>
+            </div>
+            <i class="fas fa-chevron-down state-icon" style="transition:transform 0.3s;"></i>
+        `;
+
+        if (!visualEditorMode) {
+            header.onclick = (e) => {
+                // 1. Expand/Collapse ONLY on Chevron
+                if (e.target.classList.contains('state-icon') || e.target.closest('.state-icon')) {
+                    const body = card.querySelector('.team-players-body');
+                    const isOpen = body.style.display !== 'none';
+                    body.style.display = isOpen ? 'none' : 'block';
+                    header.querySelector('.state-icon').style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+                    return;
+                }
+
+                // 2. Selection on Click (Avoid double toggle if clicking directly on checkbox)
+                const cb = header.querySelector('.team-select-cb');
+                if (cb) {
+                    if (e.target !== cb) {
+                        cb.checked = !cb.checked;
+                    }
+                    if (cb.checked) {
+                        visualSelectedTeams.add(team.id);
+                        card.style.background = '#fff3e0';
+                        card.style.border = '2px solid #ffb74d';
+                    } else {
+                        visualSelectedTeams.delete(team.id);
+                        card.style.background = 'white';
+                        card.style.border = '1px solid transparent';
+                    }
+                }
+            };
+        }
+
+        // Body
+        const body = document.createElement('div');
+        body.className = 'team-players-body';
+        body.style.cssText = 'padding: 10px; overflow-y: auto; flex: 1; background: ' + (visualEditorMode ? '#fff' : '#fafafa') + '; display: ' + (visualEditorMode ? 'block' : 'none') + ';';
+
+        // Drag Target Ops
+        if (visualEditorMode) {
+            body.ondragover = (e) => { e.preventDefault(); body.style.background = '#e8f5e9'; };
+            body.ondragleave = (e) => { body.style.background = '#fff'; };
+            body.ondrop = async (e) => {
+                e.preventDefault();
+                body.style.background = '#fff';
+                const playerId = e.dataTransfer.getData('text/plain');
+                if (!playerId) return;
+
+                // Optimistic Move
+                const player = dataCache.players[playerId];
+                const oldTeamId = player.teamId;
+                if (oldTeamId === team.id) return; // Dropped on same team
+
+                try {
+                    // Update DB
+                    await updateDoc(doc(db, "players", playerId), { teamId: team.id });
+
+                    // Check if old team empty
+                    const oldTeamPlayers = Object.values(dataCache.players).filter(p => p.teamId === oldTeamId && p.id !== playerId);
+                    if (oldTeamPlayers.length === 0) {
+                        // Custom confirmation
+                        if (await confirmEmptyTeamDeletion()) {
+                            await deleteDoc(doc(db, "teams", oldTeamId));
+                            visualSelectedTeams.delete(oldTeamId);
+                        }
+                    }
+                    renderVisualTeams(); // Re-render all to update counts
+                } catch (err) {
+                    console.error(err);
+                    showAlert("Erreur lors du déplacement : " + err.message, "error");
+                }
+            };
+        }
+
+        players.forEach(p => {
+            const row = document.createElement('div');
+            row.style.cssText = 'padding: 8px; margin-bottom: 5px; background: white; border: 1px solid #eee; border-radius: 4px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;';
+            if (visualEditorMode) {
+                row.draggable = true;
+                row.style.cursor = 'grab';
+                row.ondragstart = (e) => {
+                    e.dataTransfer.setData('text/plain', p.id);
+                };
+            }
+
+            row.innerHTML = `
+                <div style="width: 25px; height: 25px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #555;">
+                    ${p.firstName ? p.firstName.charAt(0) : 'U'}
+                </div>
+                <div>${p.firstName} ${p.lastName}</div>
+            `;
+            body.appendChild(row);
+        });
+
+        card.appendChild(header);
+        card.appendChild(body);
+        visualContainer.appendChild(card);
+    });
+}
+
+function confirmEmptyTeamDeletion() {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('empty-team-confirm-modal');
+        const btnKeep = document.getElementById('btn-keep-empty-team');
+        const btnDelete = document.getElementById('btn-delete-empty-team');
+        const close = modal.querySelector('.close-modal');
+
+        const cleanup = () => {
+            modal.classList.remove('active');
+            btnKeep.onclick = null;
+            btnDelete.onclick = null;
+            close.onclick = null;
+        };
+
+        btnKeep.onclick = () => { cleanup(); resolve(false); };
+        btnDelete.onclick = () => { cleanup(); resolve(true); };
+        close.onclick = () => { cleanup(); resolve(false); };
+
+        modal.classList.add('active');
+    });
+}
+
 document.getElementById('team-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -1749,22 +2099,149 @@ async function populateTeamSelect(selectedId = null) {
     });
 }
 
-async function openPlayerModal() {
-    document.getElementById('player-form').reset();
+window.openPlayerModal = async function (data = null) {
+    const form = document.getElementById('player-form');
+    if (!form) return;
+    form.reset();
     document.getElementById('player-id').value = '';
-    document.getElementById('player-image-preview').innerHTML = '';
 
+    // Reset Tabs
+    const tabIdentity = document.querySelector('.tab-link[data-tab="tab-identity"]');
+    if (tabIdentity) window.switchPlayerTab(tabIdentity, 'tab-identity');
+
+    // Populate Teams
     await populateTeamSelect();
 
-    const form = document.getElementById('player-form');
-    if (form) setLoading(form, false);
+    if (data) {
+        document.getElementById('player-id').value = data.id || '';
+        document.getElementById('ep-firstname').value = data.firstName || '';
+        document.getElementById('ep-lastname').value = data.lastName || '';
+        document.getElementById('ep-gender').value = data.gender || 'M';
+        document.getElementById('ep-dob').value = data.birthDate || data.dob || '';
+        document.getElementById('ep-medical').value = data.medicalCondition || data.medical || '';
 
+        document.getElementById('ep-address').value = data.address || '';
+        document.getElementById('ep-city').value = data.city || '';
+        document.getElementById('ep-postal').value = data.postalCode || '';
+        document.getElementById('ep-phone').value = data.phone || data.phoneFamily || '';
+
+        document.getElementById('ep-p1-name').value = data.parent1Name || data.parentName || '';
+        document.getElementById('ep-p1-email').value = data.parent1Email || data.parentEmail || '';
+        document.getElementById('ep-p2-name').value = data.parent2Name || '';
+        document.getElementById('ep-p2-email').value = data.parent2Email || '';
+
+        document.getElementById('ep-jersey-size').value = data.jerseySize || '';
+        document.getElementById('ep-short-size').value = data.shortSize || '';
+        document.getElementById('ep-short-opt').value = data.shortOption || '';
+        document.getElementById('ep-socks-opt').value = data.socksOption || 'Non';
+        document.getElementById('ep-socks-size').value = data.socksSize || '';
+        document.getElementById('ep-socks-qty').value = data.socksQuantity || 1;
+
+        document.getElementById('ep-photo-auth').value = data.photoAuth || 'Oui';
+        document.getElementById('ep-requests').value = data.specialRequests || '';
+
+        const teamSelect = document.getElementById('ep-team');
+        if (teamSelect) teamSelect.value = data.teamId || '';
+    }
+
+    setLoading(form, false);
     const modal = document.getElementById('player-modal');
     if (modal) modal.classList.add('active');
 }
 
-if (openPlayerModalBtn) openPlayerModalBtn.addEventListener('click', openPlayerModal);
-if (openPlayerModalDirBtn) openPlayerModalDirBtn.addEventListener('click', openPlayerModal);
+
+if (openPlayerModalBtn) openPlayerModalBtn.addEventListener('click', () => openPlayerModal(null));
+if (openPlayerModalDirBtn) openPlayerModalDirBtn.addEventListener('click', () => openPlayerModal(null));
+
+
+document.getElementById('player-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    setLoading(form, true);
+
+    try {
+        const id = document.getElementById('player-id').value;
+
+        const data = {
+            firstName: document.getElementById('ep-firstname').value,
+            lastName: document.getElementById('ep-lastname').value,
+            gender: document.getElementById('ep-gender').value,
+            birthDate: document.getElementById('ep-dob').value,
+            dob: document.getElementById('ep-dob').value, // Dual store for compatibility
+            medicalCondition: document.getElementById('ep-medical').value,
+
+            address: document.getElementById('ep-address').value,
+            city: document.getElementById('ep-city').value,
+            postalCode: document.getElementById('ep-postal').value,
+            phone: document.getElementById('ep-phone').value,
+
+            parent1Name: document.getElementById('ep-p1-name').value,
+            parent1Email: document.getElementById('ep-p1-email').value,
+            parentName: document.getElementById('ep-p1-name').value, // Compat
+            parentEmail: document.getElementById('ep-p1-email').value, // Compat
+
+            parent2Name: document.getElementById('ep-p2-name').value,
+            parent2Email: document.getElementById('ep-p2-email').value,
+
+            jerseySize: document.getElementById('ep-jersey-size').value,
+            shortSize: document.getElementById('ep-short-size').value,
+            shortOption: document.getElementById('ep-short-opt').value,
+            socksOption: document.getElementById('ep-socks-opt').value,
+            socksSize: document.getElementById('ep-socks-size').value,
+            socksQuantity: parseInt(document.getElementById('ep-socks-qty').value) || 1,
+
+            photoAuth: document.getElementById('ep-photo-auth').value,
+            specialRequests: document.getElementById('ep-requests').value,
+
+            teamId: document.getElementById('ep-team').value || null
+        };
+
+        if (id) {
+            await updateDoc(doc(db, "players", id), data);
+        } else {
+            // New Player
+            data.createdAt = serverTimestamp();
+            await addDoc(collection(db, "players"), data);
+        }
+
+        showAlert("Joueur enregistré avec succès !", "success");
+
+        const modal = document.getElementById('player-modal');
+        if (modal) modal.classList.remove('active');
+
+        // Reload views if they exist/are active
+        if (typeof loadPlayers === 'function') loadPlayers();
+        if (typeof loadTeamPlayers === 'function' && data.teamId) loadTeamPlayers(data.teamId);
+
+    } catch (err) {
+        console.error("Error saving player:", err);
+        showAlert("Erreur: " + err.message, "error");
+    } finally {
+        setLoading(form, false);
+    }
+});
+
+window.switchPlayerTab = function (element, tabId) {
+    // Remove active class from all tabs
+    const headers = element.parentElement.querySelectorAll('.tab-link');
+    headers.forEach(h => {
+        h.classList.remove('active');
+        h.style.color = '#666';
+        h.style.borderBottom = '2px solid transparent';
+    });
+
+    // Add active class to clicked tab
+    element.classList.add('active');
+    element.style.color = 'var(--primary)';
+    element.style.borderBottom = '2px solid var(--primary)';
+
+    // Hide all contents
+    const form = document.getElementById('player-form');
+    form.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+
+    // Show target content
+    document.getElementById(tabId).style.display = 'block';
+};
 
 
 if (playerModal) playerModal.querySelector('.close-modal').addEventListener('click', () => playerModal.classList.remove('active'));
@@ -3558,7 +4035,7 @@ window.checkAdminAndSetupUI = async (user) => {
     if (!user) return;
 
     const roles = await getUserRole(user.email);
-    console.log("User Roles:", roles);
+    // console.log("User Roles:", roles);
 
     // --- MIGRATION: Ensure SuperAdmin has document ID == lowercase email (for rules) ---
     if (roles.includes('SuperAdmin')) {
@@ -3601,24 +4078,24 @@ window.checkAdminAndSetupUI = async (user) => {
 
         // Force fetch if cache is empty (likely first load)
         if (referees.length === 0) {
-            console.log("Referees cache empty during check. Force fetching...");
+            // console.log("Referees cache empty during check. Force fetching...");
             const refSnap = await getDocs(collection(db, "referees"));
             dataCache.referees = {};
             refSnap.forEach(doc => {
                 dataCache.referees[doc.id] = { id: doc.id, ...doc.data() };
             });
             referees = Object.values(dataCache.referees);
-            console.log(`Fetched ${referees.length} referees.`);
+            // console.log(`Fetched ${referees.length} referees.`);
         }
 
-        console.log(`Checking referee link for ${user.email}. Total refs in cache: ${referees.length}`);
+        // console.log(`Checking referee link for ${user.email}. Total refs in cache: ${referees.length}`);
 
         const refEntry = referees.find(r => r.email && r.email.toLowerCase().trim() === user.email.toLowerCase().trim());
         if (refEntry) {
-            console.log("Referee Match FOUND:", refEntry);
+            // console.log("Referee Match FOUND:", refEntry);
             window.currentUserRefereeId = refEntry.id;
         } else {
-            console.log("No referee match found for email:", user.email);
+            // console.log("No referee match found for email:", user.email);
         }
 
     } catch (e) {
@@ -5722,4 +6199,64 @@ if (configTabContainer) {
             }
         });
     });
+}
+
+// --- GLOBAL POPUPS ---
+// Exposed for use in other modules (like email-campaigns.js)
+window.showPrompt = function (message, defaultValue = '') {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-prompt-modal');
+        if (!modal) {
+            // Fallback
+            return resolve(prompt(message, defaultValue));
+        }
+
+        const msgEl = document.getElementById('prompt-message');
+        const inputEl = document.getElementById('prompt-input');
+        const btnOk = document.getElementById('prompt-ok-btn');
+        const btnCancel = document.getElementById('prompt-cancel-btn');
+
+        if (msgEl) msgEl.textContent = message;
+        if (inputEl) inputEl.value = defaultValue;
+
+        modal.classList.add('active');
+        if (inputEl) {
+            setTimeout(() => inputEl.focus(), 50);
+        }
+
+        // Clean listeners
+        const newOk = btnOk.cloneNode(true);
+        btnOk.parentNode.replaceChild(newOk, btnOk);
+
+        const newCancel = btnCancel.cloneNode(true);
+        btnCancel.parentNode.replaceChild(newCancel, btnCancel);
+
+        // Attach new listeners
+        newOk.addEventListener('click', () => {
+            const val = inputEl ? inputEl.value : '';
+            modal.classList.remove('active');
+            resolve(val);
+        });
+
+        newCancel.addEventListener('click', () => {
+            modal.classList.remove('active');
+            resolve(null);
+        });
+
+        // Enter key
+        if (inputEl) {
+            inputEl.onkeydown = (e) => {
+                if (e.key === 'Enter') newOk.click();
+                if (e.key === 'Escape') newCancel.click();
+            };
+        }
+    });
+};
+
+// Initialize modules
+if (typeof window.initAutomationsModule === 'function') {
+    window.initAutomationsModule();
+}
+if (typeof window.initCampaignModule === 'function') {
+    window.initCampaignModule();
 }

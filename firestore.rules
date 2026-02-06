@@ -133,6 +133,15 @@ service cloud.firestore {
         allow read: if canView("Facturation");
         allow write: if canEdit("Facturation");
     }
+
+    // AUTOMATION DOCUMENTATION
+    match /automation_notes/{noteId} {
+        // Technically Automations module permission not defined yet, using generic admin check or Config
+        // Let's assume Automations falls under Config or a new "Automations" key.
+        // For now, allow all authenticated admins (or reuse Config permission)
+        allow read: if request.auth != null; // Visible to all admins
+        allow write: if canEdit("Config") || canEdit("Automations");
+    }
     
     // Default fallback: Deny everything else
     match /{document=**} {

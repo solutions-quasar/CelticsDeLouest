@@ -14,6 +14,16 @@ function initCampaignModule() {
                 toolbar: '#camp-editor-toolbar'
             }
         });
+
+        // Add listener to the List tab to ensure it closes editor view
+        const listTab = document.querySelector('[data-tab="tab-campaign-list"]');
+        if (listTab) {
+            listTab.addEventListener('click', () => {
+                document.querySelector('[data-tab="tab-campaign-editor"]').style.display = 'none';
+                document.getElementById('tab-campaign-list').classList.add('active');
+                document.getElementById('tab-campaign-editor').classList.remove('active');
+            });
+        }
     }
 
     // Attach Event Listeners
@@ -21,16 +31,18 @@ function initCampaignModule() {
     document.getElementById('btn-new-campaign')?.addEventListener('click', () => openCampaignEditor());
     document.getElementById('btn-save-draft')?.addEventListener('click', () => saveCampaign('draft'));
     document.getElementById('btn-send-campaign')?.addEventListener('click', () => confirmAndSend());
+    document.getElementById('btn-send-campaign')?.addEventListener('click', () => confirmAndSend());
     document.getElementById('btn-test-campaign')?.addEventListener('click', sendTestEmail);
+    document.getElementById('btn-campaign-back')?.addEventListener('click', closeEditor);
 
     // Filters
-    document.querySelectorAll('.btn-filter').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            loadCampaigns(e.target.dataset.filter);
+    // Filters
+    const filterSelect = document.getElementById('campaign-filter-select');
+    if (filterSelect) {
+        filterSelect.addEventListener('change', (e) => {
+            loadCampaigns(e.target.value);
         });
-    });
+    }
 
     // Populate Teams if needed
     populateTeamSelectCampaign();
@@ -278,7 +290,8 @@ async function confirmAndSend() {
 }
 
 async function sendTestEmail() {
-    const email = await window.showPrompt("Entrez l'email de test:", "votre@email.com");
+    const defaultEmail = window.auth.currentUser ? window.auth.currentUser.email : "";
+    const email = await window.showPrompt("Entrez l'email de test:", defaultEmail);
     if (!email) return;
 
     const subject = document.getElementById('camp-subject').value;
@@ -378,6 +391,7 @@ function getStatusColor(status) {
 
 function closeEditor() {
     document.querySelector('[data-tab="tab-campaign-editor"]').style.display = 'none';
-    document.querySelector('[data-tab="tab-campaign-list"]').click();
+    const listTab = document.querySelector('[data-tab="tab-campaign-list"]');
+    if (listTab) listTab.click();
 }
 

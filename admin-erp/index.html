@@ -263,6 +263,11 @@
                                     <select id="team-filter-season"
                                         style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; min-width: 150px;"></select>
 
+                                    <button class="btn-action" id="btn-open-visual-editor"><i class="fas fa-th"></i>
+                                        Visuel</button>
+                                    <button class="btn-action" id="btn-generate-teams"
+                                        style="background-color: var(--secondary);"><i class="fas fa-magic"></i>
+                                        Générer</button>
                                     <button class="btn-action" id="open-team-modal"><i class="fas fa-plus"></i>
                                         Ajouter</button>
                                 </div>
@@ -273,6 +278,101 @@
                                 </div>
 
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Team Generation Confirmation Modal -->
+                    <div id="team-gen-confirm-modal" class="modal">
+                        <div class="modal-content" style="max-width: 400px; text-align: center;">
+                            <span class="close-modal">&times;</span>
+                            <div style="margin-bottom: 20px;">
+                                <i class="fas fa-magic" style="font-size: 3rem; color: var(--secondary);"></i>
+                            </div>
+                            <h3>Générer les équipes ?</h3>
+                            <p style="color: #666; margin-bottom: 20px;">
+                                Il y a <strong id="gen-unassigned-count" style="color: var(--primary);">0</strong>
+                                joueurs inscrits sans équipe pour cette saison.
+                            </p>
+                            <p style="font-size: 0.9rem; margin-bottom: 30px;">
+                                Cette action va créer automatiquement une équipe par catégorie et y assigner tous les
+                                joueurs correspondants.
+                            </p>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <button id="btn-confirm-generate" class="btn-action"
+                                    style="width: 100%; justify-content: center; background: var(--secondary);">
+                                    <i class="fas fa-check"></i> Générer
+                                </button>
+                                <button class="btn-action" id="btn-cancel-generate"
+                                    style="width: 100%; justify-content: center; background: #999;">
+                                    Fermer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Empty Team Deletion Confirmation Modal -->
+                    <div id="empty-team-confirm-modal" class="modal">
+                        <div class="modal-content" style="max-width: 400px; text-align: center;">
+                            <span class="close-modal">&times;</span>
+                            <div style="margin-bottom: 20px;">
+                                <i class="fas fa-question-circle" style="font-size: 3rem; color: #f39c12;"></i>
+                            </div>
+                            <h3>Équipe vide</h3>
+                            <p style="color: #666; margin-bottom: 25px;">L'équipe d'origine est maintenant
+                                vide.<br>Voulez-vous la conserver ou la supprimer ?</p>
+                            <div style="display: flex; gap: 10px; justify-content: center;">
+                                <button id="btn-keep-empty-team" class="btn-action"
+                                    style="background: #95a5a6; flex: 1;">Conserver</button>
+                                <button id="btn-delete-empty-team" class="btn-action"
+                                    style="background: #e74c3c; flex: 1;">Supprimer</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Team Editor Modal (Fullscreen) -->
+                    <div id="team-visual-modal" class="modal"
+                        style="display: none; align-items: flex-start; padding: 0;">
+                        <div class="modal-content"
+                            style="width: 100%; height: 100%; max-width: none; max-height: none; border-radius: 0; display: flex; flex-direction: column; padding: 0;">
+
+                            <!-- Header -->
+                            <div
+                                style="padding: 15px 25px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; background: white;">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <h2 style="margin: 0;">Éditeur Visuel</h2>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <select id="visual-filter-category" class="form-control"
+                                            style="padding: 5px 10px; width: 150px;">
+                                            <option value="">Toutes Catégories</option>
+                                        </select>
+                                        <select id="visual-filter-gender" class="form-control"
+                                            style="padding: 5px 10px; width: 150px;">
+                                            <option value="">Tous Sexes</option>
+                                            <option value="M">Masculin</option>
+                                            <option value="F">Féminin</option>
+                                            <option value="X">Mixte</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 10px;">
+                                    <button id="btn-visual-assignments" class="btn-action"
+                                        style="background: var(--primary);">
+                                        <i class="fas fa-exchange-alt"></i> Modifier l'assignation
+                                    </button>
+                                    <button id="btn-close-visual" class="btn-action" style="background: #e74c3c;">
+                                        <i class="fas fa-times"></i> Fermer
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Body -->
+                            <div style="flex: 1; padding: 25px; background: #f4f6f9; overflow-y: auto;">
+                                <div id="visual-teams-container"
+                                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+                                    <!-- Team Cards Injected Here -->
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 
@@ -327,71 +427,6 @@
                     </div>
 
                     <!-- Boutique View -->
-                    <div id="view-boutique" class="view">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Gestion Boutique</h3>
-                                <div class="header-actions-group">
-                                    <button class="view-toggle-btn active" data-view="grid"
-                                        data-target="products-list"><i class="fas fa-th-large"></i></button>
-                                    <button class="view-toggle-btn" data-view="list" data-target="products-list"><i
-                                            class="fas fa-list"></i></button>
-                                    <button class="btn-action" id="open-product-modal"><i
-                                            class="fas fa-plus"></i></button>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 20px;">
-                                    <div class="tab-link active" data-tab="tab-products"><i class="fas fa-tshirt"></i>
-                                        Produits</div>
-                                    <div class="tab-link" data-tab="tab-boutique-config"><i class="fas fa-cog"></i>
-                                        Configuration</div>
-                                </div>
-
-                                <div id="tab-products" class="tab-content active">
-                                    <div class="header-actions-group" style="margin-bottom:15px;">
-                                        <button class="view-toggle-btn active" data-view="grid"
-                                            data-target="products-list"><i class="fas fa-th-large"></i></button>
-                                        <button class="view-toggle-btn" data-view="list" data-target="products-list"><i
-                                                class="fas fa-list"></i></button>
-                                        <button class="btn-action" id="open-product-modal"><i class="fas fa-plus"></i>
-                                            Ajouter</button>
-                                    </div>
-                                    <div class="product-grid" id="products-list">
-                                        <!-- JS will populate -->
-                                    </div>
-                                </div>
-
-                                <div id="tab-boutique-config" class="tab-content">
-                                    <div class="form-group">
-                                        <label>Lien vers la boutique en ligne</label>
-                                        <div style="display:flex; gap:10px;">
-                                            <input type="url" id="boutique-link" class="form-control"
-                                                placeholder="https://..." style="width:100%;">
-                                            <button class="btn-save" id="save-boutique-btn"><i class="fas fa-save"></i>
-                                                Sauvegarder</button>
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Texte descriptif (Page Boutique)</label>
-                                        <!-- Editor Toolbar -->
-                                        <div id="boutique-editor-toolbar">
-                                            <span class="ql-formats">
-                                                <button class="ql-bold"></button>
-                                                <button class="ql-italic"></button>
-                                                <button class="ql-underline"></button>
-                                            </span>
-                                            <span class="ql-formats">
-                                                <select class="ql-color"></select>
-                                                <button class="ql-list" value="bullet"></button>
-                                            </span>
-                                        </div>
-                                        <div id="boutique-editor" style="height: 250px; background: white;"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Inventory View -->
                     <div id="view-inventory" class="view">
@@ -661,105 +696,64 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Gestion de la Boutique</h3>
-                                <button class="btn-save" id="save-boutique-btn"><i class="fas fa-save"></i>
-                                    Sauvegarder</button>
                             </div>
                             <div class="card-body">
-                                <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 20px;">
-                                    <div class="tab-link active" data-tab="tab-products"><i class="fas fa-tshirt"></i>
-                                        Produits</div>
-                                    <div class="tab-link" data-tab="tab-boutique-config"><i class="fas fa-cog"></i>
-                                        Configuration</div>
-                                </div>
-
-                                <div id="tab-products" class="tab-content active">
-                                    <div class="header-actions-group" style="margin-bottom:15px;">
-                                        <button class="view-toggle-btn active" data-view="grid"
-                                            data-target="products-list"><i class="fas fa-th-large"></i></button>
-                                        <button class="view-toggle-btn" data-view="list" data-target="products-list"><i
-                                                class="fas fa-list"></i></button>
-                                        <button class="btn-action" id="open-product-modal"><i class="fas fa-plus"></i>
-                                            Ajouter</button>
-                                    </div>
-                                    <div class="product-grid" id="products-list">
-                                        <!-- JS will populate -->
+                                <div class="form-group">
+                                    <label>Lien vers la boutique en ligne</label>
+                                    <div style="display:flex; gap:10px;">
+                                        <input type="url" id="boutique-link" class="form-control"
+                                            placeholder="https://..." style="width:100%;">
                                     </div>
                                 </div>
-
-                                <div id="tab-boutique-config" class="tab-content">
-                                    <div class="form-group">
-                                        <label>Lien vers la boutique en ligne</label>
-                                        <div style="display:flex; gap:10px;">
-                                            <input type="url" id="boutique-link" class="form-control"
-                                                placeholder="https://..." style="width:100%;">
-                                        </div>
+                                <div class="form-group">
+                                    <label>Texte descriptif (Page Boutique)</label>
+                                    <div id="boutique-editor-toolbar">
+                                        <span class="ql-formats">
+                                            <button class="ql-bold"></button>
+                                            <button class="ql-italic"></button>
+                                            <button class="ql-underline"></button>
+                                        </span>
+                                        <span class="ql-formats">
+                                            <select class="ql-color"></select>
+                                            <button class="ql-list" value="bullet"></button>
+                                        </span>
                                     </div>
-                                    <div class="form-group">
-                                        <label>Texte descriptif (Page Boutique)</label>
-                                        <div id="boutique-editor-toolbar">
-                                            <span class="ql-formats">
-                                                <button class="ql-bold"></button>
-                                                <button class="ql-italic"></button>
-                                                <button class="ql-underline"></button>
-                                            </span>
-                                            <span class="ql-formats">
-                                                <select class="ql-color"></select>
-                                                <button class="ql-list" value="bullet"></button>
-                                            </span>
-                                        </div>
-                                        <div id="boutique-editor" style="height: 250px; background: white;"></div>
-                                    </div>
+                                    <div id="boutique-editor" style="height: 250px; background: white;"></div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Floating Save Button -->
+                        <div style="position: sticky; bottom: 20px; z-index: 100; margin-top: 20px; padding: 0 20px;">
+                            <button class="btn-save" id="save-boutique-btn"
+                                style="width: 100%; padding: 15px; font-size: 1.1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; gap: 10px;">
+                                <i class="fas fa-save"></i> Sauvegarder
+                            </button>
                         </div>
                     </div>
 
                     <!-- AUTOMATIONS VIEW -->
                     <div id="view-automations" class="view">
                         <div class="card">
-                            <div class="card-header">
-                                <h3>Automatisations & Communications</h3>
-                            </div>
                             <div class="card-body">
-                                <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 20px;">
-                                    <div class="tab-link active" data-tab="tab-auto-list"><i class="fas fa-robot"></i>
-                                        Automatisations</div>
-                                    <div class="tab-link" data-tab="tab-auto-email"><i
-                                            class="fas fa-envelope-open-text"></i> Courriels de masse</div>
-                                </div>
+                                <div id="tab-auto-list" class="tab-content active" style="display:block;">
+                                    <div
+                                        style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                                        <div>
+                                            <h4 style="margin: 0; color: #444; font-size: 1rem;"><i
+                                                    class="fas fa-book"></i> Documentation des Processus</h4>
+                                            <p style="margin: 4px 0 0 0; color: #777; font-size: 0.85rem;">Liste
+                                                manuelle des automatisations actives sur la plateforme.</p>
+                                        </div>
+                                        <button class="btn-action" id="btn-add-auto-note"><i class="fas fa-plus"></i>
+                                            Ajouter</button>
+                                    </div>
 
-                                <div id="tab-auto-list" class="tab-content active">
-                                    <div class="product-grid" id="automations-list">
-                                        <p style="color:#666; font-style:italic;">Aucune automatisation active pour la
-                                            saison.</p>
+                                    <div id="automation-notes-list"
+                                        style="display: flex; flex-direction: column; gap: 15px;">
+                                        <!-- Content populated by JS -->
+                                        <div class="loading-spinner">Chargement...</div>
                                     </div>
-                                </div>
-
-                                <div id="tab-auto-email" class="tab-content">
-                                    <div class="form-group">
-                                        <label>Cible</label>
-                                        <select id="auto-email-target" class="form-control"
-                                            style="width:100%; padding:8px; border-radius:4px; border:1px solid #ddd;">
-                                            <option value="all_active">Tous les joueurs actifs (Saison en cours)
-                                            </option>
-                                            <option value="all_coaches">Tous les coachs</option>
-                                            <option value="all_referees">Tous les arbitres</option>
-                                            <option value="board">Membres du C.A.</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Sujet</label>
-                                        <input type="text" id="auto-email-subject" class="form-control"
-                                            style="width:100%;" placeholder="Sujet du courriel...">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Message</label>
-                                        <textarea id="auto-email-body" rows="10" class="form-control"
-                                            style="width:100%; padding:10px; border-radius:4px; border:1px solid #ddd;"
-                                            placeholder="Rédigez votre message ici..."></textarea>
-                                    </div>
-                                    <button class="btn-save" id="send-bulk-email-btn"><i class="fas fa-paper-plane"></i>
-                                        Envoyer</button>
                                 </div>
                             </div>
                         </div>
@@ -787,11 +781,14 @@
 
                                 <!-- TAB 1: LIST / DASHBOARD -->
                                 <div id="tab-campaign-list" class="tab-content active">
-                                    <div class="filter-group" style="margin-bottom:15px; display:flex; gap:10px;">
-                                        <button class="btn-filter active" data-filter="all">Tous</button>
-                                        <button class="btn-filter" data-filter="draft">Brouillons</button>
-                                        <button class="btn-filter" data-filter="scheduled">Programmés</button>
-                                        <button class="btn-filter" data-filter="sent">Envoyés</button>
+                                    <div class="filter-group" style="margin-bottom:15px;">
+                                        <select id="campaign-filter-select" class="form-control"
+                                            style="width: 200px; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                                            <option value="all">Tous</option>
+                                            <option value="draft">Brouillons</option>
+                                            <option value="scheduled">Programmés</option>
+                                            <option value="sent">Envoyés</option>
+                                        </select>
                                     </div>
                                     <div id="campaigns-list-container" class="view-grid">
                                         <p>Chargement des campagnes...</p>
@@ -880,38 +877,51 @@
                                     </div>
 
                                     <!-- Scheduling & Actions -->
+                                    <!-- Scheduling & Actions (Floating footer) -->
                                     <div class="form-group"
-                                        style="background:#eef2f5; padding:15px; border-radius:6px; margin-top:20px;">
+                                        style="position: sticky; bottom: 0; background: white; border-top: 1px solid #ddd; padding: 15px 20px; margin: 20px -20px -20px -20px; z-index: 900; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); border-radius: 0 0 8px 8px;">
                                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                                            <div style="display:flex; gap:15px; align-items:center;">
-                                                <div>
-                                                    <label
-                                                        style="margin-bottom:4px; display:block; font-size:0.85rem;">Programmer
-                                                        (Optionnel)</label>
-                                                    <input type="datetime-local" id="camp-schedule-at"
-                                                        class="form-control">
-                                                </div>
-                                                <div>
-                                                    <label
-                                                        style="margin-bottom:4px; display:block; font-size:0.85rem;">Récurrence</label>
-                                                    <select id="camp-recurrence" class="form-control">
-                                                        <option value="">Aucune</option>
-                                                        <option value="weekly">Hebdomadaire (+7 jours)</option>
-                                                        <option value="monthly">Mensuelle (+1 mois)</option>
-                                                    </select>
-                                                </div>
-                                            </div>
+                                            <button class="btn-secondary" id="btn-campaign-back"
+                                                style="margin-right: 15px;">
+                                                <i class="fas fa-arrow-left"></i> Retour
+                                            </button>
 
-                                            <div style="display:flex; gap:10px;">
-                                                <button class="btn-action" id="btn-test-campaign"
-                                                    style="background:#6c757d;"><i class="fas fa-vial"></i>
-                                                    Test</button>
-                                                <button class="btn-action" id="btn-save-draft"
-                                                    style="background:#f39c12;"><i class="fas fa-save"></i>
-                                                    Brouillon</button>
-                                                <button class="btn-action" id="btn-send-campaign"
-                                                    style="background:var(--primary);"><i
-                                                        class="fas fa-paper-plane"></i> Envoyer / Programmer</button>
+                                            <div
+                                                style="display:flex; gap:15px; align-items:center; flex: 1; justify-content: flex-end;">
+                                                <div
+                                                    style="display:flex; gap:15px; align-items:center; border-right: 1px solid #ddd; padding-right: 15px; margin-right: 15px;">
+                                                    <div>
+                                                        <label
+                                                            style="margin-bottom:4px; display:block; font-size:0.85rem;">Programmer</label>
+                                                        <input type="datetime-local" id="camp-schedule-at"
+                                                            class="form-control"
+                                                            style="font-size: 0.9rem; padding: 4px;">
+                                                    </div>
+                                                    <div>
+                                                        <label
+                                                            style="margin-bottom:4px; display:block; font-size:0.85rem;">Récurrence</label>
+                                                        <select id="camp-recurrence" class="form-control"
+                                                            style="font-size: 0.9rem; padding: 4px;">
+                                                            <option value="">Aucune</option>
+                                                            <option value="weekly">Hebdomadaire (+7j)</option>
+                                                            <option value="monthly">Mensuelle (+1m)</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div style="display:flex; gap:10px;">
+                                                    <button class="btn-action" id="btn-test-campaign"
+                                                        style="background:#6c757d; font-size: 0.9rem;"><i
+                                                            class="fas fa-vial"></i>
+                                                        Test</button>
+                                                    <button class="btn-action" id="btn-save-draft"
+                                                        style="background:#f39c12; font-size: 0.9rem;"><i
+                                                            class="fas fa-save"></i>
+                                                        Brouillon</button>
+                                                    <button class="btn-action" id="btn-send-campaign"
+                                                        style="background:var(--primary); font-size: 0.9rem;"><i
+                                                            class="fas fa-paper-plane"></i> Envoyer</button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -927,8 +937,6 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3>Configuration & Inscriptions</h3>
-                                <button class="btn-save" id="save-settings-btn"><i class="fas fa-save"></i>
-                                    Sauvegarder Tout</button>
                             </div>
                             <div class="card-body" id="config-tabs-container">
                                 <!-- Sub-tabs Navigation -->
@@ -1104,6 +1112,14 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Floating Save Button -->
+                        <div style="position: sticky; bottom: 20px; z-index: 100; margin-top: 20px; padding: 0 20px;">
+                            <button class="btn-save" id="save-settings-btn"
+                                style="width: 100%; padding: 15px; font-size: 1.1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; gap: 10px;">
+                                <i class="fas fa-save"></i> Sauvegarder Tout
+                            </button>
                         </div>
                     </div>
 
@@ -2680,65 +2696,242 @@
 
     <!-- Edit/Add Player Modal -->
     <div class="modal" id="player-modal">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2 id="player-modal-title">Joueur</h2>
-            <form id="player-form">
+        <div class="modal-content"
+            style="max-width: 800px; height: 90vh; display: flex; flex-direction: column; padding: 0;">
+            <div
+                style="padding: 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="player-modal-title" style="margin: 0;">Joueur</h2>
+                <span class="close-modal" onclick="document.getElementById('player-modal').classList.remove('active')"
+                    style="position: static; cursor: pointer; font-size: 2rem;">&times;</span>
+            </div>
+
+            <form id="player-form" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
                 <input type="hidden" id="player-id">
 
-                <div class="form-row" style="display: flex; gap: 15px;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Prénom</label>
-                        <input type="text" id="player-first-name" required>
-                    </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label>Nom</label>
-                        <input type="text" id="player-last-name" required>
-                    </div>
+                <!-- Tabs -->
+                <div class="tabs-header"
+                    style="padding: 0 20px; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; gap: 20px;">
+                    <div class="tab-link active" data-tab="tab-identity" onclick="switchPlayerTab(this, 'tab-identity')"
+                        style="padding: 15px 0; border-bottom: 2px solid var(--primary); color: var(--primary); cursor: pointer; font-weight: 600;">
+                        Identité</div>
+                    <div class="tab-link" data-tab="tab-contact" onclick="switchPlayerTab(this, 'tab-contact')"
+                        style="padding: 15px 0; border-bottom: 2px solid transparent; color: #666; cursor: pointer; font-weight: 600;">
+                        Coordonnées</div>
+                    <div class="tab-link" data-tab="tab-uniform" onclick="switchPlayerTab(this, 'tab-uniform')"
+                        style="padding: 15px 0; border-bottom: 2px solid transparent; color: #666; cursor: pointer; font-weight: 600;">
+                        Uniforme</div>
+                    <div class="tab-link" data-tab="tab-info" onclick="switchPlayerTab(this, 'tab-info')"
+                        style="padding: 15px 0; border-bottom: 2px solid transparent; color: #666; cursor: pointer; font-weight: 600;">
+                        Divers / Admin</div>
                 </div>
 
-                <div class="form-row" style="display: flex; gap: 15px;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Date de Naissance</label>
-                        <input type="date" id="player-birth-date">
+                <!-- Content -->
+                <div style="flex: 1; overflow-y: auto; padding: 25px;">
+
+                    <!-- TAB: IDENTITY -->
+                    <div id="tab-identity" class="tab-content active">
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Prénom</label>
+                                <input type="text" id="ep-firstname" required class="form-control">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Nom</label>
+                                <input type="text" id="ep-lastname" required class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Sexe</label>
+                                <select id="ep-gender" class="form-control">
+                                    <option value="M">Masculin</option>
+                                    <option value="F">Féminin</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Date de Naissance</label>
+                                <input type="date" id="ep-dob" required class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Maladie ou allergies</label>
+                            <textarea id="ep-medical" rows="3" class="form-control" placeholder="Aucune"></textarea>
+                        </div>
                     </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label>Équipe</label>
-                        <select id="player-team">
-                            <option value="">Non assigné</option>
-                            <!-- JS Will Populate -->
-                        </select>
+
+                    <!-- TAB: CONTACT -->
+                    <div id="tab-contact" class="tab-content" style="display: none;">
+                        <h4
+                            style="margin-bottom: 15px; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                            Ménage</h4>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Adresse (Rue et #)</label>
+                            <input type="text" id="ep-address" class="form-control">
+                        </div>
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Ville</label>
+                                <input type="text" id="ep-city" class="form-control">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Code Postal</label>
+                                <input type="text" id="ep-postal" class="form-control">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label>Téléphone (Principal)</label>
+                            <input type="tel" id="ep-phone" class="form-control">
+                        </div>
+
+                        <h4
+                            style="margin-bottom: 15px; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                            Parents</h4>
+                        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                            <label style="font-weight: bold; margin-bottom: 10px; display: block;">Parent 1
+                                (Responsable)</label>
+                            <div class="form-row" style="display: flex; gap: 15px;">
+                                <div class="form-group" style="flex: 1;">
+                                    <label>Nom Complet</label>
+                                    <input type="text" id="ep-p1-name" class="form-control">
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label>Courriel</label>
+                                    <input type="email" id="ep-p1-email" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px;">
+                            <label style="font-weight: bold; margin-bottom: 10px; display: block;">Parent 2</label>
+                            <div class="form-row" style="display: flex; gap: 15px;">
+                                <div class="form-group" style="flex: 1;">
+                                    <label>Nom Complet</label>
+                                    <input type="text" id="ep-p2-name" class="form-control">
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label>Courriel</label>
+                                    <input type="email" id="ep-p2-email" class="form-control">
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- TAB: UNIFORM -->
+                    <div id="tab-uniform" class="tab-content" style="display: none;">
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Taille Chandail</label>
+                                <select id="ep-jersey-size" class="form-control">
+                                    <option value="">-- Choisir --</option>
+                                    <option value="YXS">YXS</option>
+                                    <option value="YS">YS</option>
+                                    <option value="YM">YM</option>
+                                    <option value="YL">YL</option>
+                                    <option value="YXL">YXL</option>
+                                    <option value="AS">AS</option>
+                                    <option value="AM">AM</option>
+                                    <option value="AL">AL</option>
+                                    <option value="AXL">AXL</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Taille Short</label>
+                                <select id="ep-short-size" class="form-control">
+                                    <option value="">-- Choisir --</option>
+                                    <option value="YXS">YXS</option>
+                                    <option value="YS">YS</option>
+                                    <option value="YM">YM</option>
+                                    <option value="YL">YL</option>
+                                    <option value="YXL">YXL</option>
+                                    <option value="AS">AS</option>
+                                    <option value="AM">AM</option>
+                                    <option value="AL">AL</option>
+                                    <option value="AXL">AXL</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Option Short</label>
+                            <select id="ep-short-opt" class="form-control">
+                                <option value="">-- Non spécifié --</option>
+                                <option value="achat">Achat</option>
+                                <option value="pret">Prêt</option>
+                            </select>
+                        </div>
+
+                        <h4
+                            style="margin: 20px 0 10px 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                            Bas Blancs</h4>
+                        <div class="form-row" style="display: flex; gap: 15px; align-items: flex-end;">
+                            <div class="form-group" style="width: 100px;">
+                                <label>Requis</label>
+                                <select id="ep-socks-opt" class="form-control">
+                                    <option value="Non">Non</option>
+                                    <option value="Oui">Oui</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Taille</label>
+                                <select id="ep-socks-size" class="form-control">
+                                    <option value="">-- Choisir --</option>
+                                    <option value="Très Petit">Très Petit</option>
+                                    <option value="Petit">Petit</option>
+                                    <option value="Moyen">Moyen</option>
+                                    <option value="Large">Large</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="width: 80px;">
+                                <label>Qté</label>
+                                <input type="number" id="ep-socks-qty" value="1" min="1" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB: ADMIN / INFO -->
+                    <div id="tab-info" class="tab-content" style="display: none;">
+                        <h4
+                            style="margin-bottom: 15px; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                            Autorisations</h4>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Autorisation Photos (Site Web / Pubs)</label>
+                            <select id="ep-photo-auth" class="form-control">
+                                <option value="Oui">Oui</option>
+                                <option value="Non">Non</option>
+                            </select>
+                        </div>
+
+                        <h4
+                            style="margin: 20px 0 10px 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                            Demandes Spéciales</h4>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <textarea id="ep-requests" rows="3" class="form-control"
+                                placeholder="Demandes particulières à l'inscription..."></textarea>
+                        </div>
+
+                        <h4
+                            style="margin: 20px 0 10px 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                            Administration</h4>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Équipe Assignée</label>
+                            <select id="ep-team" class="form-control">
+                                <option value="">-- Non assigné --</option>
+                            </select>
+                        </div>
+                    </div>
+
                 </div>
 
-                <h4 style="margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Parent / Tuteur
-                </h4>
-
-                <div class="form-row" style="display: flex; gap: 15px;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Prénom</label>
-                        <input type="text" id="player-parent-first-name">
-                    </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label>Nom</label>
-                        <input type="text" id="player-parent-last-name">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Courriel</label>
-                    <input type="email" id="player-parent-email">
-                </div>
-
-                <div class="form-group">
-                    <label>Téléphone</label>
-                    <input type="tel" id="player-parent-phone">
-                </div>
-
-                <div class="form-actions" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
-                    <button type="submit" class="btn-save" style="width: 100%; padding: 12px;">Enregistrer</button>
-                    <button type="button" class="btn-secondary close-modal-btn btn-close-custom"
-                        style="width: 100%; padding: 12px; border: 2px solid var(--primary); background: white; color: var(--primary); font-weight: 600; border-radius: 6px;">Fermer</button>
+                <!-- Footer -->
+                <div
+                    style="padding: 20px; border-top: 1px solid #ddd; display: flex; flex-direction: column; gap: 10px; background: #fff;">
+                    <button type="submit" class="btn-save"
+                        style="margin: 0; padding: 12px; width: 100%;">Enregistrer</button>
+                    <button type="button" class="btn-secondary"
+                        onclick="document.getElementById('player-modal').classList.remove('active')"
+                        style="border: 1px solid #ccc; background: white; color: #333; padding: 12px; width: 100%;">Fermer</button>
                 </div>
             </form>
         </div>
@@ -2773,10 +2966,83 @@
             <h3 id="alert-title" style="margin-bottom: 15px;">Information</h3>
             <p id="alert-message" style="color: #666; margin-bottom: 25px; font-size: 1rem;"></p>
 
-            <button class="btn-action" id="alert-ok-btn"
-                style="width: 100%; justify-content: center; background: var(--secondary);">
-                OK
             </button>
+        </div>
+    </div>
+
+    <!-- GENERIC PROMPT MODAL -->
+    <div id="custom-prompt-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px; text-align: center;">
+            <div style="margin-bottom: 20px;">
+                <i class="fas fa-keyboard" style="font-size: 3rem; color: var(--primary);"></i>
+            </div>
+            <h3 id="prompt-title" style="margin-bottom: 15px;">Saisie requise</h3>
+            <p id="prompt-message" style="color: #666; margin-bottom: 15px; font-size: 1rem;"></p>
+            <div class="form-group" style="margin-bottom: 25px;">
+                <input type="text" id="prompt-input" class="form-control"
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+
+            <div class="modal-footer" style="justify-content: center; gap: 15px;">
+                <button class="btn-secondary" id="prompt-cancel-btn"
+                    style="background: #7f8c8d; border-color: #7f8c8d;">Annuler</button>
+                <button class="btn-action" id="prompt-ok-btn" style="background: var(--primary); color: white;">
+                    Valider
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUTOMATION DOC EDITOR MODAL (FULLSCREEN) -->
+    <div id="automation-doc-modal" class="modal" style="z-index: 10001;">
+        <div class="modal-content"
+            style="width: 95%; height: 95%; max-width: none; display: flex; flex-direction: column; padding: 0;">
+            <div class="modal-header"
+                style="padding: 15px 25px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0;"><i class="fas fa-book-open"></i> Documentation du Processus</h3>
+                <button class="close-modal-btn" id="close-auto-doc-btn"
+                    style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <div class="modal-body"
+                style="flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column;">
+                <div class="form-group">
+                    <label>Titre</label>
+                    <input type="text" id="auto-doc-title" class="form-control"
+                        style="font-size: 1.2rem; padding: 10px;">
+                </div>
+                <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
+                    <label>Description Détaillée</label>
+                    <div id="auto-doc-toolbar">
+                        <span class="ql-formats">
+                            <select class="ql-header"></select>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-bold"></button>
+                            <button class="ql-italic"></button>
+                            <button class="ql-underline"></button>
+                            <button class="ql-strike"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-list" value="ordered"></button>
+                            <button class="ql-list" value="bullet"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-link"></button>
+                            <button class="ql-image"></button>
+                        </span>
+                    </div>
+                    <div id="auto-doc-editor" style="flex: 1; border: 1px solid #ccc;"></div>
+                </div>
+            </div>
+            <div class="modal-footer"
+                style="padding: 15px 25px; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn-save" id="save-auto-doc-btn" style="width: 100%; justify-content: center;"><i
+                        class="fas fa-save"></i> Enregistrer</button>
+                <button id="cancel-auto-doc-btn"
+                    style="width: 100%; padding: 12px; background: white; color: var(--primary); border: 2px solid var(--primary); border-radius: 6px; font-weight: 600; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                    <i class="fas fa-times"></i> Fermer
+                </button>
+            </div>
         </div>
     </div>
 
@@ -2849,6 +3115,7 @@
     <script src="./js/ui-utils.js"></script>
     <script src="./js/players.js"></script>
     <script src="./js/search.js"></script>
+    <script src="./js/automations.js"></script>
     <script src="./js/email-campaigns.js"></script>
     <script type="module" src="./js/app.js"></script>
 </body>

@@ -228,6 +228,8 @@ export async function refreshBillingData() {
                 else if (limitStatus === 'failed') limitStatus = 'Échoué';
 
                 const tr = document.createElement('tr');
+                tr.classList.add('clickable-row');
+                tr.style.cursor = 'pointer';
                 tr.innerHTML = `
                     <td>${date}</td>
                     <td><strong>${data.customerName || 'Inconnu'}</strong><br><small>${data.customerEmail}</small></td>
@@ -237,6 +239,11 @@ export async function refreshBillingData() {
                         <a href="${data.invoiceUrl || '#'}" target="_blank" class="btn-action" style="padding:4px 8px; font-size:0.8rem;"><i class="fas fa-external-link-alt"></i> Voir</a>
                     </td>
                 `;
+                tr.addEventListener('click', (e) => {
+                    if (!e.target.closest('a') && data.invoiceUrl) {
+                        window.open(data.invoiceUrl, '_blank');
+                    }
+                });
                 tbody.appendChild(tr);
             });
         }

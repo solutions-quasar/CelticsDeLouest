@@ -1918,13 +1918,12 @@
                     </div>
                 </div>
 
-                <div class="form-actions"
-                    style="position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #ddd; box-shadow: 0 -4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; z-index: 100;">
-                    <button type="submit" class="btn-save"
-                        style="width: 100%; padding: 12px; font-weight: 600; font-size: 1rem;">Enregistrer</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn-save">
+                        <i class="fas fa-save"></i> Enregistrer
+                    </button>
                     <button type="button" class="btn-close-custom"
-                        onclick="document.getElementById('registration-modal').classList.remove('active')"
-                        style="width: 100%; padding: 12px; border: 2px solid var(--primary); background: white; color: var(--primary); font-weight: 600; border-radius: 6px; cursor:pointer; font-size: 1rem;">
+                        onclick="document.getElementById('registration-modal').classList.remove('active')">
                         Fermer
                     </button>
                 </div>
@@ -1933,127 +1932,226 @@
     </div>
 
     <!-- ADMIN MODAL -->
-    <div class="modal" id="admin-modal">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>Utilisateur Plateforme</h2>
-            <form id="admin-form">
-                <input type="hidden" id="admin-id">
-                <div class="form-group">
-                    <label>Email (ID de connexion)</label>
-                    <input type="email" id="admin-email" required>
+    <div class="modal modal-full" id="admin-modal" style="padding: 0;">
+        <div class="modal-content"
+            style="width: 100%; height: 100%; max-width: none; margin: 0; padding: 0; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: #f8f9fa;">
+            <form id="admin-form" style="flex: 1; overflow-y: auto; scroll-behavior: smooth;">
+                <div class="modal-header-sticky">
+                    <h2>Utilisateur Plateforme</h2>
+                    <span class="close-modal"
+                        onclick="document.getElementById('admin-modal').classList.remove('active')">&times;</span>
                 </div>
-                <div class="form-group">
-                    <label>Nom</label>
-                    <input type="text" id="admin-name" required>
-                </div>
-                <div class="form-group">
-                    <label>Rôles / Permissions</label>
-                    <div id="roles-selection-container"
-                        style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
 
-                        <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px dashed #eee;">
-                            <label
-                                style="font-size: 0.85rem; color: #666; margin-bottom: 5px; display: block;">Appliquer
-                                un préréglage</label>
-                            <select id="admin-preset-roles"
-                                style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; background: white;">
-                                <option value="custom">-- Personnalisé --</option>
-                                <option value="super-admin">Super Admin (Accès total)</option>
-                                <option value="secretaire">Secrétaire (Joueurs, Inscriptions, Matchs)</option>
-                                <option value="coach-general">Coach Général (Équipes, Joueurs)</option>
-                                <option value="arbitre-general">Arbitre (Calendrier, Visionnement)</option>
-                                <option value="tresorier">Trésorier (Facturation, Boutique)</option>
-                            </select>
+                <div class="modal-body-scroll">
+                    <div style="max-width: 800px; margin: 0 auto;">
+                        <input type="hidden" id="admin-id">
+                        <div class="form-group">
+                            <label>Email (ID de connexion)</label>
+                            <input type="email" id="admin-email" required>
                         </div>
-
-                        <div
-                            style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
-                            <label
-                                style="display:flex; align-items:center; font-weight:bold; font-size:1rem; cursor:pointer; margin-bottom: 0;">
-                                <input type="checkbox" id="role-superadmin" value="SuperAdmin"
-                                    style="width:20px; height:20px; margin-right:8px;"> Super Admin
-                            </label>
+                        <div class="form-group">
+                            <label>Nom</label>
+                            <input type="text" id="admin-name" required>
                         </div>
+                        <div class="form-group">
+                            <label>Rôles / Permissions</label>
+                            <div id="roles-selection-container"
+                                style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
 
-                        <div class="permissions-grid"
-                            style="display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center;">
-                            <div style="font-weight: 600; color: #444;">Module</div>
-                            <div style="font-size: 0.8rem; color: #666; text-align: center;">Aucun</div>
-                            <div style="font-size: 0.8rem; color: #666; text-align: center;">Visionner</div>
-                            <div style="font-size: 0.8rem; color: #666; text-align: center;">Modifier</div>
+                                <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+                                    <label
+                                        style="font-size: 0.9rem; color: #444; margin-bottom: 8px; display: block; font-weight: 600;">Rôle</label>
+                                    <select id="admin-preset-roles"
+                                        style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd; background: white; font-size: 1rem;">
+                                        <option value="custom">-- Personnalisé --</option>
+                                        <option value="super-admin">Super Admin (Accès total)</option>
+                                        <option value="secretaire">Secrétaire</option>
+                                        <option value="coach-general">Coach Général</option>
+                                        <option value="arbitre-general">Arbitre Général</option>
+                                        <option value="tresorier">Trésorier</option>
+                                    </select>
+                                    <div id="role-description"
+                                        style="margin-top: 10px; font-size: 0.85rem; color: #666; line-height: 1.4; font-style: italic; background: #f9f9f9; padding: 10px; border-radius: 4px; display: none;">
+                                        <!-- JS will populate description here -->
+                                    </div>
+                                </div>
 
-                            <!-- Repeat for each module -->
-                            <div>Équipes & Joueurs</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Equipes" value="none"
-                                    checked></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Equipes" value="view"></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Equipes" value="edit"></div>
+                                <div class="permissions-grid"
+                                    style="display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center;">
+                                    <div style="font-weight: 600; color: #444;">Module</div>
+                                    <div style="font-size: 0.8rem; color: #666; text-align: center;">Aucun</div>
+                                    <div style="font-size: 0.8rem; color: #666; text-align: center;">Visionner</div>
+                                    <div style="font-size: 0.8rem; color: #666; text-align: center;">Modifier</div>
 
-                            <div>Boutique & Inventaire</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Boutique" value="none"
-                                    checked></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Boutique" value="view">
+                                    <!-- Individual Modules -->
+                                    <div>Tableau de bord</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Dashboard"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Dashboard"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Dashboard"
+                                            value="edit"></div>
+
+                                    <div>Joueurs</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Joueurs"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Joueurs"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Joueurs"
+                                            value="edit"></div>
+
+                                    <div>Coachs</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Coachs" value="none"
+                                            checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Coachs"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Coachs"
+                                            value="edit"></div>
+
+                                    <div>Arbitres</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Arbitres"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Arbitres"
+                                            value="view">
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Arbitres"
+                                            value="edit">
+                                    </div>
+
+                                    <div>C.A. (Conseil)</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Club" value="none"
+                                            checked>
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Club" value="view">
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Club" value="edit">
+                                    </div>
+
+                                    <div>Commanditaires</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Commanditaires"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Commanditaires"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Commanditaires"
+                                            value="edit"></div>
+
+                                    <div>Equipes</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Equipes"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Equipes"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Equipes"
+                                            value="edit"></div>
+
+                                    <div>Calendrier / Matchs</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Matchs" value="none"
+                                            checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Matchs"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Matchs"
+                                            value="edit"></div>
+
+                                    <div>Inventaire</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Inventaire"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Inventaire"
+                                            value="view">
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Inventaire"
+                                            value="edit">
+                                    </div>
+
+                                    <div>Inscriptions</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Inscriptions"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Inscriptions"
+                                            value="view">
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Inscriptions"
+                                            value="edit">
+                                    </div>
+
+                                    <div>Boutique</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Boutique"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Boutique"
+                                            value="view">
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Boutique"
+                                            value="edit">
+                                    </div>
+
+                                    <div>Campagnes Email</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Campagnes"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Campagnes"
+                                            value="view">
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Campagnes"
+                                            value="edit">
+                                    </div>
+
+                                    <div>Automatisations</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
+                                            value="edit"></div>
+
+                                    <div>Facturation</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Facturation"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Facturation"
+                                            value="view">
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Facturation"
+                                            value="edit">
+                                    </div>
+
+                                    <div>Terrains</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Terrains"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Terrains"
+                                            value="view">
+                                    </div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Terrains"
+                                            value="edit">
+                                    </div>
+
+                                    <div>Saisons</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Saisons"
+                                            value="none" checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Saisons"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Saisons"
+                                            value="edit"></div>
+
+                                    <div>Configuration</div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Config" value="none"
+                                            checked></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Config"
+                                            value="view"></div>
+                                    <div style="text-align: center;"><input type="radio" name="perm-Config"
+                                            value="edit"></div>
+                                </div>
+                                <div style="margin-top: 10px; font-size: 0.8rem; color: #888; font-style: italic;">
+                                    Note: 'Modifier' inclut automatiquement les droits de visionnement.
+                                </div>
                             </div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Boutique" value="edit">
-                            </div>
-
-                            <div>C.A. & Arbitres</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Club" value="none" checked>
-                            </div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Club" value="view"></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Club" value="edit"></div>
-
-                            <div>Inscriptions</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Inscriptions" value="none"
-                                    checked></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Inscriptions" value="view">
-                            </div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Inscriptions" value="edit">
-                            </div>
-
-                            <div>Matchs (Calendrier)</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Matchs" value="none"
-                                    checked></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Matchs" value="view"></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Matchs" value="edit"></div>
-
-                            <div>Campagnes Email</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Campagnes" value="none"
-                                    checked></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Campagnes" value="view">
-                            </div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Campagnes" value="edit">
-                            </div>
-
-                            <div>Automatisations</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
-                                    value="none" checked></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
-                                    value="view"></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Automatisations"
-                                    value="edit"></div>
-
-                            <div>Facturation</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Facturation" value="none"
-                                    checked></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Facturation" value="view">
-                            </div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Facturation" value="edit">
-                            </div>
-
-                            <div>Terrains / Saisons</div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Config" value="none"
-                                    checked></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Config" value="view"></div>
-                            <div style="text-align: center;"><input type="radio" name="perm-Config" value="edit"></div>
-                        </div>
-                        <div style="margin-top: 10px; font-size: 0.8rem; color: #888; font-style: italic;">
-                            Note: 'Modifier' inclut automatiquement les droits de visionnement.
                         </div>
                     </div>
                 </div>
-                <button type="submit" class="btn-save">Enregistrer</button>
+
+                <div class="modal-footer-sticky">
+                    <button type="submit" class="btn-save">
+                        <i class="fas fa-save"></i> Enregistrer
+                    </button>
+                    <button type="button" class="btn-close-custom"
+                        onclick="document.getElementById('admin-modal').classList.remove('active')">
+                        <i class="fas fa-times"></i> Fermer
+                    </button>
+                </div>
             </form>
         </div>
     </div>

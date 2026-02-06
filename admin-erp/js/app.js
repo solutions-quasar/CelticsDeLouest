@@ -554,14 +554,35 @@ onAuthStateChanged(auth, async (user) => {
         // Initialize Real-time Listeners
         initRealTimeListeners();
 
-        // Restore last view
-        const lastView = localStorage.getItem('celtics_admin_last_view');
-        if (lastView) {
+        // Determine allowed views
+        const allowedViews = [];
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            if (btn.style.display !== 'none') allowedViews.push(btn.dataset.target);
+        });
+
+        // Restore last view OR Redirect to first allowed view
+        let lastView = localStorage.getItem('celtics_admin_last_view');
+
+        // If last view is stored but not allowed anymore (e.g. role changed), clear it
+        if (lastView && !allowedViews.includes(lastView)) {
+            lastView = null;
+        }
+
+        if (lastView && allowedViews.includes(lastView)) {
             const btn = document.querySelector(`.nav-btn[data-target="${lastView}"]`);
             if (btn) btn.click();
-            else loadDashboardData();
+            else if (allowedViews.includes('view-dashboard')) loadDashboardData();
         } else {
-            loadDashboardData();
+            // Redirect to the first permitted view
+            if (allowedViews.length > 0) {
+                const firstTarget = allowedViews[0];
+                const firstBtn = document.querySelector(`.nav-btn[data-target="${firstTarget}"]`);
+                if (firstBtn) firstBtn.click();
+                else if (firstTarget === 'view-dashboard') loadDashboardData();
+            } else {
+                // Fallback if nothing allowed (weird case)
+                loadDashboardData();
+            }
         }
 
         seedDatabase();
@@ -710,6 +731,11 @@ function setupClickableCard(cardSelector, cacheKey, modalId, idFieldId, populate
                 e.target.closest('.delete-inv') ||
                 e.target.closest('.delete-reg') ||
                 e.target.closest('.delete-coach') ||
+                e.target.closest('.delete-admin') ||
+                e.target.closest('.edit-admin') ||
+                e.target.closest('.btn-icon') ||
+                e.target.closest('.btn-action') ||
+                e.target.closest('button') ||
                 e.target.closest('a')) {
                 console.log("Click ignored due to exclusion");
                 return;
@@ -1404,6 +1430,11 @@ async function loadTeams() {
             teamsArr = teamsArr.filter(t => t.seasonId === selectedSeason);
         }
 
+        // COACH FILTER: If current user is a coach (and not super-admin), show only their teams
+        if (window.currentUserCoachId && window.currentUserMainRole !== 'super-admin') {
+            teamsArr = teamsArr.filter(t => (t.coachIds || []).includes(window.currentUserCoachId));
+        }
+
         const coachesMap = {};
         const seasonsMap = {};
 
@@ -1619,18 +1650,49 @@ async function loadTeamPlayers(teamId) {
             return nA.localeCompare(nB);
         });
 
+        const isCoach = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId;
+
         players.forEach(player => {
             const name = player.name || `${player.firstName || ''} ${player.lastName || ''}`.trim();
             const div = document.createElement('div');
-            div.style.cssText = 'padding: 8px; background: #f9f9f9; border-radius: 6px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;';
+
+            let playerDetails = '';
+            if (isCoach) {
+                const dob = player.dob || player.birthDate || '-';
+                const health = player.medical || player.medicalCondition || 'Aucune';
+                const parents = player.parentName || `${player.parentFirstName || ''} ${player.parentLastName || ''}`.trim() || '-';
+                const phone = player.phone || player.parentPhone || '-';
+                const email = player.parentEmail || '-';
+
+                playerDetails = `
+                    <div style="font-size: 0.8rem; color: #666; margin-top: 5px; padding-left: 20px;">
+                        <div><i class="fas fa-birthday-cake" style="width:14px;"></i> <b>Né(e):</b> ${dob}</div>
+                        <div><i class="fas fa-heartbeat" style="width:14px;"></i> <b>Santé:</b> ${health}</div>
+                        <div><i class="fas fa-user-friends" style="width:14px;"></i> <b>Parent:</b> ${parents} (${phone}, ${email})</div>
+                    </div>
+                `;
+            }
+
+            div.style.cssText = 'padding: 10px; background: white; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px;';
             div.innerHTML = `
-                <span><i class="fas fa-user" style="color:#666; margin-right:8px;"></i> ${name}</span>
-                <button class="btn-delete-player" data-player-id="${player.id}" style="background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
-                    <i class="fas fa-times"></i>
-                </button>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 500;"><i class="fas fa-user" style="color:#666; margin-right:8px;"></i> ${name}</span>
+                    ${!isCoach ? `
+                    <button class="btn-delete-player" data-player-id="${player.id}" style="background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    ` : ''}
+                </div>
+                ${playerDetails}
             `;
             container.appendChild(div);
         });
+
+        // Hide Add Player controls for Coaches
+        const addControls = document.querySelector('#team-players-container div[style*="border-top: 1px dashed"]');
+        if (addControls) {
+            addControls.style.display = isCoach ? 'none' : 'flex';
+        }
 
         // Setup delete player from team
         container.querySelectorAll('.btn-delete-player').forEach(btn => {
@@ -3199,10 +3261,36 @@ const adminModal = document.getElementById('admin-modal');
 const openAdminModalBtn = document.getElementById('open-admin-modal');
 const navAdminsBtn = document.getElementById('nav-admins-btn');
 
+const ROLE_DESCRIPTIONS = {
+    'super-admin': 'Accès total à tout le système (visionner, modifier, supprimer). Aucune restriction.',
+    'secretaire': 'Gestion des joueurs, des inscriptions, des matchs et visionnement des équipes.',
+    'coach-general': 'Visionnement restreint de ses propres équipes. Accès en lecture seule aux détails des joueurs (santé, parents, naissance).',
+    'arbitre-general': 'Visionnement du calendrier des matchs uniquement. Ne peut pas modifier ou voir les détails du match (sauf sa disponibilité).',
+    'tresorier': 'Gestion de la facturation, de la boutique et visionnement de l\'inventaire.',
+    'custom': 'Aucune permission de base. Utilisez la grille ci-dessous pour définir les accès spécifiques.'
+};
+
+function updateRoleDescription(role) {
+    const descEl = document.getElementById('role-description');
+    if (!descEl) return;
+    const text = ROLE_DESCRIPTIONS[role] || '';
+    if (text) {
+        descEl.textContent = text;
+        descEl.style.display = 'block';
+    } else {
+        descEl.style.display = 'none';
+    }
+}
+
 if (openAdminModalBtn) openAdminModalBtn.addEventListener('click', () => {
     document.getElementById('admin-form').reset();
     document.getElementById('admin-id').value = '';
     document.getElementById('admin-preset-roles').value = 'custom';
+    updateRoleDescription('custom');
+
+    // Reset permissions radios to 'none'
+    document.querySelectorAll('.permissions-grid input[value="none"]').forEach(r => r.checked = true);
+
     setLoading(document.getElementById('admin-form'), false);
     adminModal.classList.add('active');
 });
@@ -3218,16 +3306,21 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
         const email = document.getElementById('admin-email').value;
         const name = document.getElementById('admin-name').value;
 
-        // Collect roles from radios and checkbox
+        // Collect roles from radios and dropdown
         const roles = [];
-        const isSuperAdmin = document.getElementById('role-superadmin').checked;
+        const roleSelectValue = document.getElementById('admin-preset-roles').value;
+        const isSuperAdmin = roleSelectValue === 'super-admin';
 
         if (isSuperAdmin) {
             roles.push('SuperAdmin');
         } else {
+            // Save main role first if not custom
+            if (roleSelectValue !== 'custom') {
+                roles.push(roleSelectValue);
+            }
             // Find all permission radios
             const permissionsGrid = document.querySelector('.permissions-grid');
-            const moduleNames = ['Equipes', 'Boutique', 'Club', 'Inscriptions', 'Matchs', 'Campagnes', 'Automatisations', 'Facturation', 'Config'];
+            const moduleNames = ['Dashboard', 'Joueurs', 'Coachs', 'Arbitres', 'Club', 'Commanditaires', 'Equipes', 'Matchs', 'Inventaire', 'Inscriptions', 'Boutique', 'Campagnes', 'Automatisations', 'Facturation', 'Terrains', 'Saisons', 'Config'];
 
             moduleNames.forEach(mod => {
                 const selected = document.querySelector(`input[name="perm-${mod}"]:checked`)?.value;
@@ -3287,37 +3380,11 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
 
 document.getElementById('admin-preset-roles')?.addEventListener('change', (e) => {
     const preset = e.target.value;
+    updateRoleDescription(preset);
     if (preset === 'custom') return;
 
-    // Reset all to none
+    // Reset all to 'none' when selecting a preset role
     document.querySelectorAll('.permissions-grid input[value="none"]').forEach(r => r.checked = true);
-    document.getElementById('role-superadmin').checked = false;
-
-    const setPerm = (mod, level) => {
-        const rad = document.querySelector(`input[name="perm-${mod}"][value="${level}"]`);
-        if (rad) rad.checked = true;
-    };
-
-    switch (preset) {
-        case 'super-admin':
-            document.getElementById('role-superadmin').checked = true;
-            break;
-        case 'secretaire':
-            setPerm('Equipes', 'view');
-            setPerm('Inscriptions', 'edit');
-            setPerm('Matchs', 'edit');
-            break;
-        case 'coach-general':
-            setPerm('Equipes', 'edit');
-            break;
-        case 'arbitre-general':
-            setPerm('Matchs', 'view');
-            break;
-        case 'tresorier':
-            setPerm('Facturation', 'edit');
-            setPerm('Boutique', 'edit');
-            break;
-    }
 });
 
 async function loadAdmins() {
@@ -3360,6 +3427,12 @@ async function loadAdmins() {
                     <button class="btn-icon delete-admin" data-id="${data.id}" style="color:red;"><i class="fas fa-trash"></i></button>
                 </td>
             `;
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', (e) => {
+                if (!e.target.closest('button')) {
+                    row.querySelector('.edit-admin').click();
+                }
+            });
             table.appendChild(row);
         });
 
@@ -3372,26 +3445,32 @@ async function loadAdmins() {
                     document.getElementById('admin-id').value = id;
                     document.getElementById('admin-email').value = data.email;
                     document.getElementById('admin-name').value = data.name;
-                    document.getElementById('admin-preset-roles').value = 'custom';
 
-                    // Reset Checks & Radios
-                    document.getElementById('role-superadmin').checked = false;
+                    // Reset Radios to 'none'
                     document.querySelectorAll('.permissions-grid input[value="none"]').forEach(r => r.checked = true);
 
                     const rolesArray = Array.isArray(data.role) ? data.role : [data.role];
 
                     if (rolesArray.includes('SuperAdmin')) {
-                        document.getElementById('role-superadmin').checked = true;
+                        const role = 'super-admin';
+                        document.getElementById('admin-preset-roles').value = role;
+                        updateRoleDescription(role);
                     } else {
+                        // Default to custom, will be overwritten if a role is found
+                        document.getElementById('admin-preset-roles').value = 'custom';
+                        updateRoleDescription('custom');
+
                         rolesArray.forEach(r => {
-                            if (r.includes(':')) {
+                            if (ROLE_PERMISSIONS[r]) {
+                                document.getElementById('admin-preset-roles').value = r;
+                                updateRoleDescription(r);
+                            } else if (r.includes(':')) {
                                 const [mod, level] = r.split(':');
-                                let targetMod = (mod === 'Terrains' || mod === 'Saisons') ? 'Config' : mod;
-                                const radio = document.querySelector(`input[name="perm-${targetMod}"][value="${level}"]`);
+                                const radio = document.querySelector(`input[name="perm-${mod}"][value="${level}"]`);
                                 if (radio) radio.checked = true;
                             } else {
-                                let targetMod = (r === 'Terrains' || r === 'Saisons') ? 'Config' : r;
-                                const radio = document.querySelector(`input[name="perm-${targetMod}"][value="edit"]`);
+                                // Fallback for simple permissions or old roles
+                                const radio = document.querySelector(`input[name="perm-${r}"][value="edit"]`);
                                 if (radio) radio.checked = true;
                             }
                         });
@@ -3466,6 +3545,15 @@ async function getUserRole(email) {
 document.getElementById('nav-admins-btn')?.addEventListener('click', loadAdmins);
 
 // EXPORT to window for button usage if needed, or re-run role check
+const ROLE_PERMISSIONS = {
+    'super-admin': { all: 'edit' },
+    'secretaire': { Dashboard: 'view', Joueurs: 'edit', Inscriptions: 'edit', Matchs: 'edit', Equipes: 'view' },
+    'coach-general': { Dashboard: 'view', Equipes: 'view' },
+    'arbitre-general': { Matchs: 'view' },
+    'tresorier': { Dashboard: 'view', Facturation: 'edit', Boutique: 'edit', Inventaire: 'view' },
+    'custom': {}
+};
+
 window.checkAdminAndSetupUI = async (user) => {
     if (!user) return;
 
@@ -3509,35 +3597,87 @@ window.checkAdminAndSetupUI = async (user) => {
     // Also check if user is a referee
     window.currentUserRefereeId = null;
     try {
-        const referees = Object.values(dataCache.referees || {});
-        const refEntry = referees.find(r => r.email && r.email.toLowerCase() === user.email.toLowerCase());
-        if (refEntry) {
-            window.currentUserRefereeId = refEntry.id;
-            console.log("Logged in as Referee:", window.currentUserRefereeId);
-        } else {
-            console.log("Not recognized as a Referee for email:", user.email);
+        let referees = Object.values(dataCache.referees || {});
+
+        // Force fetch if cache is empty (likely first load)
+        if (referees.length === 0) {
+            console.log("Referees cache empty during check. Force fetching...");
+            const refSnap = await getDocs(collection(db, "referees"));
+            dataCache.referees = {};
+            refSnap.forEach(doc => {
+                dataCache.referees[doc.id] = { id: doc.id, ...doc.data() };
+            });
+            referees = Object.values(dataCache.referees);
+            console.log(`Fetched ${referees.length} referees.`);
         }
+
+        console.log(`Checking referee link for ${user.email}. Total refs in cache: ${referees.length}`);
+
+        const refEntry = referees.find(r => r.email && r.email.toLowerCase().trim() === user.email.toLowerCase().trim());
+        if (refEntry) {
+            console.log("Referee Match FOUND:", refEntry);
+            window.currentUserRefereeId = refEntry.id;
+        } else {
+            console.log("No referee match found for email:", user.email);
+        }
+
     } catch (e) {
         console.warn("Error checking referee status:", e);
     }
 
-    const isSuper = roles.includes('SuperAdmin');
+    // Also check if user is a coach
+    window.currentUserCoachId = null;
+    try {
+        const coaches = Object.values(dataCache.coaches || {});
+        const coachEntry = coaches.find(c => c.email && c.email.toLowerCase() === user.email.toLowerCase());
+        if (coachEntry) {
+            window.currentUserCoachId = coachEntry.id;
+            console.log("Logged in as Coach:", window.currentUserCoachId);
+        }
+    } catch (e) {
+        console.warn("Error checking coach status:", e);
+    }
+
+    // Determine Main Role and Extra Permissions
+    let mainRole = 'custom';
+    const extraRoles = [];
+
+    roles.forEach(r => {
+        if (ROLE_PERMISSIONS[r]) {
+            mainRole = r;
+        } else if (r === 'SuperAdmin') {
+            mainRole = 'super-admin';
+        } else {
+            extraRoles.push(r);
+        }
+    });
+
+    const isSuper = mainRole === 'super-admin';
+    window.currentUserMainRole = mainRole;
 
     // Define permission mapping
     const permissionMap = {
-        'Equipes': ['view-teams', 'view-coaches', 'view-players'],
-        'Boutique': ['view-inventory', 'view-boutique'],
-        'Club': ['view-board', 'view-referees', 'view-sponsors'],
-        'Inscriptions': ['view-registrations'],
+        'Joueurs': ['view-players'],
+        'Coachs': ['view-coaches'],
+        'Arbitres': ['view-referees'],
+        'Club': ['view-board'],
+        'Commanditaires': ['view-sponsors'],
+        'Equipes': ['view-teams'],
         'Matchs': ['view-matches'],
+        'Inventaire': ['view-inventory'],
+        'Inscriptions': ['view-registrations'],
+        'Boutique': ['view-boutique'],
         'Campagnes': ['view-email-campaigns'],
         'Automatisations': ['view-automations'],
         'Facturation': ['view-billing'],
-        'Config': ['view-fields', 'view-seasons', 'view-settings', 'view-fields-list']
+        'Terrains': ['view-fields', 'view-fields-list'],
+        'Saisons': ['view-seasons'],
+        'Config': ['view-settings'],
+        'Dashboard': ['view-dashboard']
     };
 
-    // Determine which views are allowed and store permissions
-    let allowedViews = ['view-dashboard'];
+    // Determine allowed views and store permissions
+    let allowedViews = [];
     window.currentPermissions = {}; // Reset
 
     if (isSuper) {
@@ -3547,10 +3687,23 @@ window.checkAdminAndSetupUI = async (user) => {
         });
         window.currentPermissions.all = 'edit';
     } else {
-        roles.forEach(role => {
-            // Handle 'Equipes:view' vs legacy 'Equipes'
+        // 1. apply base permissions from role
+        const basePerms = ROLE_PERMISSIONS[mainRole] || {};
+        Object.keys(basePerms).forEach(mod => {
+            window.currentPermissions[mod] = basePerms[mod];
+            if (permissionMap[mod]) {
+                allowedViews = allowedViews.concat(permissionMap[mod]);
+            }
+        });
+
+        // 2. apply additional permissions (supplements)
+        extraRoles.forEach(role => {
             const [mod, level] = role.includes(':') ? role.split(':') : [role, 'edit'];
-            window.currentPermissions[mod] = level;
+
+            // Higher level wins (edit > view)
+            if (level === 'edit' || window.currentPermissions[mod] !== 'edit') {
+                window.currentPermissions[mod] = level;
+            }
 
             if (permissionMap[mod]) {
                 allowedViews = allowedViews.concat(permissionMap[mod]);
@@ -3580,15 +3733,24 @@ window.checkAdminAndSetupUI = async (user) => {
         const isSuper = window.currentPermissions.all === 'edit';
 
         const modMap = {
-            'view-teams': 'Equipes', 'view-players': 'Equipes', 'view-coaches': 'Equipes',
-            'view-boutique': 'Boutique', 'view-inventory': 'Boutique',
-            'view-board': 'Club', 'view-referees': 'Club', 'view-sponsors': 'Club',
-            'view-registrations': 'Inscriptions',
+            'view-dashboard': 'Dashboard',
+            'view-players': 'Joueurs',
+            'view-coaches': 'Coachs',
+            'view-referees': 'Arbitres',
+            'view-board': 'Club',
+            'view-sponsors': 'Commanditaires',
+            'view-teams': 'Equipes',
             'view-matches': 'Matchs',
+            'view-inventory': 'Inventaire',
+            'view-registrations': 'Inscriptions',
+            'view-boutique': 'Boutique',
             'view-email-campaigns': 'Campagnes',
             'view-automations': 'Automatisations',
             'view-billing': 'Facturation',
-            'view-fields': 'Config', 'view-seasons': 'Config', 'view-settings': 'Config'
+            'view-fields': 'Terrains',
+            'view-fields-list': 'Terrains',
+            'view-seasons': 'Saisons',
+            'view-settings': 'Config'
         };
 
         Object.keys(modMap).forEach(viewId => {
@@ -3618,6 +3780,26 @@ window.checkAdminAndSetupUI = async (user) => {
                 });
             }
         });
+
+        // ROLE SPECIFIC ENFORCEMENT
+        if (window.currentUserMainRole === 'arbitre-general' || window.currentUserRefereeId) {
+            // Arbitres cannot open match modal (handled by onclick in loadMatches but let's be double sure)
+            // They also shouldn't see 'Ajouter' buttons in match view
+            const matchView = document.getElementById('view-matches');
+            if (matchView) {
+                const addBtn = matchView.querySelector('#open-match-modal');
+                if (addBtn) addBtn.style.display = 'none';
+            }
+        }
+
+        if (window.currentUserMainRole === 'coach-general' || window.currentUserCoachId) {
+            // Coaches cannot edit teams (handled by grid permissions but let's be sure)
+            const teamView = document.getElementById('view-teams');
+            if (teamView) {
+                const addBtn = teamView.querySelector('#open-team-modal');
+                if (addBtn) addBtn.style.display = 'none';
+            }
+        }
     }
 
     // Run enforcement after views are rendered
@@ -4268,11 +4450,15 @@ async function loadMatches(skipFetch = false) {
 
     if (!calEl) return;
 
+    // Permissions check for UI elements
+    const addBtn = document.getElementById('open-match-modal');
+    if (addBtn) addBtn.style.display = window.currentUserRefereeId ? 'none' : 'block';
+
     try {
         // We rely on dataCache.matches, dataCache.referees, dataCache.fields being populated
         // by the centralized onSnapshot listeners in initRealTimeListeners.
 
-        const activeFields = Object.values(dataCache.fields).filter(f => f.active !== false);
+        const activeFields = Object.values(dataCache.fields).filter(f => f.active !== false && !f.isCombined);
         activeFields.sort((a, b) => a.name.localeCompare(b.name));
 
         if (activeFields.length === 0) {
@@ -4302,23 +4488,40 @@ async function loadMatches(skipFetch = false) {
             `;
             const card = createCard(null, `${data.category} vs ${data.opponent}`, subtitle, data.id, 'edit-match', 'delete-match', 'fa-futbol');
             card.classList.add('match-card');
+
+            // Add Dispo button in list view for referees
+            if (window.currentUserRefereeId) {
+                const isAvailable = (data.availableRefs || []).includes(window.currentUserRefereeId);
+                const dispoBtn = document.createElement('button');
+                dispoBtn.className = `btn-dispo ${isAvailable ? 'btn-dispo-active' : 'btn-dispo-inactive'}`;
+                dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Dispo' : 'Dispo ?';
+                dispoBtn.style.cssText = 'width: 100%; margin-top: 10px; padding: 8px; font-size: 0.8rem;';
+                dispoBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    toggleMatchAvailability(data.id);
+                };
+                card.querySelector('.card-body').appendChild(dispoBtn);
+            }
+
             list.appendChild(card);
         });
-        setupClickableCard('.match-card', 'matches', 'match-modal', 'match-id', async (data) => {
-            await loadRefereesIntoSelects();
-            await loadFieldsIntoAddSelect();
-            document.getElementById('match-date').value = data.date;
-            document.getElementById('match-time').value = data.time;
-            document.getElementById('match-category').value = data.category;
-            document.getElementById('match-opponent').value = data.opponent;
-            selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
-            renderMatchFieldTags();
-            document.getElementById('match-ref-center').value = data.refCenter || '';
-            document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
-            document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
-            document.getElementById('match-played').checked = data.played || false;
-        });
-        setupDeleteButton('.delete-match', 'matches', () => loadMatches());
+        if (!window.currentUserRefereeId) {
+            setupClickableCard('.match-card', 'matches', 'match-modal', 'match-id', async (data) => {
+                await loadRefereesIntoSelects();
+                await loadFieldsIntoAddSelect();
+                document.getElementById('match-date').value = data.date;
+                document.getElementById('match-time').value = data.time;
+                document.getElementById('match-category').value = data.category;
+                document.getElementById('match-opponent').value = data.opponent;
+                selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
+                renderMatchFieldTags();
+                document.getElementById('match-ref-center').value = data.refCenter || '';
+                document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
+                document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
+                document.getElementById('match-played').checked = data.played || false;
+            });
+            setupDeleteButton('.delete-match', 'matches', () => loadMatches());
+        }
     }
 }
 
@@ -4339,7 +4542,7 @@ function renderCustomCalendarGrid(container, fields) {
         </div>
         <h3 style="margin:0; text-transform: capitalize;">Semaine du ${weekRange.start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</h3>
         <div>
-            <button class="btn-action" id="cal-settings-btn"><i class="fas fa-cog"></i> Config</button>
+            ${!window.currentUserRefereeId ? '<button class="btn-action" id="cal-settings-btn"><i class="fas fa-cog"></i> Config</button>' : ''}
         </div>
     `;
     container.appendChild(nav);
@@ -4408,20 +4611,28 @@ function renderDaySection(container, date, fields) {
             // For each match, we check which columns it should appear in (either as match or as unavailable)
             fields.forEach(colField => {
                 let isDirectMatch = matchFieldIds.includes(colField.id);
-                let isGhostConflict = false;
+                let isParentMatch = false; // Match is on a combined field containing this colField
+                let isChildMatch = false; // Match is on a child of this combined colField
 
-                if (!isDirectMatch) {
-                    // Check if any of the match fields is a group containing colField
-                    // OR if colField is a group containing any of the match fields
-                    isGhostConflict = matchFieldIds.some(mfid => {
-                        const mField = dataCache.fields[mfid];
-                        if (mField?.isCombined && mField.constituentFieldIds?.includes(colField.id)) return true;
-                        if (colField.isCombined && colField.constituentFieldIds?.includes(mfid)) return true;
-                        return false;
-                    });
-                }
+                // Check overlap
+                matchFieldIds.forEach(mfid => {
+                    const mField = dataCache.fields[mfid];
+                    // Case 1: Match is on Combined, Col is Constituent (SHOW MATCH)
+                    if (mField?.isCombined && mField.constituentFieldIds?.includes(colField.id)) {
+                        isParentMatch = true;
+                    }
+                    // Case 2: Col is Combined, Match is on Constituent (SHOW UNAVAILABLE/LINKED)
+                    if (colField.isCombined && colField.constituentFieldIds?.includes(mfid)) {
+                        isChildMatch = true;
+                    }
+                });
 
-                if (isDirectMatch || isGhostConflict) {
+                // We show full match if it's direct OR if it's a parent match (displayed on constituent col)
+                const shouldRenderAsMatch = isDirectMatch || isParentMatch;
+                // It is ghost only if it is a child match AND NOT explicitly a match (though logic implies mutually exclusive usually)
+                const isGhostConflict = isChildMatch && !shouldRenderAsMatch;
+
+                if (shouldRenderAsMatch || isGhostConflict) {
                     const cell = section.querySelector(`td[data-field-id="${colField.id}"][data-time="${match.time}"]`);
                     if (!cell) return;
 
@@ -4479,18 +4690,22 @@ function renderDaySection(container, date, fields) {
                     `;
 
                     if (!isGhostConflict) {
-                        // If simple referee, show availability toggle
-                        if (window.currentUserRefereeId) {
+                        // If simple referee or arbitre role, show availability toggle
+                        if (window.currentUserRefereeId || window.currentUserMainRole === 'arbitre-general') {
                             const isAvailable = (match.availableRefs || []).includes(window.currentUserRefereeId);
                             const dispoBtn = document.createElement('button');
                             dispoBtn.className = `btn-dispo ${isAvailable ? 'btn-dispo-active' : 'btn-dispo-inactive'}`;
                             dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Dispo' : 'Dispo ?';
-                            dispoBtn.title = "Indiquer ma disponibilité for ce match";
+                            dispoBtn.title = "Indiquer ma disponibilité pour ce match";
                             dispoBtn.style.cssText = 'margin-top:auto; font-size:0.7rem; padding:6px; z-index:20;';
 
                             dispoBtn.onclick = (e) => {
                                 e.stopPropagation();
-                                toggleMatchAvailability(match.id);
+                                if (window.currentUserRefereeId) {
+                                    toggleMatchAvailability(match.id);
+                                } else {
+                                    showAlert("Votre compte administrateur n'est pas lié à un profil d'arbitre.", "warning");
+                                }
                             };
                             evt.appendChild(dispoBtn);
                         }
@@ -4501,7 +4716,15 @@ function renderDaySection(container, date, fields) {
                                 evt.dataset.preventClick = 'false';
                                 return;
                             }
-                            openMatchModal(match);
+                            // Redirect to toggle availability for referees, open modal for others
+                            if (window.currentUserRefereeId || window.currentUserMainRole === 'arbitre-general') {
+                                if (window.currentUserRefereeId) {
+                                    toggleMatchAvailability(match.id);
+                                }
+                                // If arbitre but not linked to a referee profile, just block modal
+                            } else {
+                                openMatchModal(match);
+                            }
                         };
 
                         setupMatchInteractions(evt, match, isoDate);
@@ -4519,6 +4742,8 @@ function renderDaySection(container, date, fields) {
     // Cell Click (Create)
     section.querySelectorAll('.grid-cell').forEach(cell => {
         cell.onclick = () => {
+            const isArbitre = window.currentUserMainRole === 'arbitre-general' || window.currentUserRefereeId;
+            if (isArbitre) return; // Referees and Arbitres cannot create matches
             if (cell.children.length > 0) return; // Already has event
             openMatchModal(null, isoDate, cell.dataset.time, cell.dataset.fieldId);
         };
@@ -4566,6 +4791,11 @@ function minutesToTime(mins) {
 
 // --- Drag & Resize Support ---
 function setupMatchInteractions(el, match, date) {
+    if (window.currentUserRefereeId) {
+        el.style.cursor = 'pointer';
+        return; // No drag/resize for referees
+    }
+
     let isDragging = false;
     let isResizing = false;
     let hasMoved = false;

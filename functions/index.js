@@ -13,6 +13,26 @@ const resend = new Resend(process.env.RESEND_API_KEY || 'YOUR_RESEND_KEY');
 // Initialize Stripe (Test Key)
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'YOUR_STRIPE_KEY');
 
+// --- AUTH HELPER: VERIFY ADMIN ---
+async function authenticateAdmin(req) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        throw new Error("Unauthorized: Missing or invalid token");
+    }
+    const token = authHeader.split(" ")[1];
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        const email = decodedToken.email.toLowerCase();
+        const adminDoc = await db.collection('admins').doc(email).get();
+        if (!adminDoc.exists) {
+            throw new Error("Forbidden: Not an admin");
+        }
+        return decodedToken;
+    } catch (e) {
+        throw new Error("Unauthorized: " + e.message);
+    }
+}
+
 // --- STRIPE HELPER: CREATE/GET CUSTOMER ---
 async function getOrCreateStripeCustomer(email, name) {
     const existing = await stripe.customers.list({ email: email, limit: 1 });
@@ -306,6 +326,7 @@ exports.processScheduledPayments = onSchedule("every 24 hours", async (event) =>
 // --- STRIPE LOGIC: MANUAL INVOICE ---
 exports.createManualInvoice = onRequest({ cors: true }, async (req, res) => {
     try {
+        await authenticateAdmin(req);
         const { email, name, items, dueDate } = req.body;
         // items = [{ description, amount }]
 
@@ -351,9 +372,13 @@ exports.stripeWebhook = onRequest(async (req, res) => {
     let event;
 
     try {
-        // Validation skipped for simple test mode if key not set, but recommended
-        // event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
-        event = req.body; // Use body directly for easier Dev testing if not verifying sig
+        if (!sig || !endpointSecret || endpointSecret === "whsec_YOUR_STRIPE_WEBHOOK_SECRET") {
+            // If secret not configured, we allow body directly ONLY in development/testing
+            // In production, this SHOULD fail if sig is missing
+            event = req.body;
+        } else {
+            event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
+        }
     } catch (err) {
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
@@ -454,6 +479,7 @@ const getEmailTemplate = (content, title = "Celtics de l'Ouest") => {
 // --- HTTP FUNCTION: SEND CAMPAIGN (Immediate or Test) ---
 exports.sendCampaign = onRequest({ cors: true }, async (req, res) => {
     try {
+        await authenticateAdmin(req);
         const { campaignId, testEmail, testContent, testSubject } = req.body;
 
         // CASE 1: TEST EMAIL
@@ -728,6 +754,72 @@ exports.sendConfirmationEmail = onRequest({ cors: true }, async (req, res) => {
         res.status(200).json({ data });
     } catch (e) {
         console.error("Function Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- ADMIN INVITATION LOGIC ---
+exports.inviteAdmin = onRequest({ cors: true }, async (req, res) => {
+    try {
+        await authenticateAdmin(req);
+        const { email, name } = req.body;
+        if (!email) return res.status(400).json({ error: "Missing email" });
+
+        const lowerEmail = email.toLowerCase().trim();
+        let user;
+
+        try {
+            // 1. Create User in Auth (or get if exists)
+            try {
+                user = await admin.auth().getUserByEmail(lowerEmail);
+            } catch (err) {
+                if (err.code === 'auth/user-not-found') {
+                    user = await admin.auth().createUser({
+                        email: lowerEmail,
+                        displayName: name || '',
+                    });
+                } else {
+                    throw err;
+                }
+            }
+
+            // 2. Generate Reset Link
+            const link = await admin.auth().generatePasswordResetLink(lowerEmail);
+
+            // 3. Format Email
+            const emailContent = `
+                <p>Bonjour ${name || 'nouvel utilisateur'},</p>
+                <p>Vous avez été invité à rejoindre la plateforme administrative des <strong>Celtics de l'Ouest</strong>.</p>
+                <p>Pour finaliser votre compte et choisir votre mot de passe, veuillez cliquer sur le bouton ci-dessous :</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${link}" class="btn" style="color: white; padding: 12px 24px; text-decoration: none; font-weight: bold;">Initialiser mon compte</a>
+                </div>
+                <p>Si le bouton ne fonctionne pas, vous pouvez copier ce lien dans votre navigateur :</p>
+                <p style="word-break: break-all; font-size: 12px; color: #666;">${link}</p>
+                <p>À bientôt,<br>L'équipe des Celtics</p>
+            `;
+            const html = getEmailTemplate(emailContent, "Invitation Plateforme Admin");
+
+            // 4. Send Email
+            const { data, error } = await resend.emails.send({
+                from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+                reply_to: "celtics.portneuf@gmail.com",
+                to: lowerEmail,
+                subject: "Bienvenue sur la plateforme administrative - Celtics de l'Ouest",
+                html: html
+            });
+
+            if (error) throw error;
+
+            res.json({ success: true, message: "Invitation envoyée", authId: user.uid });
+
+        } catch (authError) {
+            console.error("Auth Error in inviteAdmin:", authError);
+            res.status(500).json({ error: "Auth Error: " + authError.message });
+        }
+
+    } catch (e) {
+        console.error("inviteAdmin main error:", e);
         res.status(500).json({ error: e.message });
     }
 });

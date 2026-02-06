@@ -116,6 +116,15 @@
     z-index: 1000;
 }
 
+.grid-event-wrapper.ghost-event {
+    border: 1px dashed rgba(0, 0, 0, 0.2);
+    box-shadow: none;
+    pointer-events: none;
+    background: #bdc3c7 !important;
+    color: #2c3e50 !important;
+    border-left: 4px solid #7f8c8d !important;
+}
+
 .resize-handle {
     position: absolute;
     bottom: 0;

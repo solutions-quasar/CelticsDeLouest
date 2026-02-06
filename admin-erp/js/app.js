@@ -3249,6 +3249,30 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
         } else {
             // ALWAYS use lowercase email as the Document ID for security rules
             await setDoc(doc(db, "admins", lowerEmail), data);
+
+            // --- INVITATION LOGIC FOR NEW USERS ---
+            try {
+                const token = await auth.currentUser.getIdToken();
+                const inviteUrl = 'https://us-central1-celticsdelouest.cloudfunctions.net/inviteAdmin';
+                const inviteRes = await fetch(inviteUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ email: lowerEmail, name: name })
+                });
+                const inviteData = await inviteRes.json();
+                if (!inviteRes.ok || inviteData.error) {
+                    console.error("Invite failed:", inviteData.error);
+                    showAlert("Utilisateur créé, mais l'invitation par courriel a échoué: " + (inviteData.error || "Erreur serveur"), "warning");
+                } else {
+                    showAlert("Utilisateur créé et invitation envoyée !", "success");
+                }
+            } catch (inviteErr) {
+                console.error("Invite Fetch Error:", inviteErr);
+                showAlert("Utilisateur créé, mais erreur lors de l'envoi de l'invitation.", "warning");
+            }
         }
 
         adminModal.classList.remove('active');
@@ -4198,12 +4222,13 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
         const newEnd = timeToMinutes(data.endTime || data.time);
 
         if (selectedMatchFields.length > 0 && dataCache.matches) {
+            const conflictFieldIds = getConflictFieldIds(selectedMatchFields);
             const conflicts = Object.values(dataCache.matches).filter(m => {
                 if (m.id === id) return false;
                 if (m.date !== data.date) return false;
 
                 const matchFieldIds = m.fieldIds || (m.fieldId ? [m.fieldId] : []);
-                const hasFieldOverlap = matchFieldIds.some(mfid => selectedMatchFields.includes(mfid));
+                const hasFieldOverlap = matchFieldIds.some(mfid => conflictFieldIds.includes(mfid));
                 if (!hasFieldOverlap) return false;
 
                 const mStart = timeToMinutes(m.time);
@@ -4378,12 +4403,31 @@ function renderDaySection(container, date, fields) {
     // Place Matches
     Object.values(dataCache.matches).forEach(match => {
         if (match.date === isoDate) {
-            const fieldIds = match.fieldIds || (match.fieldId ? [match.fieldId] : []);
-            fieldIds.forEach(fid => {
-                const cell = section.querySelector(`td[data-field-id="${fid}"][data-time="${match.time}"]`);
-                if (cell) {
+            const matchFieldIds = match.fieldIds || (match.fieldId ? [match.fieldId] : []);
+
+            // For each match, we check which columns it should appear in (either as match or as unavailable)
+            fields.forEach(colField => {
+                let isDirectMatch = matchFieldIds.includes(colField.id);
+                let isGhostConflict = false;
+
+                if (!isDirectMatch) {
+                    // Check if any of the match fields is a group containing colField
+                    // OR if colField is a group containing any of the match fields
+                    isGhostConflict = matchFieldIds.some(mfid => {
+                        const mField = dataCache.fields[mfid];
+                        if (mField?.isCombined && mField.constituentFieldIds?.includes(colField.id)) return true;
+                        if (colField.isCombined && colField.constituentFieldIds?.includes(mfid)) return true;
+                        return false;
+                    });
+                }
+
+                if (isDirectMatch || isGhostConflict) {
+                    const cell = section.querySelector(`td[data-field-id="${colField.id}"][data-time="${match.time}"]`);
+                    if (!cell) return;
+
                     const evt = document.createElement('div');
                     evt.className = 'grid-event-wrapper';
+                    if (isGhostConflict) evt.classList.add('ghost-event');
 
                     const startMins = timeToMinutes(match.time);
                     const endMins = timeToMinutes(match.endTime || match.time);
@@ -4394,7 +4438,8 @@ function renderDaySection(container, date, fields) {
                     evt.style.minHeight = `calc(100% - 4px)`;
 
                     // Color based on type
-                    const mType = match.type || 'match';
+                    const mType = isGhostConflict ? 'unavailable' : (match.type || 'match');
+
                     if (mType === 'practice') {
                         evt.style.background = '#e67e22'; // Orange
                         evt.style.borderLeft = '4px solid #d35400';
@@ -4403,59 +4448,67 @@ function renderDaySection(container, date, fields) {
                         evt.style.background = '#7f8c8d'; // Gray
                         evt.style.borderLeft = '4px solid #2c3e50';
                         evt.style.color = 'white';
-                        evt.style.opacity = '0.9';
+                        evt.style.opacity = isGhostConflict ? '0.6' : '0.9';
                     } else {
-                        // Match (default) - uses standard green/primary or existing CSS
                         evt.style.background = 'var(--primary)';
                         evt.style.borderLeft = '4px solid #1e8449';
                         evt.style.color = 'white';
                     }
 
-                    let eventTitle = `${match.category} vs ${match.opponent}`;
-                    let eventMeta = `<i class="fas fa-user"></i> ${match.refCenter ? 'Arbitres OK' : 'Pas d\'arbitre'}`;
+                    let eventTitle = isGhostConflict ? 'Indisponible' : `${match.category} vs ${match.opponent}`;
+                    let eventMeta = isGhostConflict ? '<i class="fas fa-link"></i> Terrain occupé' : `<i class="fas fa-user"></i> ${match.refCenter ? 'Arbitres OK' : 'Pas d\'arbitre'}`;
 
-                    if (mType === 'practice') {
-                        eventTitle = `Pratique (${match.category})`;
-                        eventMeta = '<i class="fas fa-running"></i> Entraînement';
-                    } else if (mType === 'unavailable') {
-                        eventTitle = 'Indisponible';
-                        eventMeta = '<i class="fas fa-ban"></i> Fermé';
+                    if (!isGhostConflict) {
+                        if (mType === 'practice') {
+                            eventTitle = `Pratique (${match.category})`;
+                            eventMeta = '<i class="fas fa-running"></i> Entraînement';
+                        } else if (mType === 'unavailable') {
+                            eventTitle = 'Indisponible';
+                            eventMeta = '<i class="fas fa-ban"></i> Fermé';
+                        }
+                    } else {
+                        // For ghost events, maybe show what's occupying it
+                        const occupationSource = matchFieldIds.map(fid => dataCache.fields[fid]?.name || 'Auto').join(', ');
+                        eventMeta = `<small><i class="fas fa-link"></i> Groupé avec ${occupationSource}</small>`;
                     }
 
                     evt.innerHTML = `
-                        <div class="grid-event-title">${eventTitle}</div>
+                        <div class="grid-event-title" style="${isGhostConflict ? 'font-size:0.7rem; font-style:italic;' : ''}">${eventTitle}</div>
                         <div class="grid-event-meta">${eventMeta}</div>
-                        <div class="resize-handle"></div>
+                        ${!isGhostConflict ? '<div class="resize-handle"></div>' : ''}
                     `;
 
-                    // If simple referee, show availability toggle
-                    if (window.currentUserRefereeId) {
-                        const isAvailable = (match.availableRefs || []).includes(window.currentUserRefereeId);
-                        const dispoBtn = document.createElement('button');
-                        dispoBtn.className = `btn-dispo ${isAvailable ? 'btn-dispo-active' : 'btn-dispo-inactive'}`;
-                        dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Dispo' : 'Dispo ?';
-                        dispoBtn.title = "Indiquer ma disponibilité pour ce match";
-                        dispoBtn.style.cssText = 'margin-top:auto; font-size:0.7rem; padding:6px; z-index:20;';
+                    if (!isGhostConflict) {
+                        // If simple referee, show availability toggle
+                        if (window.currentUserRefereeId) {
+                            const isAvailable = (match.availableRefs || []).includes(window.currentUserRefereeId);
+                            const dispoBtn = document.createElement('button');
+                            dispoBtn.className = `btn-dispo ${isAvailable ? 'btn-dispo-active' : 'btn-dispo-inactive'}`;
+                            dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Dispo' : 'Dispo ?';
+                            dispoBtn.title = "Indiquer ma disponibilité for ce match";
+                            dispoBtn.style.cssText = 'margin-top:auto; font-size:0.7rem; padding:6px; z-index:20;';
 
-                        dispoBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            toggleMatchAvailability(match.id);
-                        };
-                        evt.appendChild(dispoBtn);
-                    }
-
-                    evt.onclick = (e) => {
-                        e.stopPropagation();
-                        // Prevent opening if we just finished dragging/resizing
-                        if (evt.dataset.preventClick === 'true') {
-                            evt.dataset.preventClick = 'false';
-                            return;
+                            dispoBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                toggleMatchAvailability(match.id);
+                            };
+                            evt.appendChild(dispoBtn);
                         }
-                        openMatchModal(match);
-                    };
 
-                    // Init Drag & Resize
-                    setupMatchInteractions(evt, match, isoDate);
+                        evt.onclick = (e) => {
+                            e.stopPropagation();
+                            if (evt.dataset.preventClick === 'true') {
+                                evt.dataset.preventClick = 'false';
+                                return;
+                            }
+                            openMatchModal(match);
+                        };
+
+                        setupMatchInteractions(evt, match, isoDate);
+                    } else {
+                        evt.style.cursor = 'not-allowed';
+                        evt.title = "Ce terrain est indisponible car il est lié à un autre terrain occupé.";
+                    }
 
                     cell.appendChild(evt);
                 }
@@ -4470,6 +4523,31 @@ function renderDaySection(container, date, fields) {
             openMatchModal(null, isoDate, cell.dataset.time, cell.dataset.fieldId);
         };
     });
+}
+
+// --- Conflict & Group Helpers ---
+function getConflictFieldIds(fieldIds) {
+    const conflictIds = new Set(fieldIds);
+    const allFields = Object.values(dataCache.fields || {});
+
+    fieldIds.forEach(fid => {
+        const field = dataCache.fields[fid];
+        if (!field) return;
+
+        // If it's a group, all its constituents are in conflict
+        if (field.isCombined && field.constituentFieldIds) {
+            field.constituentFieldIds.forEach(cid => conflictIds.add(cid));
+        }
+
+        // Any group that contains this field is in conflict
+        allFields.forEach(f => {
+            if (f.isCombined && f.constituentFieldIds && f.constituentFieldIds.includes(fid)) {
+                conflictIds.add(f.id);
+            }
+        });
+    });
+
+    return Array.from(conflictIds);
 }
 
 // --- Time Helpers ---
@@ -5089,7 +5167,7 @@ async function populateFieldSelect(selectedId = null) {
     fields.forEach(data => {
         const option = document.createElement('option');
         option.value = data.id;
-        option.textContent = data.name;
+        option.textContent = (data.isCombined ? '[COMBINÉ] ' : '') + data.name;
         if (selectedId && data.id === selectedId) option.selected = true;
         select.appendChild(option);
     });
@@ -5103,7 +5181,51 @@ if (openFieldModalBtn) {
     openFieldModalBtn.addEventListener('click', () => {
         document.getElementById('field-form').reset();
         document.getElementById('field-id').value = '';
+
+        // Reset combined fields UI
+        const combinedCheckbox = document.getElementById('field-is-combined');
+        if (combinedCheckbox) combinedCheckbox.checked = false;
+        const constituentsContainer = document.getElementById('field-constituents-container');
+        if (constituentsContainer) constituentsContainer.style.display = 'none';
+
+        populateConstituentsList([]);
+
         fieldModal.classList.add('active');
+    });
+}
+
+// Toggle constituents visibility
+document.getElementById('field-is-combined')?.addEventListener('change', (e) => {
+    const container = document.getElementById('field-constituents-container');
+    if (container) container.style.display = e.target.checked ? 'block' : 'none';
+    if (e.target.checked) populateConstituentsList([]);
+});
+
+function populateConstituentsList(selectedIds = []) {
+    const list = document.getElementById('field-constituents-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    const currentId = document.getElementById('field-id').value;
+
+    // Only show non-combined fields as potential constituents
+    const fields = Object.values(dataCache.fields || {})
+        .filter(f => !f.isCombined && f.id !== currentId && f.active !== false);
+
+    if (fields.length === 0) {
+        list.innerHTML = '<p style="font-size: 0.8rem; color: #888;">Aucun terrain simple disponible.</p>';
+        return;
+    }
+
+    fields.sort((a, b) => a.name.localeCompare(b.name)).forEach(f => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 0.85rem;';
+        const isChecked = selectedIds.includes(f.id);
+        div.innerHTML = `
+            <input type="checkbox" class="constituent-checkbox" value="${f.id}" id="const-${f.id}" ${isChecked ? 'checked' : ''} style="width: auto; margin: 0;">
+            <label for="const-${f.id}" style="margin: 0; cursor: pointer;">${f.name}</label>
+        `;
+        list.appendChild(div);
     });
 }
 
@@ -5114,10 +5236,25 @@ if (fieldModal) {
 document.getElementById('field-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('field-id').value;
+    const isCombined = document.getElementById('field-is-combined')?.checked || false;
+    const constituentFieldIds = [];
+    if (isCombined) {
+        document.querySelectorAll('.constituent-checkbox:checked').forEach(cb => {
+            constituentFieldIds.push(cb.value);
+        });
+        if (constituentFieldIds.length < 2) {
+            showAlert("Veuillez sélectionner au moins 2 terrains pour un groupe combiné.", "warning");
+            setLoading(form, false);
+            return;
+        }
+    }
+
     const data = {
         name: document.getElementById('field-name').value,
         location: document.getElementById('field-location').value,
-        type: document.getElementById('field-type').value
+        type: document.getElementById('field-type').value,
+        isCombined: isCombined,
+        constituentFieldIds: constituentFieldIds
     };
 
     const form = e.target;
@@ -5152,7 +5289,13 @@ async function loadFields() {
 
         fields.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(data => {
             const id = data.id;
-            const card = createCard(null, data.name, `${data.type || '-'} <br> <small>${data.location || ''}</small>`, id, 'edit-field', 'delete-field', 'fa-map-marker-alt');
+            const isCombined = data.isCombined === true;
+            const subtitle = `
+                ${isCombined ? '<span class="badge" style="background:#6c5ce7; color:white; margin-bottom:5px; font-size:0.7rem;">COMBINÉ</span><br>' : ''}
+                ${data.type || '-'} <br>
+                <small>${data.location || ''}</small>
+            `;
+            const card = createCard(null, data.name, subtitle, id, 'edit-field', 'delete-field', isCombined ? 'fa-layer-group' : 'fa-map-marker-alt');
             list.appendChild(card);
         });
 
@@ -5161,6 +5304,15 @@ async function loadFields() {
             document.getElementById('field-name').value = data.name;
             document.getElementById('field-location').value = data.location || '';
             document.getElementById('field-type').value = data.type || 'gazon';
+
+            const isCombined = data.isCombined === true;
+            const combinedCheckbox = document.getElementById('field-is-combined');
+            if (combinedCheckbox) {
+                combinedCheckbox.checked = isCombined;
+                const container = document.getElementById('field-constituents-container');
+                if (container) container.style.display = isCombined ? 'block' : 'none';
+            }
+            populateConstituentsList(data.constituentFieldIds || []);
         });
         setupDeleteButton('.delete-field', 'fields', () => loadFields());
 

@@ -239,20 +239,20 @@ async function confirmAndSend() {
             const id = document.getElementById('camp-id').value;
             // Call Cloud Function "sendCampaign"
             // We can use fetch to call the HTTPS endpoint
-            // TODO: Replace URL with your actual Cloud Function URL
-            // const functionUrl = "https://us-central1-celtics-de-louest.cloudfunctions.net/sendCampaign";
-            const functionUrl = "http://127.0.0.1:5001/celticsdelouest/us-central1/sendCampaign";
+            const functionUrl = "https://us-central1-celticsdelouest.cloudfunctions.net/sendCampaign";
+            const token = await window.auth.currentUser.getIdToken();
 
             try {
                 // Show loading state
                 document.getElementById('btn-send-campaign').disabled = true;
                 document.getElementById('btn-send-campaign').textContent = "Envoi...";
 
-                // Note: CORS issues might occur if not testing on localhost correctly
-                // or if functions not deployed with cors=true.
                 const res = await fetch(functionUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({ campaignId: id })
                 });
 
@@ -284,15 +284,17 @@ async function sendTestEmail() {
     const subject = document.getElementById('camp-subject').value;
     const content = quillCampaign.root.innerHTML;
 
-    // USE LOCAL EMULATOR URL FOR DEV
-    // const functionUrl = "https://us-central1-celtics-de-louest.cloudfunctions.net/sendCampaign";
-    const functionUrl = "http://127.0.0.1:5001/celticsdelouest/us-central1/sendCampaign";
+    const functionUrl = "https://us-central1-celticsdelouest.cloudfunctions.net/sendCampaign";
+    const token = await window.auth.currentUser.getIdToken();
 
     try {
         const res = await fetch(functionUrl, {
 
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
                 testEmail: email,
                 testSubject: subject,

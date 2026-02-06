@@ -159,10 +159,14 @@ export async function loadBilling() {
             };
 
             const url = 'https://us-central1-celticsdelouest.cloudfunctions.net/createManualInvoice';
+            const token = await window.auth.currentUser.getIdToken();
 
             const res = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(payload)
             });
             const data = await res.json();

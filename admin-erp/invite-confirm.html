@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Initialisation du compte - Celtics de l'Ouest</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .setup-card {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .icon-box {
+            width: 80px;
+            height: 80px;
+            background: #e6f3ec;
+            color: #008744;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            font-size: 2rem;
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        .btn-setup {
+            background: #008744;
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-weight: 600;
+            display: block;
+            transition: transform 0.2s;
+        }
+
+        .btn-setup:hover {
+            transform: translateY(-2px);
+            background: #007038;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="setup-card">
+        <div class="icon-box">
+            <i class="fas fa-user-shield"></i>
+        </div>
+        <h2>Bienvenue !</h2>
+        <p>Cliquez sur le bouton ci-dessous pour sécuriser votre compte et choisir votre mot de passe.</p>
+        <a id="setup-link" href="#" class="btn-setup">Démarrer l'initialisation</a>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const link = urlParams.get('link');
+        const setupBtn = document.getElementById('setup-link');
+
+        if (link) {
+            setupBtn.href = decodeURIComponent(link);
+        } else {
+            document.querySelector('p').textContent = "Lien invalide ou manquant. Veuillez contacter l'administrateur.";
+            setupBtn.style.display = 'none';
+        }
+    </script>
+</body>
+
+</html>

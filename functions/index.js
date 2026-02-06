@@ -784,18 +784,19 @@ exports.inviteAdmin = onRequest({ cors: true }, async (req, res) => {
             }
 
             // 2. Generate Reset Link
-            const link = await admin.auth().generatePasswordResetLink(lowerEmail);
+            const firebaseLink = await admin.auth().generatePasswordResetLink(lowerEmail);
 
-            // 3. Format Email
+            // 3. Create a Redirect Link (to prevent scanners from clicking the one-time link)
+            const redirectLink = `https://celticsdelouest.web.app/admin-erp/invite-confirm.html?link=${encodeURIComponent(firebaseLink)}`;
+
+            // 4. Format Email
             const emailContent = `
                 <p>Bonjour ${name || 'nouvel utilisateur'},</p>
                 <p>Vous avez été invité à rejoindre la plateforme administrative des <strong>Celtics de l'Ouest</strong>.</p>
                 <p>Pour finaliser votre compte et choisir votre mot de passe, veuillez cliquer sur le bouton ci-dessous :</p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="${link}" class="btn" style="color: white; padding: 12px 24px; text-decoration: none; font-weight: bold;">Initialiser mon compte</a>
+                    <a href="${redirectLink}" class="btn" style="color: white; padding: 12px 24px; text-decoration: none; font-weight: bold;">Initialiser mon compte</a>
                 </div>
-                <p>Si le bouton ne fonctionne pas, vous pouvez copier ce lien dans votre navigateur :</p>
-                <p style="word-break: break-all; font-size: 12px; color: #666;">${link}</p>
                 <p>À bientôt,<br>L'équipe des Celtics</p>
             `;
             const html = getEmailTemplate(emailContent, "Invitation Plateforme Admin");

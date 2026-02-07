@@ -1,0 +1,69 @@
+/* Custom Prompt Styles - matches ERP modern aesthetics */
+#custom-prompt-modal .modal-content {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    text-align: center;
+    border: none;
+    max-width: 400px;
+}
+
+#custom-prompt-modal h3 {
+    margin-bottom: 25px;
+    font-size: 1.25rem;
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+#custom-prompt-modal input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e5e7eb;
+    border-radius: 25px; /* Rounder radius */
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.3s ease;
+    margin-bottom: 25px;
+    background-color: #f9fafb;
+    color: var(--text-dark);
+}
+
+#custom-prompt-modal input:focus {
+    border-color: var(--primary);
+    background-color: #fff;
+    box-shadow: 0 0 0 3px rgba(0, 128, 64, 0.1);
+}
+
+#custom-prompt-modal .btn-action {
+    padding: 10px 20px;
+    border-radius: 25px; /* Round buttons to match input */
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: none;
+    flex: 1;
+}
+
+#custom-prompt-modal #prompt-ok-btn {
+    background: var(--primary);
+    color: white;
+}
+
+#custom-prompt-modal #prompt-ok-btn:hover {
+    background: var(--primary-dark);
+    box-shadow: 0 4px 10px rgba(0, 128, 64, 0.2);
+    transform: translateY(-2px);
+}
+
+#custom-prompt-modal #prompt-cancel-btn {
+    background: #9ca3af;
+    color: white;
+}
+
+#custom-prompt-modal #prompt-cancel-btn:hover {
+    background: #6b7280;
+    box-shadow: 0 4px 10px rgba(107, 114, 128, 0.2);
+    transform: translateY(-2px);
+}

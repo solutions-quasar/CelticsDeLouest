@@ -76,10 +76,53 @@ window.showConfirm = function (message) {
 
 window.showPrompt = function (message, defaultValue = "") {
     return new Promise((resolve) => {
-        // Since we don't have a specific prompt modal, we can reuse alert or create one.
-        // For now, I'll alert the user that prompt isn't fully stylized or just use native fallback
-        // OR I can quickly create a prompt modal in HTML.
-        // Let's assume we want consistency, so I should probably add one to index.html.
-        resolve(prompt(message, defaultValue));
+        const modal = document.getElementById('custom-prompt-modal');
+        const messageEl = document.getElementById('prompt-message');
+        const inputEl = document.getElementById('prompt-input');
+        const okBtn = document.getElementById('prompt-ok-btn');
+        const cancelBtn = document.getElementById('prompt-cancel-btn');
+
+        if (!modal || !messageEl || !inputEl || !okBtn || !cancelBtn) {
+            console.error("Prompt modal elements missing");
+            resolve(prompt(message, defaultValue)); // Fallback
+            return;
+        }
+
+        messageEl.textContent = message;
+        inputEl.value = defaultValue;
+
+        // Focus input after modal is shown
+        setTimeout(() => inputEl.focus(), 100);
+
+        const cleanup = () => {
+            modal.classList.remove('active');
+            okBtn.onclick = null;
+            cancelBtn.onclick = null;
+            inputEl.onkeydown = null;
+        };
+
+        const confirm = () => {
+            const val = inputEl.value;
+            cleanup();
+            resolve(val);
+        };
+
+        okBtn.onclick = confirm;
+
+        cancelBtn.onclick = () => {
+            cleanup();
+            resolve(null);
+        };
+
+        // Enter key to confirm
+        inputEl.onkeydown = (e) => {
+            if (e.key === 'Enter') confirm();
+            if (e.key === 'Escape') {
+                cleanup();
+                resolve(null);
+            }
+        };
+
+        modal.classList.add('active');
     });
 }

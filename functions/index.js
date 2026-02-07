@@ -833,7 +833,7 @@ exports.inviteAdmin = onRequest({ cors: true }, async (req, res) => {
 // --- PASSWORD RESET: SEND ADMIN PASSWORD RESET EMAIL ---
 exports.sendAdminPasswordReset = onRequest({ cors: true }, async (req, res) => {
     try {
-        await authenticateAdmin(req);
+        // await authenticateAdmin(req); // REMOVED: Must be public for forgot password flow
         const { email } = req.body;
 
         if (!email) {

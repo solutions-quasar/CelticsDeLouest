@@ -1439,6 +1439,19 @@
         </div>
     </div>
 
+    <!-- Custom Prompt Modal -->
+    <div id="custom-prompt-modal" class="modal" style="z-index: 10000;">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <h3 id="prompt-message" style="margin-bottom: 20px;">Entrez une valeur</h3>
+            <input type="text" id="prompt-input" class="form-control" style="width: 100%; margin-bottom: 20px;"
+                placeholder="">
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="prompt-ok-btn" class="btn-action" style="background: var(--primary); flex: 1;">OK</button>
+                <button id="prompt-cancel-btn" class="btn-action" style="background: #999; flex: 1;">Annuler</button>
+            </div>
+        </div>
+    </div>
+
     <div id="inventory-batch-modal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <span class="close-modal">&times;</span>

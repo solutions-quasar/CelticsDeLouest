@@ -566,13 +566,36 @@ if (loginForm) {
 
         forgotBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('email').value;
-            if (!email) return showAlert("Entrez votre courriel ci-dessus.", "warning");
+            let email = document.getElementById('email').value;
+
+            // If email field is empty, ask for it
+            if (!email) {
+                email = await showPrompt("Veuillez entrer votre adresse courriel pour la réinitialisation :");
+            }
+
+            if (!email) return;
+
+            // Confirm before sending (Allow editing)
+            email = await showPrompt("Confirmer l'adresse courriel pour l'envoi :", email);
+            if (!email) return;
+
             try {
-                await sendPasswordResetEmail(auth, email);
-                showAlert("Courriel de réinitialisation envoyé.", "success");
+                // Use the Cloud Function directly (public endpoint since user is not logged in)
+                const response = await fetch('https://us-central1-celticsdelouest.cloudfunctions.net/sendAdminPasswordReset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showAlert("Courriel de réinitialisation envoyé ! Vérifiez votre boîte de réception.", "success");
+                } else {
+                    showAlert("Erreur: " + (result.error || "Impossible d'envoyer le courriel."), "error");
+                }
             } catch (error) {
-                showAlert("Erreur: " + error.message, "error");
+                console.error(error);
+                showAlert("Erreur technique: " + error.message, "error");
             }
         });
     }
@@ -6428,10 +6451,12 @@ window.showPrompt = function (message, defaultValue = '') {
     });
 };
 
-// Initialize modules
-if (typeof window.initAutomationsModule === 'function') {
-    window.initAutomationsModule();
-}
-if (typeof window.initCampaignModule === 'function') {
-    window.initCampaignModule();
+// Initialize modules ONLY if user is authenticated (to avoid permission errors on login screen)
+if (auth.currentUser) {
+    if (typeof window.initAutomationsModule === 'function') {
+        window.initAutomationsModule();
+    }
+    if (typeof window.initCampaignModule === 'function') {
+        window.initCampaignModule();
+    }
 }

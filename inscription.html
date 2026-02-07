@@ -1031,7 +1031,7 @@
     <!-- Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, getDoc, getDocs, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
@@ -1048,6 +1048,7 @@
 
         // State
         let settings = null;
+        let activeSeasonId = null;
         let registeredChildren = [];
         let currentChildData = null;
 
@@ -1115,6 +1116,14 @@
                         } else {
                             // Fallback to current year if not set
                             document.getElementById('season-year-display').innerText = new Date().getFullYear();
+                        }
+
+                        // Fetch Active Season ID
+                        const seasonsRef = collection(db, "seasons");
+                        const q = query(seasonsRef, where("active", "==", true));
+                        const qSnap = await getDocs(q);
+                        if (!qSnap.empty) {
+                            activeSeasonId = qSnap.docs[0].id;
                         }
 
                     } else {
@@ -1762,17 +1771,15 @@
                 for (let i = 0; i < allChildren.length; i++) {
                     const child = allChildren[i];
                     child.timestamp = serverTimestamp();
-                    child.status = 'Active'; // Auto-active if paid? Or 'New'? Let's keep 'New' or 'Paid'. 
-                    // ERP usually expects 'New' or 'Active'. If paid, maybe 'Paid'? 
-                    // keeping 'New' for admin review, but adding payment status.
+                    child.seasonId = activeSeasonId;
 
                     child.yearOfBirth = parseInt(child.dob.split('-')[0], 10);
                     child.registrationSessionId = sessionId;
                     child.childIndex = i + 1;
                     child.totalChildrenInSession = allChildren.length;
 
-                    // Payment Info
                     if (paymentInfo) {
+                        child.status = 'Paid';
                         child.paymentStatus = 'Paid';
                         child.stripeCustomerId = paymentInfo.customerId;
                         child.stripePaymentIntentId = paymentInfo.paymentIntentId;
@@ -1783,6 +1790,7 @@
                             child.installmentPlan = true;
                         }
                     } else {
+                        child.status = 'New';
                         child.paymentStatus = 'Pending'; // Offline payment
                         child.paymentMethod = 'Interac/Cash';
                     }

@@ -250,6 +250,42 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Equipment Summary Stats -->
+                            <div class="card" id="dashboard-equipment-card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-tshirt"></i> Résumé des Équipements (Payés)</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div id="dash-equipment-summary"
+                                        style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                                        <div>
+                                            <h4
+                                                style="font-size: 0.9rem; color: var(--primary); border-bottom: 2px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">
+                                                Chandails</h4>
+                                            <div id="dash-jerseys-list"
+                                                style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+                                                --</div>
+                                        </div>
+                                        <div>
+                                            <h4
+                                                style="font-size: 0.9rem; color: var(--secondary); border-bottom: 2px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">
+                                                Shorts</h4>
+                                            <div id="dash-shorts-list"
+                                                style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+                                                --</div>
+                                        </div>
+                                        <div>
+                                            <h4
+                                                style="font-size: 0.9rem; color: #8e44ad; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">
+                                                Bas</h4>
+                                            <div id="dash-socks-list"
+                                                style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+                                                --</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -311,7 +347,7 @@
                     </div>
 
                     <!-- Empty Team Deletion Confirmation Modal -->
-                    <div id="empty-team-confirm-modal" class="modal">
+                    <div id="empty-team-confirm-modal" class="modal" style="z-index: 3000;">
                         <div class="modal-content" style="max-width: 400px; text-align: center;">
                             <span class="close-modal">&times;</span>
                             <div style="margin-bottom: 20px;">
@@ -384,6 +420,10 @@
                             <div class="card-header">
                                 <h3>Gestion des Joueurs</h3>
                                 <div class="header-actions-group">
+                                    <select id="player-filter-season"
+                                        style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 8px; margin-right: 10px; font-size: 0.9rem; outline: none;">
+                                        <option value="all">Afficher tout</option>
+                                    </select>
                                     <div class="search-box"
                                         style="display: flex; align-items: center; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 4px 12px; margin-right: 15px;">
                                         <i class="fas fa-search" style="color: #999; margin-right: 8px;"></i>
@@ -530,8 +570,14 @@
                                 <div class="header-actions-group">
                                     <div class="filter-group"
                                         style="display:flex; gap:10px; align-items:center; margin-right:15px;">
-                                        <input type="text" id="reg-search" placeholder="Rechercher..."
-                                            style="padding:6px; border:1px solid #ddd; border-radius:4px;">
+                                        <div style="display:flex; align-items:center; gap: 10px;">
+                                            <select id="reg-filter-season"
+                                                style="padding:6px; border:1px solid #ddd; border-radius:4px;">
+                                                <option value="">Toutes les saisons</option>
+                                            </select>
+                                            <input type="text" id="reg-search" placeholder="Rechercher..."
+                                                style="padding:6px; border:1px solid #ddd; border-radius:4px;">
+                                        </div>
                                     </div>
                                     <button class="btn-action" id="btn-migrate-registrations"
                                         style="margin-right:5px; background:var(--secondary);">
@@ -1911,6 +1957,12 @@
                         Administration</h4>
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
                         <div class="form-group">
+                            <label>Saison</label>
+                            <select id="reg-season">
+                                <option value="">-- Choisir --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label>Programme / Catégorie</label>
                             <input type="text" id="reg-program" readonly>
                         </div>
@@ -1918,6 +1970,8 @@
                             <label>Prix Final ($)</label>
                             <input type="number" id="reg-price">
                         </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
                         <div class="form-group">
                             <label>Statut Paiement / Dossier</label>
                             <select id="reg-status">
@@ -1927,10 +1981,10 @@
                                 <option value="Migré">Migré</option>
                             </select>
                         </div>
-                    </div>
-                    <div class="form-group" style="margin-top:10px;">
-                        <label>ID Session / Groupe</label>
-                        <input type="text" id="reg-session-id" readonly style="font-size:0.8rem; color:#666;">
+                        <div class="form-group">
+                            <label>ID Session / Groupe</label>
+                            <input type="text" id="reg-session-id" readonly style="font-size:0.8rem; color:#666;">
+                        </div>
                     </div>
                 </div>
 
@@ -2914,11 +2968,19 @@
                         <h4
                             style="margin: 20px 0 10px 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 5px;">
                             Administration</h4>
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label>Équipe Assignée</label>
-                            <select id="ep-team" class="form-control">
-                                <option value="">-- Non assigné --</option>
-                            </select>
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Saison</label>
+                                <select id="ep-season" class="form-control" required>
+                                    <option value="">-- Choisir --</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Équipe Assignée</label>
+                                <select id="ep-team" class="form-control">
+                                    <option value="">-- Non assigné --</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 

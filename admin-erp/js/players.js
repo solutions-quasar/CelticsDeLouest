@@ -37,6 +37,19 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         checkAndLoad();
     }
+
+    // Filter and Search Listeners
+    document.getElementById('player-search')?.addEventListener('input', () => {
+        const gridContainer = document.getElementById('players-directory-list');
+        const isGridView = gridContainer && gridContainer.style.display !== 'none';
+        loadPlayersDirectory(isGridView ? 'grid' : 'list');
+    });
+
+    document.getElementById('player-filter-season')?.addEventListener('change', () => {
+        const gridContainer = document.getElementById('players-directory-list');
+        const isGridView = gridContainer && gridContainer.style.display !== 'none';
+        loadPlayersDirectory(isGridView ? 'grid' : 'list');
+    });
 });
 
 // Load Players Directory Function
@@ -47,8 +60,26 @@ window.loadPlayersDirectory = async function (viewMode = 'grid') {
     if (!gridContainer && !tbody) return;
 
     try {
+        const searchInput = document.getElementById('player-search');
+        const filterSeason = document.getElementById('player-filter-season');
+        const query = searchInput?.value.toLowerCase() || '';
+        const seasonId = filterSeason?.value || 'all';
+
         // Use global cache updated by real-time listener
-        const players = Object.values(window.dataCache.players || {});
+        let players = Object.values(window.dataCache.players || {});
+
+        // Filter by season
+        if (seasonId !== 'all') {
+            players = players.filter(p => p.seasonId === seasonId);
+        }
+
+        // Filter by search query
+        if (query) {
+            players = players.filter(p => {
+                const fullName = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase();
+                return fullName.includes(query);
+            });
+        }
 
         if (viewMode === 'grid' && gridContainer) {
             gridContainer.innerHTML = '';

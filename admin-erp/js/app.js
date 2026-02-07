@@ -1,7 +1,7 @@
 // Firebase Configuration
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp, onSnapshot } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { loadBilling } from "./billing.js";
@@ -72,6 +72,7 @@ window.where = where;
 window.orderBy = orderBy;
 window.getCountFromServer = getCountFromServer;
 window.Timestamp = Timestamp;
+window.writeBatch = writeBatch;
 
 // --- Rich Text Editors ---
 let quillWelcome;
@@ -300,13 +301,16 @@ function createCard(imageUrl, title, subtitle, id, editClass, deleteClass, defau
             : `<div class="${imgClass} placeholder-img" style="background:#eee; display:flex; align-items:center; justify-content:center; color:#888"><i class="fas ${defaultIcon} fa-2x"></i></div>`;
     }
 
+    const editBtn = editClass ? `<button class="btn-icon ${editClass}" data-id="${id}" style="color:var(--primary)"><i class="fas fa-pen"></i></button>` : '';
+    const deleteBtn = deleteClass ? `<button class="btn-icon ${deleteClass}" data-id="${id}" style="color:var(--danger)"><i class="fas fa-trash"></i></button>` : '';
+
     card.innerHTML = `
         ${imgHtml}
         <h4>${title}</h4>
         <p>${subtitle}</p>
         <div class="product-actions" style="justify-content:center; gap: 10px;">
-            <button class="btn-icon ${editClass}" data-id="${id}" style="color:var(--primary)"><i class="fas fa-pen"></i></button>
-            <button class="btn-icon ${deleteClass}" data-id="${id}" style="color:var(--danger)"><i class="fas fa-trash"></i></button>
+            ${editBtn}
+            ${deleteBtn}
         </div>
     `;
     return card;
@@ -387,11 +391,23 @@ function initRealTimeListeners() {
         const view = document.getElementById('view-players');
         if (view && view.classList.contains('active')) loadPlayersDirectory();
         if (typeof updateStats === 'function') updateStats();
+
+        // Refresh visual editor if open
+        const visualModal = document.getElementById('team-visual-modal');
+        if (visualModal && visualModal.style.display === 'flex') {
+            if (typeof renderVisualTeams === 'function') renderVisualTeams();
+        }
     });
 
     syncCollection("teams", "teams", () => {
         const view = document.getElementById('view-teams');
         if (view && view.classList.contains('active')) loadTeams();
+
+        // Refresh visual editor if open
+        const visualModal = document.getElementById('team-visual-modal');
+        if (visualModal && visualModal.style.display === 'flex') {
+            if (typeof renderVisualTeams === 'function') renderVisualTeams();
+        }
     });
 
     syncCollection("matches", "matches", () => {
@@ -414,9 +430,41 @@ function initRealTimeListeners() {
     });
 
     syncCollection("seasons", "seasons", () => {
+        // Find active season and set it as current
+        const activeSeason = Object.values(dataCache.seasons || {}).find(s => s.active);
+        if (activeSeason) {
+            dataCache.currentSeason = activeSeason.id;
+        }
+
         const view = document.getElementById('view-seasons');
         if (view && view.classList.contains('active')) loadSeasons();
         if (typeof loadTeamFilterSeasons === 'function') loadTeamFilterSeasons();
+        // Also populate the registration filter if it exists
+        if (document.getElementById('reg-filter-season')) {
+            populateSeasonSelect('reg-filter-season', dataCache.currentSeason);
+        }
+
+        // Also populate player season filter
+        if (document.getElementById('player-filter-season')) {
+            const playerSel = document.getElementById('player-filter-season');
+            const currentVal = playerSel.value || 'all';
+
+            playerSel.innerHTML = '<option value="all">Afficher tout</option>';
+
+            const seasons = Object.values(dataCache.seasons || {});
+            const items = seasons.map(s => ({
+                id: s.id,
+                name: s.name || `${s.type || ''} ${s.year || ''}` || 'Saison Sans Nom'
+            }));
+
+            items.sort((a, b) => b.name.localeCompare(a.name)).forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name;
+                if (s.id === currentVal) opt.selected = true;
+                playerSel.appendChild(opt);
+            });
+        }
     });
 
     syncCollection("settings", "settings", () => {
@@ -1368,12 +1416,18 @@ if (btnGenerateTeams) {
         const seasonId = document.getElementById('team-filter-season').value;
         if (!seasonId) return showAlert("Veuillez sélectionner une saison.", "warning");
 
-        const players = Object.values(dataCache.players || {}).filter(p => p.seasonId === seasonId && !p.teamId);
+        const season = dataCache.seasons?.[seasonId];
+        const seasonYear = season ? parseInt(season.year) : new Date().getFullYear();
+
+        const players = Object.values(dataCache.players || {}).filter(p => {
+            // Include if season matches AND no team assigned
+            return p.seasonId === seasonId && !p.teamId;
+        });
 
         document.getElementById('gen-unassigned-count').textContent = players.length;
 
         if (players.length === 0) {
-            showAlert("Tous les joueurs ont déjà une équipe !", "info");
+            showAlert("Tous les joueurs ont déjà une équipe pour cette saison !", "info");
             return;
         }
 
@@ -1392,24 +1446,57 @@ if (btnConfirmGenerate) {
         setLoading(btnConfirmGenerate.parentElement, true);
 
         try {
+            const season = dataCache.seasons?.[seasonId];
+            const seasonYear = season ? parseInt(season.year) : new Date().getFullYear();
+
             const players = Object.values(dataCache.players || {}).filter(p => p.seasonId === seasonId && !p.teamId);
 
             // Group by Category and Gender
             const groups = {};
             players.forEach(p => {
-                const key = `${p.category || 'Inconnu'}_${p.gender || 'X'}`;
+                let cat = p.category;
+
+                // fallback to derive category from age
+                if (!cat && p.dob) {
+                    const bYear = parseInt(p.dob.split('-')[0]);
+                    const age = seasonYear - bYear;
+                    if (age >= 18) cat = 'Senior';
+                    else if (age >= 4) cat = 'U' + age;
+                    else cat = 'Timbits';
+                }
+
+                if (!cat) cat = 'Inconnu';
+
+                const key = `${cat}_${p.gender || 'X'}`;
                 if (!groups[key]) groups[key] = [];
                 groups[key].push(p);
             });
 
-            const batch = writeBatch(db);
+            let batch = writeBatch(db);
             let opCount = 0;
             const MAX_BATCH = 450;
+
+            const commitBatch = async () => {
+                if (opCount > 0) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    opCount = 0;
+                }
+            };
 
             // Create Teams and Assign
             for (const key of Object.keys(groups)) {
                 const [cat, gender] = key.split('_');
                 const groupPlayers = groups[key];
+
+                // Mapping gender to full labels used by the UI
+                const teamGender = gender === 'M' ? 'Masculin' : (gender === 'F' ? 'Féminin' : 'Mixte');
+
+                // Skip if somehow the gender is unknown and we don't want auto-mixed teams
+                if (teamGender === 'Mixte' && gender !== 'Mixte') {
+                    console.warn(`Skipping team generation for ${cat} with unknown gender code: ${gender}`);
+                    continue;
+                }
 
                 // Create Team
                 const teamRef = doc(collection(db, "teams"));
@@ -1418,25 +1505,23 @@ if (btnConfirmGenerate) {
                 batch.set(teamRef, {
                     name: teamName,
                     category: cat,
-                    gender: gender,
+                    gender: teamGender,
                     seasonId: seasonId,
                     createdAt: serverTimestamp()
                 });
                 opCount++;
+                if (opCount >= MAX_BATCH) await commitBatch();
 
                 // Assign Players
-                groupPlayers.forEach(p => {
+                for (const p of groupPlayers) {
                     const pRef = doc(db, "players", p.id);
                     batch.update(pRef, { teamId: teamRef.id });
                     opCount++;
-
-                    if (opCount >= MAX_BATCH) {
-                        // In a real app we'd commit and start new, but here simplified
-                    }
-                });
+                    if (opCount >= MAX_BATCH) await commitBatch();
+                }
             }
 
-            await batch.commit();
+            await commitBatch();
             showAlert("Équipes générées avec succès !", "success");
             teamGenModal.classList.remove('active');
             // Refresh logic will happen via listeners
@@ -1637,10 +1722,15 @@ function renderVisualTeams() {
                 if (oldTeamId === team.id) return; // Dropped on same team
 
                 try {
-                    // Update DB
+                    // 1. Optimistic Update (Immediate Feedback)
+                    const originalTeamId = player.teamId;
+                    player.teamId = team.id;
+                    renderVisualTeams();
+
+                    // 2. Update DB
                     await updateDoc(doc(db, "players", playerId), { teamId: team.id });
 
-                    // Check if old team empty
+                    // 3. Keep old team if not empty (handled by listener usually, but here we check for deletion)
                     const oldTeamPlayers = Object.values(dataCache.players).filter(p => p.teamId === oldTeamId && p.id !== playerId);
                     if (oldTeamPlayers.length === 0) {
                         // Custom confirmation
@@ -1649,7 +1739,8 @@ function renderVisualTeams() {
                             visualSelectedTeams.delete(oldTeamId);
                         }
                     }
-                    renderVisualTeams(); // Re-render all to update counts
+                    // Final re-render (optional since listener will fire too, but safer)
+                    renderVisualTeams();
                 } catch (err) {
                     console.error(err);
                     showAlert("Erreur lors du déplacement : " + err.message, "error");
@@ -1914,7 +2005,7 @@ async function loadTeams() {
                     teamTitle = `<span style="color:red;">${data.name}</span>`;
                 }
 
-                const card = createCard(false, teamTitle, subtitle, id, 'edit-team', 'delete-team');
+                const card = createCard(false, teamTitle, subtitle, id, null, 'delete-team');
                 card.classList.add('team-card');
                 card.setAttribute('data-id', id);
                 cardsContainer.appendChild(card);
@@ -2057,7 +2148,14 @@ async function loadTeamPlayers(teamId) {
                 `;
             }
 
-            div.style.cssText = 'padding: 10px; background: white; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px;';
+            div.style.cssText = 'padding: 10px; background: white; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: background 0.2s;';
+            div.addEventListener('mouseover', () => div.style.background = '#f9f9f9');
+            div.addEventListener('mouseout', () => div.style.background = 'white');
+            div.addEventListener('click', () => {
+                if (!isCoach && typeof window.openPlayerModal === 'function') {
+                    window.openPlayerModal(player);
+                }
+            });
             div.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-weight: 500;"><i class="fas fa-user" style="color:#666; margin-right:8px;"></i> ${name}</span>
@@ -2111,14 +2209,12 @@ const openPlayerModalBtn = document.getElementById('open-player-modal');
 const openPlayerModalDirBtn = document.getElementById('open-player-modal-directory');
 
 async function populateTeamSelect(selectedId = null) {
-    const sel = document.getElementById('player-team');
+    const sel = document.getElementById('ep-team');
     if (!sel) return;
 
-    const teamsArr = Object.values(dataCache.teams || {});
-
-    sel.innerHTML = '<option value="">-- Aucune --</option>';
+    sel.innerHTML = '<option value="">-- Non assigné --</option>';
     const items = [];
-    Object.keys(dataCache.teams).forEach(key => {
+    Object.keys(dataCache.teams || {}).forEach(key => {
         const t = dataCache.teams[key];
         items.push({ id: key, name: t.name || 'Équipe Sans Nom' });
     });
@@ -2143,8 +2239,9 @@ window.openPlayerModal = async function (data = null) {
     const tabIdentity = document.querySelector('.tab-link[data-tab="tab-identity"]');
     if (tabIdentity) window.switchPlayerTab(tabIdentity, 'tab-identity');
 
-    // Populate Teams
+    // Populate Teams and Seasons
     await populateTeamSelect();
+    await populateSeasonSelect('ep-season');
 
     if (data) {
         document.getElementById('player-id').value = data.id || '';
@@ -2174,8 +2271,22 @@ window.openPlayerModal = async function (data = null) {
         document.getElementById('ep-photo-auth').value = data.photoAuth || 'Oui';
         document.getElementById('ep-requests').value = data.specialRequests || '';
 
+        const seasonSelect = document.getElementById('ep-season');
+        if (seasonSelect) {
+            // Find season from data or fallback to active filter
+            const currentFilterSeason = document.getElementById('team-filter-season')?.value;
+            seasonSelect.value = data.seasonId || currentFilterSeason || '';
+        }
+
         const teamSelect = document.getElementById('ep-team');
         if (teamSelect) teamSelect.value = data.teamId || '';
+    } else {
+        // New player: default to currently selected filter season if available
+        const seasonSelect = document.getElementById('ep-season');
+        if (seasonSelect) {
+            const currentFilterSeason = document.getElementById('team-filter-season')?.value;
+            seasonSelect.value = currentFilterSeason || '';
+        }
     }
 
     setLoading(form, false);
@@ -2227,6 +2338,7 @@ document.getElementById('player-form')?.addEventListener('submit', async (e) => 
             photoAuth: document.getElementById('ep-photo-auth').value,
             specialRequests: document.getElementById('ep-requests').value,
 
+            seasonId: document.getElementById('ep-season').value || null,
             teamId: document.getElementById('ep-team').value || null
         };
 
@@ -2243,9 +2355,8 @@ document.getElementById('player-form')?.addEventListener('submit', async (e) => 
         const modal = document.getElementById('player-modal');
         if (modal) modal.classList.remove('active');
 
-        // Reload views if they exist/are active
-        if (typeof loadPlayers === 'function') loadPlayers();
-        if (typeof loadTeamPlayers === 'function' && data.teamId) loadTeamPlayers(data.teamId);
+        // Reload views
+        refreshPlayersViews(data.teamId);
 
     } catch (err) {
         console.error("Error saving player:", err);
@@ -2283,80 +2394,17 @@ if (playerModal) playerModal.querySelector('.close-modal').addEventListener('cli
 setupImagePreview('player-image', 'player-image-preview');
 
 
-/* 
-document.getElementById('player-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    console.log("Submitting player form...");
-    const form = e.target;
-    setLoading(form, true);
-
-    try {
-        const id = document.getElementById('player-id').value;
-        const file = document.getElementById('player-image').files[0];
-
-        if (file && file.size > 5 * 1024 * 1024) throw new Error("L'image est trop volumineuse (Max 5MB).");
-
-        const data = {
-            name: document.getElementById('player-name').value,
-            year: parseInt(document.getElementById('player-year').value),
-            skill: parseInt(document.getElementById('player-skill').value),
-            pos: document.getElementById('player-pos').value,
-            teamId: document.getElementById('player-team').value
-        };
-        await uploadAndSave('players', id, data, file);
-        console.log("Player uploaded successfully");
-
-        const modal = document.getElementById('player-modal');
-        if (modal) modal.classList.remove('active');
-
-        loadPlayers(); // Refresh Teams View
-        loadPlayersDirectory(); // Refresh Directory View
-        if (typeof updateStats === 'function') updateStats();
-    } catch (err) {
-        console.error(err);
-        showAlert("Erreur: " + (err.message || err), "error");
-    } finally {
-        setLoading(form, false);
+// Consolidated views reload helper
+function refreshPlayersViews(teamId = null) {
+    if (typeof loadPlayersDirectory === 'function') {
+        const gridContainer = document.getElementById('players-directory-list');
+        const isGridView = gridContainer && gridContainer.style.display !== 'none';
+        loadPlayersDirectory(isGridView ? 'grid' : 'list');
     }
-});
-*/
-
-async function loadPlayers() {
-    let targetList = document.getElementById('players-table-container');
-    if (!targetList) {
-        const oldTable = document.getElementById('players-table');
-        if (oldTable) {
-            const parent = oldTable.parentElement;
-            parent.id = "players-table-container";
-            parent.classList.add('view-grid');
-            oldTable.remove();
-            targetList = parent;
-        }
+    if (typeof loadTeamPlayers === 'function' && teamId) {
+        loadTeamPlayers(teamId);
     }
-    if (!targetList) return;
-
-    targetList.innerHTML = '';
-    const players = Object.values(dataCache.players || {});
-
-    players.forEach(data => {
-        const id = data.id;
-        const subtitle = `Niveau: ${data.skill || '?'} | ${data.pos || '?'}`;
-
-        const card = createCard(data.imageUrl, data.name, subtitle, doc.id, 'edit-player', 'delete-player', 'fa-user-graduate');
-        card.setAttribute('data-id', doc.id);
-        card.classList.add('player-card');
-        targetList.appendChild(card);
-    });
-
-    setupClickableCard('.player-card', 'players', 'player-modal', 'player-id', async (data) => {
-        document.getElementById('player-name').value = data.name;
-        document.getElementById('player-year').value = data.year;
-        document.getElementById('player-skill').value = data.skill;
-        document.getElementById('player-pos').value = data.pos;
-        await populateTeamSelect(data.teamId);
-        setExistingPreview('player-image-preview', data.imageUrl);
-    });
-    setupDeleteButton('.delete-player', 'players', () => { loadPlayers(); updateStats(); });
+    if (typeof updateStats === 'function') updateStats();
 }
 
 
@@ -3191,12 +3239,79 @@ async function loadInventory() {
 // --- REGISTRATIONS LOGIC ---
 const regModal = document.getElementById('registration-modal');
 const openRegModalBtn = document.getElementById('open-registration-modal');
-if (openRegModalBtn) openRegModalBtn.addEventListener('click', () => {
-    document.getElementById('registration-form-admin').reset();
+
+window.openRegistrationModal = async function (data = null) {
+    const form = document.getElementById('registration-form-admin');
+    if (!form) return;
+
+    form.reset();
     document.getElementById('reg-id').value = '';
-    setLoading(document.getElementById('registration-form-admin'), false);
-    regModal.classList.add('active');
-});
+
+    // Populate Seasons
+    await populateSeasonSelect('reg-season');
+
+    if (data) {
+        document.getElementById('reg-id').value = data.id || '';
+        document.getElementById('reg-child-first').value = data.childFirstName || '';
+        document.getElementById('reg-child-last').value = data.childLastName || '';
+        document.getElementById('reg-dob').value = data.dob || '';
+        document.getElementById('reg-gender').value = data.gender || 'M';
+        document.getElementById('reg-medical').value = data.medical || '';
+
+        // Parents
+        document.getElementById('reg-parent1-name').value = data.parent1Name || `${data.parentFirstName || ''} ${data.parentLastName || ''}`.trim();
+        document.getElementById('reg-parent1-email').value = data.parent1Email || data.email || '';
+        document.getElementById('reg-parent2-name').value = data.parent2Name || '';
+        document.getElementById('reg-parent2-email').value = data.parent2Email || '';
+        document.getElementById('reg-phone').value = data.phoneFamily || data.phone || '';
+
+        // Address
+        document.getElementById('reg-address').value = data.addressLine || '';
+        document.getElementById('reg-city').value = data.city || '';
+        document.getElementById('reg-postal').value = data.postalCode || '';
+
+        // Equipment
+        document.getElementById('reg-jersey-size').value = data.jerseySize || '';
+        document.getElementById('reg-short-info').value = (data.shortOption || '') + ' ' + (data.shortSize || '');
+        document.getElementById('reg-socks-info').value = (data.socksOption || '') + ' ' + (data.socksSize || '') + (data.socksQuantity ? ' (Qté: ' + data.socksQuantity + ')' : '');
+
+        // Other
+        document.getElementById('reg-photo-auth').value = data.photoAuth || '';
+        document.getElementById('reg-program').value = data.programCat || data.program || '';
+        document.getElementById('reg-price').value = data.finalPrice || 0;
+
+        let s = data.status || 'Nouveau';
+        if (s === 'New') s = 'Nouveau';
+        if (s === 'Paid') s = 'Payé';
+        if (s === 'Migrated') s = 'Migré';
+        if (s === 'Cancelled') s = 'Annulé';
+        document.getElementById('reg-status').value = s;
+        document.getElementById('reg-session-id').value = data.registrationSessionId || '';
+
+        // Final Season Selection
+        const targetSeasonId = data.seasonId || data.registrationSessionId || dataCache.currentSeason || '';
+        document.getElementById('reg-season').value = targetSeasonId;
+
+        // If the value didn't stick (e.g. registrationSessionId is a legacy name instead of ID)
+        if (document.getElementById('reg-season').value === '' && (data.seasonId || data.registrationSessionId)) {
+            const lookFor = data.seasonId || data.registrationSessionId;
+            // try to find by name in cache
+            const foundSeason = Object.values(dataCache.seasons || {}).find(s => {
+                const generatedName = s.name || `${s.type === 'summer' ? 'Été' : 'Hiver'} ${s.year}`;
+                return s.id === lookFor || generatedName === lookFor || s.name === lookFor;
+            });
+            if (foundSeason) document.getElementById('reg-season').value = foundSeason.id;
+        }
+    } else {
+        // New: default to current season
+        document.getElementById('reg-season').value = dataCache.currentSeason || '';
+    }
+
+    setLoading(form, false);
+    if (regModal) regModal.classList.add('active');
+};
+
+if (openRegModalBtn) openRegModalBtn.addEventListener('click', () => openRegistrationModal(null));
 if (regModal) regModal.querySelector('.close-modal').addEventListener('click', () => regModal.classList.remove('active'));
 
 document.getElementById('registration-form-admin')?.addEventListener('submit', async (e) => {
@@ -3240,7 +3355,9 @@ document.getElementById('registration-form-admin')?.addEventListener('submit', a
 
             program: document.getElementById('reg-program').value,
             finalPrice: document.getElementById('reg-price').value,
-            status: document.getElementById('reg-status').value
+            status: document.getElementById('reg-status').value,
+            seasonId: document.getElementById('reg-season').value,
+            registrationSessionId: document.getElementById('reg-session-id').value
         };
 
         // Timestamp for new ones
@@ -3264,10 +3381,16 @@ async function loadRegistrations() {
 
     // Filter values
     const searchText = document.getElementById('reg-search')?.value.toLowerCase() || '';
+    const seasonFilter = document.getElementById('reg-filter-season')?.value || '';
 
     tbody.innerHTML = '';
 
-    const regs = Object.values(dataCache.registrations || {});
+    let regs = Object.values(dataCache.registrations || {});
+
+    // Apply filters
+    if (seasonFilter) {
+        regs = regs.filter(r => (r.seasonId === seasonFilter) || (r.registrationSessionId === seasonFilter));
+    }
 
     if (regs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5">Aucune inscription trouvée.</td></tr>';
@@ -3346,45 +3469,8 @@ async function loadRegistrations() {
     if (count === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Aucune inscription trouvée.</td></tr>';
 
     // Add Click Listener
-    setupClickableCard('.reg-row', 'registrations', 'registration-modal', 'reg-id', (data) => {
-        // Child
-        document.getElementById('reg-child-first').value = data.childFirstName || '';
-        document.getElementById('reg-child-last').value = data.childLastName || '';
-        document.getElementById('reg-dob').value = data.dob || '';
-        document.getElementById('reg-gender').value = data.gender || 'M';
-        document.getElementById('reg-medical').value = data.medical || '';
-        document.getElementById('reg-price').value = data.price || '';
-
-        let s = data.status || 'Nouveau';
-        if (s === 'New') s = 'Nouveau';
-        if (s === 'Migrated') s = 'Migré';
-        if (s === 'Paid') s = 'Payé';
-        if (s === 'Confirmed') s = 'Confirmé';
-        document.getElementById('reg-status').value = s;
-
-        // Parents
-        document.getElementById('reg-parent1-name').value = data.parent1Name || `${data.parentFirstName || ''} ${data.parentLastName || ''}`.trim();
-        document.getElementById('reg-parent1-email').value = data.parent1Email || data.email || '';
-        document.getElementById('reg-parent2-name').value = data.parent2Name || '';
-        document.getElementById('reg-parent2-email').value = data.parent2Email || '';
-        document.getElementById('reg-phone').value = data.phoneFamily || data.phone || '';
-
-        // Address
-        document.getElementById('reg-address').value = data.addressLine || '';
-        document.getElementById('reg-city').value = data.city || '';
-        document.getElementById('reg-postal').value = data.postalCode || '';
-
-        // Equipment
-        document.getElementById('reg-jersey-size').value = data.jerseySize || '';
-        document.getElementById('reg-short-info').value = (data.shortOption || '') + ' ' + (data.shortSize || '');
-        document.getElementById('reg-socks-info').value = (data.socksOption || '') + ' ' + (data.socksSize || '') + (data.socksQuantity ? ' (Qté: ' + data.socksQuantity + ')' : '');
-
-        // Other
-        document.getElementById('reg-photo-auth').value = data.photoAuth || '';
-        document.getElementById('reg-program').value = data.programCat || data.program || '';
-        document.getElementById('reg-price').value = data.finalPrice || 0;
-        document.getElementById('reg-status').value = data.status || 'New';
-        document.getElementById('reg-session-id').value = data.registrationSessionId || '';
+    setupClickableCard('.reg-row', 'registrations', 'registration-modal', 'reg-id', async (data) => {
+        await openRegistrationModal(data);
     });
 
     setupDeleteButton('.delete-reg', 'registrations', () => loadRegistrations());
@@ -3392,6 +3478,7 @@ async function loadRegistrations() {
 
 // Add Listeners
 document.getElementById('reg-search')?.addEventListener('input', loadRegistrations);
+document.getElementById('reg-filter-season')?.addEventListener('change', loadRegistrations);
 
 // --- MIGRATION LOGIC ---
 const migrateBtn = document.getElementById('btn-migrate-registrations');
@@ -3414,7 +3501,7 @@ async function migrateRegistrations() {
 
     try {
         // 1. Use Cache for Candidates (Payé only as requested)
-        const candidates = Object.values(dataCache.registrations || {}).filter(r => r.status === "Payé");
+        const candidates = Object.values(dataCache.registrations || {}).filter(r => r.status === "Payé" || r.status === "Paid");
 
         if (candidates.length === 0) {
             await showAlert("Aucune inscription éligible (Payée) trouvée.");
@@ -3622,7 +3709,8 @@ async function executeMigration(list, activeTeams = []) {
                     createdAt: new Date(),
                     skill: 1, // Default to lowest skill or unrated
                     pos: 'TBD', // Default pos
-                    status: 'Active'
+                    status: 'Active',
+                    seasonId: dataCache.currentSeason || (Object.values(dataCache.seasons || {}).find(s => s.active)?.id) || r.seasonId || ''
                 };
 
                 // Add to Players
@@ -3734,7 +3822,6 @@ async function loadDashboardData() {
         });
         if (alertCount === 0) coachContainer.innerHTML = '<p style="color: green; text-align:center;">Toutes les enquêtes sont à jour.</p>';
     });
-
     // 4. Referees Task
     const refereesTask = wrap("Referees", async () => {
         const refTbody = document.getElementById('dash-ref-stats');
@@ -3760,8 +3847,61 @@ async function loadDashboardData() {
         });
     });
 
+    // 5. Equipment Task
+    const equipmentTask = wrap("Equipment", async () => {
+        const jerseyEl = document.getElementById('dash-jerseys-list');
+        const shortEl = document.getElementById('dash-shorts-list');
+        const socksEl = document.getElementById('dash-socks-list');
+        if (!jerseyEl || !shortEl || !socksEl) return;
+
+        const regs = Object.values(dataCache.registrations || {});
+        const paidStatuses = ['Payé', 'Confirmé', 'Terminé', 'Migré', 'Paid', 'Confirmed', 'Completed', 'Migrated'];
+
+        const totals = {
+            jerseys: {},
+            shorts: {},
+            socks: {}
+        };
+
+        regs.forEach(r => {
+            if (!paidStatuses.includes(r.status)) return;
+
+            // Jerseys
+            if (r.jerseySize) {
+                totals.jerseys[r.jerseySize] = (totals.jerseys[r.jerseySize] || 0) + 1;
+            }
+
+            // Shorts
+            if (r.shortSize) {
+                totals.shorts[r.shortSize] = (totals.shorts[r.shortSize] || 0) + 1;
+            }
+
+            // Socks (multiplied by quantity)
+            if (r.socksSize) {
+                const qty = parseInt(r.socksQuantity) || 1;
+                totals.socks[r.socksSize] = (totals.socks[r.socksSize] || 0) + qty;
+            }
+        });
+
+        // Helper to render lists
+        const renderList = (el, data) => {
+            const sortedSizes = Object.keys(data).sort();
+            if (sortedSizes.length === 0) {
+                el.innerHTML = '<span style="color:#999;">Aucune donnée</span>';
+                return;
+            }
+            el.innerHTML = sortedSizes.map(size => {
+                return `<div style="display:flex; justify-content:space-between;"><span>${size}:</span> <strong>${data[size]}</strong></div>`;
+            }).join('');
+        };
+
+        renderList(jerseyEl, totals.jerseys);
+        renderList(shortEl, totals.shorts);
+        renderList(socksEl, totals.socks);
+    });
+
     // Fire all tasks in parallel
-    await Promise.all([seasonTask, playersTask, coachesTask, refereesTask]);
+    await Promise.all([seasonTask, playersTask, coachesTask, refereesTask, equipmentTask]);
     console.timeEnd("DashboardLoad");
 }
 

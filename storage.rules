@@ -1,0 +1,59 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper: Check if user exists in admins collection (either lower or original case)
+    function isAdmin() {
+      return request.auth != null && 
+        (
+          firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email)) ||
+          firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email.lower()))
+        );
+    }
+
+    // Helper: Check for specific permissions
+    function hasPermission(module, level) {
+      return request.auth != null && (
+        "SuperAdmin" in firestore.get(/databases/(default)/documents/admins/$(request.auth.token.email.lower())).data.role ||
+        (module + ":" + level) in firestore.get(/databases/(default)/documents/admins/$(request.auth.token.email.lower())).data.role ||
+        (level == "view" && (module + ":edit") in firestore.get(/databases/(default)/documents/admins/$(request.auth.token.email.lower())).data.role) ||
+        (level == "edit" && module in firestore.get(/databases/(default)/documents/admins/$(request.auth.token.email.lower())).data.role)
+      );
+    }
+
+    // Match all files
+    match /{allPaths=**} {
+      allow read: if true; 
+      allow write: if isAdmin();
+    }
+
+    // Folder specific rules (secondary but good for clarity)
+    match /board_members/{imageId} {
+      allow write: if hasPermission("Club", "edit");
+    }
+
+    match /products/{imageId} {
+      allow write: if hasPermission("Boutique", "edit");
+    }
+
+    match /inventory/{imageId} {
+      allow write: if hasPermission("Boutique", "edit");
+    }
+
+    match /sponsors/{imageId} {
+      allow write: if hasPermission("Club", "edit");
+    }
+
+    match /players/{imageId} {
+      allow write: if hasPermission("Equipes", "edit");
+    }
+
+    match /coaches/{imageId} {
+      allow write: if hasPermission("Equipes", "edit");
+    }
+
+    match /settings/{imageId} {
+      allow write: if hasPermission("Config", "edit");
+    }
+  }
+}

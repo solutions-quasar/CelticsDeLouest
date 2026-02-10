@@ -360,6 +360,20 @@ async function uploadAndSave(collectionName, id, data, imageFile) {
 let activeUnsubscribes = [];
 
 function syncCollection(collectionName, cacheKey, refreshCallback) {
+    // Whitelist essential metadata that is public-read and needed for many views (like calendar)
+    const essential = ['matches', 'fields', 'seasons', 'referees', 'settings'];
+    const isEssential = essential.includes(collectionName) || essential.includes(cacheKey);
+
+    // Check if user has at least view permission for this module
+    const hasPerm = isEssential || (window.currentPermissions && (window.currentPermissions.all === 'edit' || window.currentPermissions[collectionName] || window.currentPermissions[cacheKey]));
+
+    // Some collections might not be mapped 1:1, so we check carefully
+    // If we can't confirm permission, we don't start the sync for low-privilege roles
+    if (!hasPerm && window.currentUserMainRole !== 'super-admin') {
+        // console.log(`Skipping sync for ${collectionName} - No permission.`);
+        return;
+    }
+
     const q = collection(db, collectionName);
     const unsub = onSnapshot(q, (snapshot) => {
         dataCache[cacheKey] = {};
@@ -369,7 +383,8 @@ function syncCollection(collectionName, cacheKey, refreshCallback) {
         if (refreshCallback) refreshCallback();
     }, (error) => {
         // Only log errors if we are still authenticated (prevents noise on logout)
-        if (auth.currentUser) {
+        // and if it's NOT a permission error (which we handled above, but just in case)
+        if (auth.currentUser && error.code !== 'permission-denied') {
             console.error(`Error syncing ${collectionName}:`, error);
         }
     });
@@ -410,6 +425,8 @@ function initRealTimeListeners() {
         }
     });
 
+    // Special sync for referees/coaches who need matches but might not have "Matchs" module permission
+    // Actually our rules allow read: if true for matches, so sync is fine.
     syncCollection("matches", "matches", () => {
         const view = document.getElementById('view-matches');
         if (view && view.classList.contains('active')) loadMatches();
@@ -5175,7 +5192,10 @@ async function loadMatches(skipFetch = false) {
                     e.stopPropagation();
                     toggleMatchAvailability(data.id);
                 };
-                card.querySelector('.card-body').appendChild(dispoBtn);
+                // Safety check: only append if .card-body exists, otherwise append to card
+                const body = card.querySelector('.card-body');
+                if (body) body.appendChild(dispoBtn);
+                else card.appendChild(dispoBtn);
             }
 
             list.appendChild(card);

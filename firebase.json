@@ -8,6 +8,9 @@
   "functions": {
     "source": "functions"
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "hosting": {
     "public": ".",
     "ignore": [
@@ -27,7 +30,10 @@
       "port": 8080
     },
     "hosting": {
-      "port": 5000
+      "port": 3000
+    },
+    "storage": {
+      "port": 9199
     },
     "ui": {
       "enabled": true

@@ -20,15 +20,6 @@
         "**/.*",
         "**/node_modules/**"
       ]
-    },
-    {
-      "target": "production",
-      "public": ".",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ]
     }
   ],
   "emulators": {

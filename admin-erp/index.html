@@ -6,12 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Celtics ERP | Administration</title>
     <script>
-        // Force trailing slash to ensure relative paths working correctly
-        if (window.location.pathname.endsWith('/admin-erp')) {
-            window.location.replace(window.location.pathname + '/');
-        }
+        // Script removed to avoid conflict with firebase trailingSlash: false
     </script>
-    <link rel="icon" type="image/png" href="images/favicon.png">
+    <link rel="icon" type="image/png" href="/admin-erp/images/favicon.png">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,8 +19,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="./style.css">
-    <link rel="stylesheet" href="./style_calendar.css">
+    <link rel="stylesheet" href="/admin-erp/style.css">
+    <link rel="stylesheet" href="/admin-erp/style_calendar.css">
 
     <!-- Firebase SDKs (Module) -->
     <script type="importmap">
@@ -59,7 +56,7 @@
         <div id="init-loader" class="screen active"
             style="background:white; color:var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;">
             <div style="text-align: center;">
-                <img src="images/logo.png" alt="Celtics Logo"
+                <img src="/admin-erp/images/logo.png" alt="Celtics Logo"
                     style="height: 120px; margin-bottom: 30px; animation: pulse 2s infinite;">
                 <div style="font-size: 3rem; margin-bottom: 20px;">
                     <i class="fas fa-circle-notch fa-spin"></i>
@@ -72,7 +69,7 @@
         <div id="auth-screen" class="screen">
             <div class="login-box">
                 <div class="logo-area">
-                    <img src="images/logo.png" alt="Celtics Logo">
+                    <img src="/admin-erp/images/logo.png" alt="Celtics Logo">
                     <h1>Celtics ERP</h1>
                 </div>
                 <form id="login-form">
@@ -119,7 +116,7 @@
                 <button id="sidebar-collapse-btn" class="sidebar-collapse-btn"><i
                         class="fas fa-chevron-left"></i></button>
                 <div class="sidebar-header">
-                    <img src="images/logo.png" alt="Logo">
+                    <img src="/admin-erp/images/logo.png" alt="Logo">
                     <span>Admin</span>
                 </div>
                 <nav class="sidebar-nav">
@@ -2479,7 +2476,7 @@
                             <option value="">-- Non assigné --</option>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="display:none;">
                         <label>Catégorie</label>
                         <select id="match-category">
                             <option value="U9">U9</option>
@@ -2618,9 +2615,9 @@
             <h2>Détails Équipe</h2>
             <form id="team-form">
                 <input type="hidden" id="team-id">
-                <div class="form-group" style="display:none;">
-                    <label>Nom de l'équipe</label>
-                    <input type="text" id="team-name" placeholder="Généré automatiquement">
+                <div class="form-group">
+                    <label>Nom de l'équipe (Optionnel)</label>
+                    <input type="text" id="team-name" placeholder="Laisser vide pour auto-générer (Ex: U8 Masculin)">
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
@@ -3182,12 +3179,12 @@
         </div>
     </div>
 
-    <script src="./js/ui-utils.js"></script>
-    <script src="./js/players.js"></script>
-    <script src="./js/search.js"></script>
-    <script src="./js/automations.js"></script>
-    <script src="./js/email-campaigns.js"></script>
-    <script type="module" src="./js/app.js"></script>
+    <script src="/admin-erp/js/ui-utils.js"></script>
+    <script src="/admin-erp/js/players.js"></script>
+    <script src="/admin-erp/js/search.js"></script>
+    <script src="/admin-erp/js/automations.js"></script>
+    <script src="/admin-erp/js/email-campaigns.js"></script>
+    <script type="module" src="/admin-erp/js/app.js"></script>
 </body>
 
 </html>

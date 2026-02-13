@@ -353,7 +353,7 @@ let activeUnsubscribes = [];
 
 function syncCollection(collectionName, cacheKey, refreshCallback) {
     // Whitelist essential metadata that is public-read and needed for many views (like calendar)
-    const essential = ['matches', 'fields', 'seasons', 'referees', 'settings'];
+    const essential = ['matches', 'fields', 'seasons', 'referees', 'settings', 'teams', 'inventory', 'players'];
     const isEssential = essential.includes(collectionName) || essential.includes(cacheKey);
 
     // Check if user has at least view permission for this module
@@ -603,7 +603,17 @@ if (loginForm) {
             await signInWithEmailAndPassword(auth, email, password);
         } catch (error) {
             console.error("Login Error:", error);
-            if (loginError) loginError.textContent = "Erreur: " + error.message;
+            let userMsg = "Une erreur est survenue lors de la connexion.";
+
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                userMsg = "Adresse courriel ou mot de passe incorrect.";
+            } else if (error.code === 'auth/too-many-requests') {
+                userMsg = "Trop de tentatives échouées. Veuillez réessayer plus tard.";
+            } else if (error.code === 'auth/network-request-failed') {
+                userMsg = "Erreur de réseau. Vérifiez votre connexion internet.";
+            }
+
+            if (loginError) loginError.textContent = userMsg;
         }
     });
 
@@ -1836,11 +1846,15 @@ function renderVisualTeams() {
                 };
             }
 
+            const dob = p.dob || p.birthDate;
             row.innerHTML = `
-                <div style="width: 25px; height: 25px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #555;">
+                <div style="width: 25px; height: 25px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #555; flex-shrink: 0;">
                     ${p.firstName ? p.firstName.charAt(0) : 'U'}
                 </div>
-                <div>${p.firstName} ${p.lastName}</div>
+                <div style="display:flex; flex-direction:column; line-height: 1.2;">
+                    <div>${p.firstName} ${p.lastName}</div>
+                    ${dob ? `<small style="color: #888; font-size: 0.75rem;">${dob}</small>` : ''}
+                </div>
             `;
             body.appendChild(row);
         });
@@ -1883,6 +1897,7 @@ document.getElementById('team-form')?.addEventListener('submit', async (e) => {
         const category = document.getElementById('team-category').value;
         const gender = document.getElementById('team-gender').value;
         const seasonId = document.getElementById('team-season').value;
+        const customName = document.getElementById('team-name').value.trim();
 
         // Auto-generate name: Category + Gender
         let baseName = `${category} ${gender}`;
@@ -1904,8 +1919,14 @@ document.getElementById('team-form')?.addEventListener('submit', async (e) => {
             finalName = `${baseName} (Équipe ${countSame + 1})`;
         }
 
+        // Use custom name if provided
+        if (customName) {
+            finalName = customName;
+        }
+
         const data = {
             name: finalName,
+            customName: customName, // Save for re-edit
             category: category,
             gender: gender,
             coachIds: selectedTeamCoaches,
@@ -1977,15 +1998,37 @@ async function loadTeams() {
         const selectedSeason = teamFilterSeason?.value || '';
 
         // Filter from cache
-        let teamsArr = Object.values(dataCache.teams);
+        // Filter from cache
+        let teamsArr = Object.values(dataCache.teams || {});
+        console.log("DEBUG: Total teams loaded from cache:", teamsArr.length);
+
         if (selectedSeason) {
+            console.log("DEBUG: Filtering by season ID:", selectedSeason);
+            // Check first team to see what its seasonId looks like
+            if (teamsArr.length > 0) console.log("DEBUG: First team sample:", teamsArr[0].name, "SeasonId:", teamsArr[0].seasonId);
+
             teamsArr = teamsArr.filter(t => t.seasonId === selectedSeason);
+            console.log("DEBUG: Teams remaining after season filter:", teamsArr.length);
+        } else {
+            console.log("DEBUG: No season selected in filter.");
         }
 
         // COACH FILTER: If current user is a coach (and not super-admin), show only their teams
         const isCoachLocal = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId;
+        console.log("DEBUG: isCoachLocal:", isCoachLocal, "MyCoachID:", window.currentUserCoachId);
+
         if (isCoachLocal && window.currentUserMainRole !== 'super-admin') {
-            teamsArr = teamsArr.filter(t => (t.coachIds || []).includes(window.currentUserCoachId));
+            teamsArr = teamsArr.filter(t => {
+                const cIds = [];
+                if (Array.isArray(t.coachIds)) cIds.push(...t.coachIds);
+                else if (t.coachIds) cIds.push(t.coachIds);
+
+                if (t.coachId) cIds.push(t.coachId); // Legacy fallback
+
+                // console.log("DEBUG: Checking team:", t.name, "CoachIds:", cIds);
+                return cIds.includes(window.currentUserCoachId);
+            });
+            console.log("DEBUG: Teams remaining after coach filter:", teamsArr.length);
         }
 
         const coachesMap = {};
@@ -2100,6 +2143,7 @@ async function loadTeams() {
             const isCoach = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId;
             const teamForm = document.getElementById('team-form');
 
+            document.getElementById('team-name').value = data.customName || '';
             document.getElementById('team-category').value = data.category || '';
             document.getElementById('team-gender').value = data.gender || '';
 
@@ -2765,12 +2809,20 @@ async function loadInventory() {
 
         // Find teams coached by this coach
         const myTeamIds = Object.values(dataCache.teams || {})
-            .filter(t => (t.coachIds || []).includes(coachId))
+            .filter(t => {
+                const cIds = [];
+                if (Array.isArray(t.coachIds)) cIds.push(...t.coachIds);
+                else if (t.coachIds) cIds.push(t.coachIds);
+
+                if (t.coachId) cIds.push(t.coachId); // Legacy fallback
+
+                return cIds.includes(coachId);
+            })
             .map(t => t.id);
 
         // Find players in those teams
         const myPlayerIds = Object.values(dataCache.players || {})
-            .filter(p => myTeamIds.includes(p.teamId))
+            .filter(p => p.teamId && myTeamIds.includes(p.teamId))
             .map(p => p.id);
 
         items = items.filter(item => {
@@ -2917,7 +2969,9 @@ async function loadInventory() {
                     if (e.target.closest('.btn-icon')) return;
 
                     // Helper to open single modal
-                    openSingleInventoryModal(data);
+                    if (!isRestricted) {
+                        openSingleInventoryModal(data);
+                    }
                 });
 
                 targetList.appendChild(card);
@@ -2984,6 +3038,9 @@ async function loadInventory() {
         card.addEventListener('click', (e) => {
             // Avoid triggers on delete buttons
             if (e.target.closest('.btn-icon')) return;
+
+            // Restrict access for coaches
+            if (window.isRestrictedCoach) return;
 
             const batchId = card.getAttribute('data-batch-id');
             const allItems = Object.values(dataCache.inventory);
@@ -5326,6 +5383,14 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
     }
 });
 
+// Auto-update match category when a team is selected
+document.getElementById('match-team')?.addEventListener('change', (e) => {
+    const teamId = e.target.value;
+    if (teamId && dataCache.teams?.[teamId]) {
+        document.getElementById('match-category').value = dataCache.teams[teamId].category || 'Senior';
+    }
+});
+
 async function loadMatches(skipFetch = false) {
     const list = document.getElementById('matches-list');
     const calEl = document.getElementById('calendar');
@@ -5576,12 +5641,17 @@ function renderDaySection(container, date, fields) {
                         evt.style.color = 'white';
                     }
 
-                    let eventTitle = isGhostConflict ? 'Indisponible' : `${match.category} vs ${match.opponent}`;
+                    let teamDisplayName = match.category;
+                    if (match.teamId && dataCache.teams?.[match.teamId]) {
+                        teamDisplayName = dataCache.teams[match.teamId].name || match.category;
+                    }
+
+                    let eventTitle = isGhostConflict ? 'Indisponible' : `${teamDisplayName} vs ${match.opponent}`;
                     let eventMeta = isGhostConflict ? '<i class="fas fa-link"></i> Terrain occupé' : `<i class="fas fa-user"></i> ${match.refCenter ? 'Arbitres OK' : 'Pas d\'arbitre'}`;
 
                     if (!isGhostConflict) {
                         if (mType === 'practice') {
-                            eventTitle = `Pratique (${match.category})`;
+                            eventTitle = `Pratique (${teamDisplayName})`;
                             eventMeta = '<i class="fas fa-running"></i> Entraînement';
                         } else if (mType === 'unavailable') {
                             eventTitle = 'Indisponible';
@@ -5940,7 +6010,11 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
         document.getElementById('match-team').disabled = true;
         document.getElementById('match-opponent').disabled = true;
         document.getElementById('match-played').disabled = true;
-        document.getElementById('btn-add-match-field').style.display = 'none';
+
+        const fieldSel = document.getElementById('match-field-add-select');
+        if (fieldSel) fieldSel.disabled = true;
+        const addFieldBtn = document.getElementById('btn-add-match-field');
+        if (addFieldBtn) addFieldBtn.style.display = 'none';
 
         // Hide Save/Delete
         if (document.querySelector('#match-modal .btn-save')) document.querySelector('#match-modal .btn-save').style.display = 'none';
@@ -5954,7 +6028,11 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
         document.getElementById('match-team').disabled = false;
         document.getElementById('match-opponent').disabled = false;
         document.getElementById('match-played').disabled = false;
-        document.getElementById('btn-add-match-field').style.display = 'block';
+
+        const fieldSel = document.getElementById('match-field-add-select');
+        if (fieldSel) fieldSel.disabled = false;
+        const addFieldBtn = document.getElementById('btn-add-match-field');
+        if (addFieldBtn) addFieldBtn.style.display = 'block';
 
         if (document.querySelector('#match-modal .btn-save')) document.querySelector('#match-modal .btn-save').style.display = 'block';
         // Delete button handle already by if(data) logic above but let's be safe

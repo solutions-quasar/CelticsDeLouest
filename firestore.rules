@@ -55,7 +55,7 @@ service cloud.firestore {
 
     // INVENTORY
     match /inventory/{itemId} {
-      allow read: if canView("Boutique");
+      allow read: if request.auth != null; // Visible to authenticated (filtered by UI)
       allow write: if canEdit("Boutique");
     }
 
@@ -100,7 +100,7 @@ service cloud.firestore {
 
     // TEAMS
     match /teams/{teamId} {
-      allow read: if canView("Equipes");
+      allow read: if true;
       allow write: if canEdit("Equipes");
     }
 

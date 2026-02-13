@@ -61,6 +61,11 @@ a {
     /* Reduced padding */
 }
 
+/* Hide mobile footer on desktop */
+.nav-footer {
+    display: none;
+}
+
 .nav-container {
     display: flex;
     justify-content: space-between;
@@ -76,6 +81,8 @@ a {
     align-items: center;
     gap: 10px;
     max-width: 400px;
+    position: relative;
+    z-index: 2001;
 }
 
 .logo i {
@@ -164,8 +171,20 @@ a {
 
 .menu-toggle {
     display: none;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
+    /* Larger icon */
     cursor: pointer;
+    position: relative;
+    z-index: 3000;
+    /* Extremely high to stay on top */
+    padding: 10px;
+    /* Larger hit area */
+    color: var(--text-dark);
+    transition: 0.3s;
+}
+
+.menu-toggle:hover {
+    color: var(--celtics-green);
 }
 
 /* Hero Section */
@@ -196,29 +215,54 @@ a {
     opacity: 0.9;
 }
 
+.btn-primary,
+.btn-secondary,
+.btn {
+    padding: 22px 50px;
+    border-radius: 50px;
+    font-weight: 800;
+    font-size: 1.3rem;
+    text-transform: uppercase;
+    display: inline-block;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+    text-decoration: none;
+    border: 3px solid transparent;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn:hover {
+    transform: translateY(-5px) scale(1.03);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
 .btn-primary {
     background-color: var(--celtics-green);
     color: var(--white);
-    padding: 12px 30px;
-    border-radius: 50px;
-    font-weight: 700;
-    text-transform: uppercase;
-    border: 2px solid var(--celtics-green);
-    display: inline-block;
+    border-color: var(--celtics-green);
+}
+
+.btn-secondary {
+    background-color: #7f8c8d;
+    color: var(--white);
+    border-color: #7f8c8d;
 }
 
 .btn-primary:hover {
-    background-color: transparent;
-    border-color: var(--white);
+    background-color: #00642a;
+    border-color: #00642a;
 }
 
-/* Sections */
+/* Increased section spacing */
 .section {
-    padding: 80px 0;
+    padding: 100px 0;
 }
 
 .section-bg {
     background-color: var(--white);
+
 }
 
 .section-title {
@@ -403,63 +447,209 @@ a {
 
 /* Footer */
 footer {
-    background-color: var(--text-dark);
+    background-color: #1a1a1a;
     color: var(--white);
-    padding: 60px 0 20px;
+    padding: 80px 0 60px;
+    border-top: 5px solid var(--celtics-green);
 }
 
 .footer-content {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 40px;
-    margin-bottom: 40px;
+    grid-template-columns: 2fr 1fr 1fr 1.2fr;
+    gap: 50px;
+    margin-bottom: 60px;
 }
 
 .footer-col h4 {
-    color: var(--celtics-light);
+    color: var(--white);
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 25px;
+    position: relative;
+    padding-bottom: 10px;
+}
+
+.footer-col h4::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 30px;
+    height: 2px;
+    background-color: var(--celtics-green);
+}
+
+.footer-logo {
     margin-bottom: 20px;
 }
 
-.footer-links li {
+.footer-logo img {
+    height: 60px;
+}
+
+.footer-col p {
+    color: #a0a0a0;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.footer-socials {
+    display: flex;
+    gap: 15px;
+}
+
+.footer-socials a {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    transition: 0.3s;
+    font-size: 1.2rem;
+}
+
+.footer-socials a:hover {
+    background: var(--celtics-green);
+    transform: translateY(-3px);
+}
+
+.footer-links {
     list-style: none;
-    margin-bottom: 10px;
+    padding: 0;
+}
+
+.footer-links li {
+    margin-bottom: 12px;
+}
+
+.footer-links a {
+    color: #a0a0a0;
+    transition: 0.3s;
+    font-size: 0.95rem;
 }
 
 .footer-links a:hover {
-    color: var(--celtics-light);
+    color: var(--celtics-green);
+    padding-left: 5px;
 }
 
-.copyright {
-    text-align: center;
+.footer-bottom {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding-top: 20px;
-    font-size: 0.9rem;
-    color: #95a5a6;
+    padding-top: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.copyright p {
+    color: #666;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+@media (max-width: 1100px) {
+    .footer-content {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .footer-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+        gap: 40px;
+    }
+
+    .footer-col h4::after {
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .footer-socials {
+        justify-content: center;
+    }
+
+    .footer-bottom {
+        flex-direction: column;
+        text-align: center;
+    }
 }
 
 /* Mobile / Tablet Responsive Adjustment */
 @media (max-width: 1100px) {
 
     /* Increased breakpoint from 768px to 1100px */
+    .logo {
+        z-index: 2001;
+        position: relative;
+        max-width: 80%;
+        /* Don't crowd the burger */
+        font-size: 1rem;
+        /* Smaller text on small screens */
+    }
+
     .menu-toggle {
         display: block;
+        z-index: 3000;
+        position: relative;
+        flex-shrink: 0;
+        /* Don't let it be squashed */
     }
 
     .nav-menu {
         position: fixed;
-        top: 70px;
-        left: -100%;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100vh;
         background-color: var(--white);
         flex-direction: column;
         align-items: center;
-        padding-top: 50px;
-        transition: 0.4s;
-        gap: 20px;
-        /* Restore gap for mobile menu */
+        padding: 100px 30px 40px;
+        transition: transform 0.5s cubic-bezier(0.77, 0.2, 0.05, 1.0);
+        transform: translateX(-100%);
+        /* Start off-screen */
+        gap: 0;
         overflow-y: auto;
-        /* allow scrolling if menu is tall */
+        display: flex;
+        z-index: 2500;
+        visibility: hidden;
+        /* Prevent interaction when closed */
+        opacity: 0;
+    }
+
+    .nav-menu.active {
+        transform: translateX(0);
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .nav-menu>li {
+        width: 100%;
+        text-align: center;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .nav-menu .nav-link {
+        padding: 15px 0;
+        display: block;
+        width: 100%;
+        font-size: 1.2rem;
+    }
+
+    /* Remove the underline on mobile */
+    .nav-menu .nav-link::after {
+        display: none;
+    }
+
+    /* Keep active link green */
+    .nav-menu .nav-link.active {
+        color: var(--celtics-green);
     }
 
     .nav-item-dropdown {
@@ -469,25 +659,68 @@ footer {
 
     .dropdown-menu {
         position: static;
-        /* Stack naturally on mobile */
         box-shadow: none;
-        display: flex;
+        display: none;
+        /* Hidden by default on mobile */
+        flex-direction: column;
         align-items: center;
         padding: 0;
-        background: transparent;
-        margin-top: 10px;
-        border-left: none;
+        background: rgba(0, 128, 64, 0.05);
+        margin-top: 0;
+        border-radius: 0;
+        width: 100%;
+        gap: 0;
+    }
+
+    /* Disable hover effect on mobile so touch doesn't trigger it */
+    .nav-item-dropdown:hover .dropdown-menu {
+        display: none;
+    }
+
+    /* Only show when toggled via JS */
+    .dropdown-menu.active {
+        display: flex !important;
     }
 
     .dropdown-link {
-        padding: 5px 0;
+        padding: 12px 20px;
         text-align: center;
-        font-size: 1rem;
+        font-size: 1.05rem;
+        width: 100%;
+        font-weight: 500;
+        border-top: 1px solid rgba(0, 128, 64, 0.1);
     }
 
-    .nav-menu.active {
-        left: 0;
+    .nav-footer {
+        width: 100%;
+        margin-top: auto;
+        padding-top: 40px;
+        text-align: center;
+        border-top: 2px solid var(--celtics-green);
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
     }
+
+    .nav-footer-info {
+        font-size: 0.9rem;
+        color: #666;
+    }
+
+    .nav-footer-socials {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        font-size: 1.5rem;
+    }
+
+    .nav-footer-socials a {
+        color: var(--celtics-green);
+    }
+
+
+
+
 
     .hero-content h1 {
         font-size: 2.5rem;
@@ -592,15 +825,74 @@ footer {
     transition: transform 0.3s;
 }
 
-.code-card:hover {
-    transform: translateY(-5px);
+@media (max-width: 768px) {
+
+    .spectator-code-grid,
+    .committee-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 15px;
+    }
+
+    /* Keep sponsors on 1 column */
+    #sponsors-container {
+        grid-template-columns: 1fr !important;
+    }
+
+
+    .code-card,
+    .board-card,
+    .referee-card {
+        padding: 15px;
+    }
+
+    .code-card i {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+
+    .board-card img,
+    .board-card .board-img-empty,
+    .referee-card img,
+    .referee-card .ref-img-empty {
+        width: 80px;
+        height: 80px;
+        font-size: 1.5rem;
+    }
+
+    .board-card h3,
+    .referee-card h3 {
+        font-size: 1rem;
+    }
+
+    .board-card .role {
+        font-size: 0.75rem;
+    }
+
+    /* Mobile Truncation Utility */
+    .mobile-hidden {
+        display: none !important;
+    }
 }
 
-.code-card i {
-    font-size: 2.5rem;
+.btn-show-more {
+    display: none;
+    margin: 20px auto 0;
+    background: transparent;
+    border: 2px solid var(--celtics-green);
     color: var(--celtics-green);
-    margin-bottom: 15px;
+    padding: 10px 20px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: 700;
+    transition: 0.3s;
 }
+
+@media (max-width: 768px) {
+    .btn-show-more {
+        display: inline-block;
+    }
+}
+
 
 .code-card p {
     font-size: 1rem;
@@ -609,6 +901,18 @@ footer {
 }
 
 /* Documents / Doc Box */
+.documents-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+}
+
+@media (max-width: 768px) {
+    .documents-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .doc-box {
     background: white;
     padding: 30px;
@@ -775,4 +1079,24 @@ footer {
         padding: 8px 15px;
         bottom: 10px;
     }
+}
+
+/* --- Boutique Button --- */
+.big-btn {
+    padding: 15px 40px !important;
+    font-size: 1.2rem !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 5px 15px rgba(0, 160, 85, 0.4);
+    transition: all 0.3s ease;
+}
+
+.big-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 160, 85, 0.6);
+}
+
+/* --- Loader Animation --- */
+#boutique-loader {
+    animation: fadeIn 0.5s ease-in-out;
 }

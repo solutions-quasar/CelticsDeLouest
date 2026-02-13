@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "celticsdelouest"
-  }
+  },
+  "targets": {
+    "celticsdelouest": {
+      "hosting": {
+        "staging": [
+          "celticsdelouest"
+        ],
+        "production": [
+          "celtics-production"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

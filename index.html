@@ -34,20 +34,35 @@
             <ul class="nav-menu">
                 <li><a href="#hero" class="nav-link">Accueil</a></li>
                 <li><a href="#equipes" class="nav-link">Nos Équipes</a></li>
-                <li><a href="#inscription" class="nav-link">Inscriptions</a></li>
+                <li><a href="inscription.html" class="nav-link">Inscriptions</a></li>
                 <li><a href="#valeurs" class="nav-link">Nos Valeurs</a></li>
                 <li class="nav-item-dropdown">
-                    <a href="#" class="nav-link">Le Club <i class="fas fa-chevron-down"
-                            style="font-size: 0.8rem; margin-left: 5px;"></i></a>
+                    <a href="javascript:void(0)" class="nav-link" id="le-club-toggle">Le Club <i
+                            class="fas fa-chevron-down" style="font-size: 0.8rem; margin-left: 5px;"></i></a>
                     <ul class="dropdown-menu">
                         <li><a href="#conseil" class="nav-link dropdown-link">Conseil d'administration</a></li>
                         <li><a href="#arbitres" class="nav-link dropdown-link">Nos Arbitres</a></li>
-                        <li><a href="#coaches" class="nav-link dropdown-link">Nos Coachs</a></li>
+                        <li><a href="#coaches" class="nav-link dropdown-link">Nos entraîneurs</a></li>
                         <li><a href="#sponsors" class="nav-link dropdown-link">Nos Commanditaires</a></li>
                     </ul>
                 </li>
                 <li><a href="boutique.html" class="nav-link">Boutique en ligne</a></li>
                 <li><a href="#contact" class="nav-link">Nous Joindre</a></li>
+                <!-- Mobile Menu Footer -->
+                <li class="nav-footer">
+                    <div class="nav-footer-info">
+                        <strong>Celtics de l'Ouest de Portneuf</strong><br>
+                        Club de soccer passionné depuis 2013.<br>
+                        <a href="mailto:celtics.portneuf@gmail.com"
+                            style="color:var(--celtics-green);">celtics.portneuf@gmail.com</a>
+                    </div>
+                    <div class="nav-footer-socials">
+                        <a href="https://www.facebook.com/Clubdesoccerlesceltics" target="_blank"><i
+                                class="fab fa-facebook"></i></a>
+                        <a href="https://www.instagram.com/celtics_de_louest_portneuf" target="_blank"><i
+                                class="fab fa-instagram"></i></a>
+                    </div>
+                </li>
             </ul>
         </div>
     </nav>
@@ -111,7 +126,7 @@
                         <h3>U7 • U8 • U9 • U10</h3>
                     </div>
                     <div class="team-body">
-                        <p>Nos équipes masculin jouent dans la <strong>LSCP</strong></p>
+                        <p>Nos équipes jouent dans la <strong>LSCP</strong></p>
                         <div class="team-league">
                             <a href="https://www.liguesoccerportneuf.com/calendrier" target="_blank">
                                 <img src="images/timbits.png" alt="Soccer Timbits" class="league-logo">
@@ -203,7 +218,7 @@
     <!-- Documents & Policies + Soccer Adapté -->
     <section class="section">
         <div class="container">
-            <div class="documents-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+            <div class="documents-grid">
                 <!-- Soccer Adapté -->
                 <div class="doc-box">
                     <h3><i class="fas fa-wheelchair"></i> Soccer Adapté</h3>
@@ -288,11 +303,11 @@
     <section id="coaches" class="section section-bg">
         <div class="container">
             <div class="section-title">
-                <h2>Nos Coachs</h2>
+                <h2>Nos Entraîneurs</h2>
             </div>
             <div id="coaches-container" class="spectator-code-grid">
                 <!-- JS Will Populate -->
-                <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement des coachs...</div>
+                <div style="grid-column: 1/-1; text-align: center; padding: 20px;">Chargement des entraîneurs...</div>
             </div>
         </div>
     </section>
@@ -395,24 +410,65 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-col">
+                    <div class="footer-logo">
+                        <img src="images/logo.png" alt="Celtics Logo">
+                    </div>
                     <h4>Celtics de l'Ouest</h4>
-                    <p>Club de soccer de Portneuf.</p>
+                    <p>Développer la passion du soccer dans la région de Portneuf depuis 2013. Excellence, plaisir et
+                        esprit d'équipe.</p>
+                    <div class="footer-socials">
+                        <a href="https://www.facebook.com/Clubdesoccerlesceltics" target="_blank"><i
+                                class="fab fa-facebook-f"></i></a>
+                        <a href="https://www.instagram.com/celtics_de_louest_portneuf" target="_blank"><i
+                                class="fab fa-instagram"></i></a>
+                    </div>
                 </div>
+
                 <div class="footer-col">
-                    <h4>Liens Utiles</h4>
+                    <h4>Navigation</h4>
+                    <ul class="footer-links">
+                        <li><a href="#hero">Accueil</a></li>
+                        <li><a href="#equipes">Nos Équipes</a></li>
+                        <li><a href="inscription.html">Inscriptions</a></li>
+                        <li><a href="boutique.html">Boutique en ligne</a></li>
+                        <li><a href="#contact">Nous Joindre</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-col">
+                    <h4>Le Club</h4>
+                    <ul class="footer-links">
+                        <li><a href="#conseil">Conseil d'administration</a></li>
+                        <li><a href="#arbitres">Nos Arbitres</a></li>
+                        <li><a href="#coaches">Nos entraîneurs</a></li>
+                        <li><a href="#sponsors">Nos Commanditaires</a></li>
+                        <li><a href="#valeurs">Nos Valeurs</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-col">
+                    <h4>Légal & Info</h4>
                     <ul class="footer-links">
                         <li><a href="https://celticsdelouest.org/pdf/2025_Pol_Int.pdf" target="_blank">Politique
                                 d'intégrité</a></li>
                         <li><a href="https://www.quebec.ca/tourisme-et-loisirs/encadrement-gouvernance-gestion-loisir-sport/porter-plainte-sport-loisir"
                                 target="_blank">Je Dénonce</a></li>
-                        <li><a href="https://www.liguesoccerportneuf.com/" target="_blank">Ligue de Soccer</a></li>
-                        <li><a href="admin-erp/index.html" target="_blank" style="color: #666; font-size: 0.8rem;"><i
-                                    class="fas fa-lock"></i> Admin</a></li>
+                        <li><a href="https://www.liguesoccerportneuf.com/" target="_blank">Ligue de Soccer Portneuf</a>
+                        </li>
+                        <li><a href="admin-erp/index.html" target="_blank"><i class="fas fa-lock"></i>
+                                Administration</a></li>
                     </ul>
                 </div>
             </div>
-            <div class="copyright">
-                <p>&copy; 2025 Club de soccer les Celtics de l'Ouest de Portneuf. Tous droits réservés.</p>
+
+            <div class="footer-bottom">
+                <div class="copyright">
+                    <p>&copy; <span class="current-year"></span> Celtics de l'Ouest de Portneuf. Tous droits réservés.
+                    </p>
+                </div>
+                <div class="footer-legal-mini">
+                    <p style="color: #444; font-size: 0.75rem;">Conçu avec passion pour le soccer local.</p>
+                </div>
             </div>
         </div>
     </footer>
@@ -421,19 +477,24 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import activeConfig from "./env-config.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
-            authDomain: "celticsdelouest.firebaseapp.com",
-            projectId: "celticsdelouest",
-            storageBucket: "celticsdelouest.firebasestorage.app",
-            messagingSenderId: "1078067192512",
-            appId: "1:1078067192512:web:ae3b414f15358d1bfb8325",
-            measurementId: "G-N5LFCG1QWT"
-        };
+        const app = initializeApp(activeConfig.firebase);
+        const db = getFirestore(app, activeConfig.firestoreDb);
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        // Helper to add Show More button
+        function addShowMoreButton(container, hiddenClass) {
+            if (container.querySelector(`.${hiddenClass}`)) {
+                const btn = document.createElement('button');
+                btn.className = 'btn-show-more';
+                btn.innerHTML = 'Afficher toute la liste <i class="fas fa-chevron-down"></i>';
+                btn.onclick = () => {
+                    container.querySelectorAll(`.${hiddenClass}`).forEach(el => el.classList.remove(hiddenClass));
+                    btn.style.display = 'none';
+                };
+                container.parentNode.appendChild(btn); // Append to section container (parent of grid)
+            }
+        }
 
         // Load Board Members
         async function loadBoard() {
@@ -444,16 +505,15 @@
 
                 if (!snapshot.empty) {
                     container.innerHTML = '';
+                    let count = 0;
                     snapshot.forEach(doc => {
                         const data = doc.data();
-
-                        // Filter in memory to avoid complex index requirements
                         if (data.visible === false) return;
 
                         const card = document.createElement('div');
                         card.className = 'board-card';
+                        if (count >= 6) card.classList.add('mobile-hidden');
 
-                        // Image or Placeholder for alignment
                         let imgHtml = '';
                         if (data.imageUrl && data.imageUrl.length > 10) {
                             imgHtml = `<img src="${data.imageUrl}" alt="${data.name}">`;
@@ -467,13 +527,14 @@
                             <h3>${data.name}</h3>
                         `;
                         container.appendChild(card);
+                        count++;
                     });
+                    addShowMoreButton(container, 'mobile-hidden');
                 } else {
                     container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Membres du conseil à venir.</p>';
                 }
             } catch (e) {
                 console.error("Board load error", e);
-                // Fallback static or error
                 container.innerHTML = '<p>Erreur de chargement.</p>';
             }
         }
@@ -487,16 +548,15 @@
 
                 if (!snapshot.empty) {
                     container.innerHTML = '';
+                    let count = 0;
                     snapshot.forEach(doc => {
                         const data = doc.data();
-
-                        // Filter in memory
                         if (data.visible === false) return;
 
                         const card = document.createElement('div');
                         card.className = 'referee-card';
+                        if (count >= 6) card.classList.add('mobile-hidden');
 
-                        // Image or Placeholder for alignment
                         let imgHtml = '';
                         if (data.imageUrl && data.imageUrl.length > 10) {
                             imgHtml = `<img src="${data.imageUrl}" alt="${data.name}">`;
@@ -509,7 +569,9 @@
                             <h3>${data.name}</h3>
                         `;
                         container.appendChild(card);
+                        count++;
                     });
+                    addShowMoreButton(container, 'mobile-hidden');
                 } else {
                     container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Liste des arbitres à venir.</p>';
                 }
@@ -527,16 +589,15 @@
 
                 if (!snapshot.empty) {
                     container.innerHTML = '';
+                    let count = 0;
                     snapshot.forEach(doc => {
                         const data = doc.data();
-
-                        // Filter in memory
                         if (data.visible === false) return;
 
                         const card = document.createElement('div');
-                        card.className = 'referee-card'; // Reusing style for consistency
+                        card.className = 'referee-card';
+                        if (count >= 6) card.classList.add('mobile-hidden');
 
-                        // Image or Placeholder for alignment
                         let imgHtml = '';
                         if (data.imageUrl && data.imageUrl.length > 10) {
                             imgHtml = `<img src="${data.imageUrl}" alt="${data.name}">`;
@@ -549,9 +610,11 @@
                             <h3>${data.name}</h3>
                         `;
                         container.appendChild(card);
+                        count++;
                     });
+                    addShowMoreButton(container, 'mobile-hidden');
                 } else {
-                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Liste des coachs à venir.</p>';
+                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">La liste de nos entraîneurs sera disponible prochainement.</p>';
                 }
             } catch (e) {
                 console.error("Coaches load error", e);
@@ -620,6 +683,7 @@
             loadReferees();
             loadCoaches();
             loadSponsors();
+            document.querySelectorAll('.current-year').forEach(el => el.textContent = new Date().getFullYear());
         });
     </script>
     <!-- Floating Sponsor Banner -->
@@ -633,6 +697,7 @@
         </div>
     </div>
 
+    <script src="script.js"></script>
 </body>
 
 </html>

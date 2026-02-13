@@ -263,7 +263,8 @@ async function confirmAndSend() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${token}`,
+                        'x-environment': window.activeConfig ? window.activeConfig.env : 'staging'
                     },
                     body: JSON.stringify({ campaignId: id })
                 });
@@ -306,7 +307,8 @@ async function sendTestEmail() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'x-environment': window.activeConfig ? window.activeConfig.env : 'staging'
             },
             body: JSON.stringify({
                 testEmail: email,

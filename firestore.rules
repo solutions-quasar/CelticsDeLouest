@@ -88,7 +88,7 @@ service cloud.firestore {
       allow create, delete: if canEdit("Matchs");
       allow update: if canEdit("Matchs") || (
         request.auth != null && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableRefs'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableRefs', 'unavailableRefs'])
       );
     }
 

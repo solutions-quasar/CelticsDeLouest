@@ -19,21 +19,49 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Close mobile menu when clicking a link
+    // Close mobile menu when clicking a link (but NOT the dropdown toggle)
     navLinks.forEach(link => {
-        link.addEventListener('click', () => {
+        link.addEventListener('click', (e) => {
+            if (link.id === 'le-club-toggle') return;
+
             navMenu.classList.remove('active');
             const icon = mobileMenuBtn.querySelector('i');
-            icon.classList.remove('fa-times');
-            icon.classList.add('fa-bars');
+            if (icon) {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
         });
     });
+
+    // Mobile Dropdown Toggle
+    const clubToggle = document.getElementById('le-club-toggle');
+    if (clubToggle) {
+        clubToggle.addEventListener('click', (e) => {
+            if (window.innerWidth <= 1100) {
+                e.preventDefault();
+                const dropdown = clubToggle.nextElementSibling;
+                if (dropdown) {
+                    dropdown.classList.toggle('active');
+                    // Optional: rotation or icon change
+                    const icon = clubToggle.querySelector('.fa-chevron-down');
+                    if (icon) {
+                        icon.style.transform = dropdown.classList.contains('active') ? 'rotate(180deg)' : 'rotate(0deg)';
+                        icon.style.transition = '0.3s';
+                    }
+                }
+            }
+        });
+    }
 
     // Smooth Scroll for Anchor Links (if browser smooth scroll isn't enough/supported properly)
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
-            e.preventDefault();
             const targetId = this.getAttribute('href');
+
+            // Only handle if it's still a hash link
+            if (!targetId || !targetId.startsWith('#')) return;
+
+            e.preventDefault();
             if (targetId === '#') return;
 
             const targetElement = document.querySelector(targetId);

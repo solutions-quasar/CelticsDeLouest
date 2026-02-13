@@ -214,7 +214,8 @@ body {
     cursor: pointer;
     margin-bottom: 5px;
     transition: 0.2s;
-    display: flex;
+    display: none;
+    /* Changed from flex to none to prevent flicker */
     align-items: center;
     gap: 10px;
     overflow: hidden;
@@ -515,6 +516,17 @@ body {
 
 .view.active {
     display: block;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 /* Cards & Widgets */

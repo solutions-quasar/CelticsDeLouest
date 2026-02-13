@@ -195,7 +195,7 @@
                         <!-- Content Injected by billing.js -->
                     </div>
 
-                    <div id="view-dashboard" class="view active">
+                    <div id="view-dashboard" class="view">
 
 
                         <div class="dashboard-monitoring"
@@ -2048,6 +2048,7 @@
                                         style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd; background: white; font-size: 1rem;">
                                         <option value="custom">-- Personnalisé --</option>
                                         <option value="super-admin">Super Admin (Accès total)</option>
+                                        <option value="gestionnaire">Gestionnaire</option>
                                         <option value="secretaire">Secrétaire</option>
                                         <option value="coach-general">Coach Général</option>
                                         <option value="arbitre-general">Arbitre Général</option>
@@ -2383,6 +2384,10 @@
                         <option value="gymnase">Gymnase (Intérieur)</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Ordre d'affichage (Tri)</label>
+                    <input type="number" id="field-order" placeholder="Ex: 1" value="99">
+                </div>
                 <button type="submit" class="btn-save">Enregistrer</button>
                 <button type="button" class="btn-close-custom"
                     onclick="document.getElementById('field-modal').classList.remove('active')" style="
@@ -2469,6 +2474,12 @@
                         </div>
                     </div>
                     <div class="form-group">
+                        <label>Notre équipe</label>
+                        <select id="match-team">
+                            <option value="">-- Non assigné --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label>Catégorie</label>
                         <select id="match-category">
                             <option value="U9">U9</option>
@@ -2535,6 +2546,11 @@
                         <select id="match-ref-asst2">
                             <option value="">-- Non assigné --</option>
                         </select>
+                    </div>
+
+                    <div id="match-referee-availability"
+                        style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+                        <!-- JS will populate availability here -->
                     </div>
                 </div>
 

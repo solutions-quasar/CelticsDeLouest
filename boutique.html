@@ -34,18 +34,36 @@
             <ul class="nav-menu">
                 <li><a href="index.html" class="nav-link">Accueil</a></li>
                 <li><a href="index.html#equipes" class="nav-link">Nos Équipes</a></li>
-                <li><a href="index.html#inscription" class="nav-link">Inscriptions</a></li>
+                <li><a href="inscription.html" class="nav-link">Inscriptions</a></li>
                 <li><a href="index.html#valeurs" class="nav-link">Nos Valeurs</a></li>
                 <li class="nav-item-dropdown">
-                    <a href="#" class="nav-link">Le Club <i class="fas fa-chevron-down"
-                            style="font-size: 0.8rem; margin-left: 5px;"></i></a>
+                    <a href="javascript:void(0)" class="nav-link" id="le-club-toggle">Le Club <i
+                            class="fas fa-chevron-down" style="font-size: 0.8rem; margin-left: 5px;"></i></a>
                     <ul class="dropdown-menu">
-                        <li><a href="index.html#comite" class="nav-link dropdown-link">Conseil d'administration</a></li>
+                        <li><a href="index.html#conseil" class="nav-link dropdown-link">Conseil d'administration</a>
+                        </li>
                         <li><a href="index.html#arbitres" class="nav-link dropdown-link">Nos Arbitres</a></li>
+                        <li><a href="index.html#coaches" class="nav-link dropdown-link">Nos entraîneurs</a></li>
+                        <li><a href="index.html#sponsors" class="nav-link dropdown-link">Nos Commanditaires</a></li>
                     </ul>
                 </li>
                 <li><a href="boutique.html" class="nav-link active">Boutique en ligne</a></li>
                 <li><a href="index.html#contact" class="nav-link">Nous Joindre</a></li>
+                <!-- Mobile Menu Footer -->
+                <li class="nav-footer">
+                    <div class="nav-footer-info">
+                        <strong>Celtics de l'Ouest de Portneuf</strong><br>
+                        Club de soccer passionné depuis 2013.<br>
+                        <a href="mailto:celtics.portneuf@gmail.com"
+                            style="color:var(--celtics-green);">celtics.portneuf@gmail.com</a>
+                    </div>
+                    <div class="nav-footer-socials">
+                        <a href="https://www.facebook.com/Clubdesoccerlesceltics" target="_blank"><i
+                                class="fab fa-facebook"></i></a>
+                        <a href="https://www.instagram.com/celtics_de_louest_portneuf" target="_blank"><i
+                                class="fab fa-instagram"></i></a>
+                    </div>
+                </li>
             </ul>
         </div>
     </nav>
@@ -60,6 +78,25 @@
     </header>
 
     <!-- Boutique Content -->
+    <section class="section">
+        <div class="container">
+            <div id="boutique-loader" style="text-align: center; padding: 50px;">
+                <i class="fas fa-circle-notch fa-spin fa-3x" style="color: var(--celtics-green);"></i>
+            </div>
+
+            <div id="boutique-content" style="display: none; max-width: 800px; margin: 0 auto;">
+                <div id="boutique-text" style="font-size: 1.1rem; line-height: 1.8; color: #333; margin-bottom: 40px;">
+                    <!-- Content injected by JS -->
+                </div>
+
+                <div style="text-align: center;">
+                    <a id="boutique-link-btn" href="#" target="_blank" class="btn btn-primary big-btn">
+                        <i class="fas fa-shopping-bag" style="margin-right: 10px;"></i> Accéder à la Boutique en Ligne
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
 
 
     <!-- Footer -->
@@ -67,24 +104,65 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-col">
+                    <div class="footer-logo">
+                        <img src="images/logo.png" alt="Celtics Logo">
+                    </div>
                     <h4>Celtics de l'Ouest</h4>
-                    <p>Club de soccer de Portneuf.</p>
+                    <p>Développer la passion du soccer dans la région de Portneuf depuis 2013. Excellence, plaisir et
+                        esprit d'équipe.</p>
+                    <div class="footer-socials">
+                        <a href="https://www.facebook.com/Clubdesoccerlesceltics" target="_blank"><i
+                                class="fab fa-facebook-f"></i></a>
+                        <a href="https://www.instagram.com/celtics_de_louest_portneuf" target="_blank"><i
+                                class="fab fa-instagram"></i></a>
+                    </div>
                 </div>
+
                 <div class="footer-col">
-                    <h4>Liens Utiles</h4>
+                    <h4>Navigation</h4>
+                    <ul class="footer-links">
+                        <li><a href="index.html">Accueil</a></li>
+                        <li><a href="index.html#equipes">Nos Équipes</a></li>
+                        <li><a href="inscription.html">Inscriptions</a></li>
+                        <li><a href="boutique.html">Boutique en ligne</a></li>
+                        <li><a href="index.html#contact">Nous Joindre</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-col">
+                    <h4>Le Club</h4>
+                    <ul class="footer-links">
+                        <li><a href="index.html#conseil">Conseil d'administration</a></li>
+                        <li><a href="index.html#arbitres">Nos Arbitres</a></li>
+                        <li><a href="index.html#coaches">Nos entraîneurs</a></li>
+                        <li><a href="index.html#sponsors">Nos Commanditaires</a></li>
+                        <li><a href="index.html#valeurs">Nos Valeurs</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-col">
+                    <h4>Légal & Info</h4>
                     <ul class="footer-links">
                         <li><a href="https://celticsdelouest.org/pdf/2025_Pol_Int.pdf" target="_blank">Politique
                                 d'intégrité</a></li>
                         <li><a href="https://www.quebec.ca/tourisme-et-loisirs/encadrement-gouvernance-gestion-loisir-sport/porter-plainte-sport-loisir"
                                 target="_blank">Je Dénonce</a></li>
-                        <li><a href="https://www.liguesoccerportneuf.com/" target="_blank">Ligue de Soccer</a></li>
-                        <li><a href="admin-erp/index.html" target="_blank" style="color: #666; font-size: 0.8rem;"><i
-                                    class="fas fa-lock"></i> Admin</a></li>
+                        <li><a href="https://www.liguesoccerportneuf.com/" target="_blank">Ligue de Soccer Portneuf</a>
+                        </li>
+                        <li><a href="admin-erp/index.html" target="_blank"><i class="fas fa-lock"></i>
+                                Administration</a></li>
                     </ul>
                 </div>
             </div>
-            <div class="copyright">
-                <p>&copy; 2025 Club de soccer les Celtics de l'Ouest de Portneuf. Tous droits réservés.</p>
+
+            <div class="footer-bottom">
+                <div class="copyright">
+                    <p>&copy; <span class="current-year"></span> Celtics de l'Ouest de Portneuf. Tous droits réservés.
+                    </p>
+                </div>
+                <div class="footer-legal-mini">
+                    <p style="color: #444; font-size: 0.75rem;">Conçu avec passion pour le soccer local.</p>
+                </div>
             </div>
         </div>
     </footer>
@@ -92,7 +170,7 @@
     <!-- Firebase & Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
@@ -107,8 +185,50 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        document.querySelectorAll('.current-year').forEach(el => el.textContent = new Date().getFullYear());
 
+        // Load Boutique Settings
+        const loader = document.getElementById('boutique-loader');
+        const content = document.getElementById('boutique-content');
+        const textContainer = document.getElementById('boutique-text');
+        const linkBtn = document.getElementById('boutique-link-btn');
+
+        async function loadBoutique() {
+            try {
+                const docSnap = await getDoc(doc(db, "settings", "boutique"));
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+
+                    // Set Text (HTML from Quill)
+                    if (data.description) {
+                        textContainer.innerHTML = data.description;
+                    } else {
+                        textContainer.innerHTML = "<p>Visitez notre boutique en ligne pour découvrir nos produits !</p>";
+                    }
+
+                    // Set Link
+                    if (data.link) {
+                        linkBtn.href = data.link;
+                        linkBtn.style.display = 'inline-block';
+                    } else {
+                        linkBtn.style.display = 'none';
+                    }
+                } else {
+                    textContainer.innerHTML = "<p>La boutique est actuellement fermée ou en maintenance.</p>";
+                    linkBtn.style.display = 'none';
+                }
+            } catch (error) {
+                console.error("Error loading boutique:", error);
+                textContainer.innerHTML = "<p>Erreur lors du chargement des informations.</p>";
+            } finally {
+                if (loader) loader.style.display = 'none';
+                if (content) content.style.display = 'block';
+            }
+        }
+
+        loadBoutique();
     </script>
+    <script src="script.js"></script>
 </body>
 
 </html>

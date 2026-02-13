@@ -1,4 +1,5 @@
 // Firebase Configuration
+import { activeConfig } from "../../env-config.js";
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
@@ -6,20 +7,11 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPe
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { loadBilling } from "./billing.js";
 
-const firebaseConfig = {
-    apiKey: "AIzaSyCwJOzr9gAAyrkUAbtThkKNWJ1GcJUNx-E",
-    authDomain: "celticsdelouest.firebaseapp.com",
-    projectId: "celticsdelouest",
-    storageBucket: "celticsdelouest.firebasestorage.app",
-    messagingSenderId: "1078067192512",
-    appId: "1:1078067192512:web:ae3b414f15358d1bfb8325",
-    measurementId: "G-N5LFCG1QWT"
-};
-
-const app = initializeApp(firebaseConfig);
+const app = initializeApp(activeConfig.firebase);
 const analytics = getAnalytics(app);
+window.activeConfig = activeConfig;
 
-const db = getFirestore(app);
+const db = getFirestore(app, activeConfig.firestoreDb);
 
 const auth = getAuth(app);
 const storage = getStorage(app);
@@ -407,6 +399,14 @@ function initRealTimeListeners() {
         if (view && view.classList.contains('active')) loadPlayersDirectory();
         if (typeof updateStats === 'function') updateStats();
 
+        // Refresh Inventory if active (since restricted coaches filter depends on players)
+        const invView = document.getElementById('view-inventory');
+        if (invView && invView.classList.contains('active') && typeof loadInventory === 'function') loadInventory();
+
+        // Refresh Dashboard if active
+        const dashView = document.getElementById('view-dashboard');
+        if (dashView && dashView.classList.contains('active') && typeof loadDashboardData === 'function') loadDashboardData();
+
         // Refresh visual editor if open
         const visualModal = document.getElementById('team-visual-modal');
         if (visualModal && visualModal.style.display === 'flex') {
@@ -417,6 +417,10 @@ function initRealTimeListeners() {
     syncCollection("teams", "teams", () => {
         const view = document.getElementById('view-teams');
         if (view && view.classList.contains('active')) loadTeams();
+
+        // Refresh Inventory if active (since restricted coaches filter depends on teams)
+        const invView = document.getElementById('view-inventory');
+        if (invView && invView.classList.contains('active') && typeof loadInventory === 'function') loadInventory();
 
         // Refresh visual editor if open
         const visualModal = document.getElementById('team-visual-modal');
@@ -485,6 +489,20 @@ function initRealTimeListeners() {
     });
 
     syncCollection("settings", "settings", () => {
+        const data = dataCache.settings?.current_season;
+        if (data && data.calendarConfig) {
+            window.calendarSettings.startHour = data.calendarConfig.startHour || 8;
+            window.calendarSettings.endHour = data.calendarConfig.endHour || 22;
+            window.calendarSettings.slotDuration = data.calendarConfig.slotDuration || 15;
+            window.calendarSettings.defaultDuration = data.calendarConfig.defaultDuration || 60;
+
+            // Refresh matches view if active to apply new time scales
+            const matchesView = document.getElementById('view-matches');
+            if (matchesView && matchesView.classList.contains('active')) {
+                loadMatches();
+            }
+        }
+
         const view = document.getElementById('view-settings');
         if (view && view.classList.contains('active')) loadSettings();
     });
@@ -492,11 +510,19 @@ function initRealTimeListeners() {
     syncCollection("coaches", "coaches", () => {
         const view = document.getElementById('view-coaches');
         if (view && view.classList.contains('active')) loadCoaches();
+
+        // Refresh Dashboard if active (for alerts)
+        const dashView = document.getElementById('view-dashboard');
+        if (dashView && dashView.classList.contains('active') && typeof loadDashboardData === 'function') loadDashboardData();
     });
 
     syncCollection("referees", "referees", () => {
         const view = document.getElementById('view-referees');
         if (view && view.classList.contains('active')) loadReferees();
+
+        // Refresh Dashboard if active (for stats)
+        const dashView = document.getElementById('view-dashboard');
+        if (dashView && dashView.classList.contains('active') && typeof loadDashboardData === 'function') loadDashboardData();
     });
 
     syncCollection("board_members", "board", () => {
@@ -524,6 +550,10 @@ function initRealTimeListeners() {
     syncCollection("registrations", "registrations", () => {
         const view = document.getElementById('view-registrations');
         if (view && view.classList.contains('active')) loadRegistrations();
+
+        // Refresh Dashboard if active (for equipment stats)
+        const dashView = document.getElementById('view-dashboard');
+        if (dashView && dashView.classList.contains('active') && typeof loadDashboardData === 'function') loadDashboardData();
     });
 
     syncCollection("campaigns", "campaigns", () => {
@@ -600,7 +630,10 @@ if (loginForm) {
                 // Use the Cloud Function directly (public endpoint since user is not logged in)
                 const response = await fetch('https://us-central1-celticsdelouest.cloudfunctions.net/sendAdminPasswordReset', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-environment': window.activeConfig ? window.activeConfig.env : 'staging'
+                    },
                     body: JSON.stringify({ email })
                 });
 
@@ -633,7 +666,8 @@ window.resetAdminPassword = async function (email) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`
+                'Authorization': `Bearer ${idToken}`,
+                'x-environment': window.activeConfig ? window.activeConfig.env : 'staging'
             },
             body: JSON.stringify({ email })
         });
@@ -1410,6 +1444,8 @@ function renderTeamCoachTags() {
     const container = document.getElementById('team-coaches-list');
     if (!container) return;
     container.innerHTML = '';
+    const isCoach = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId;
+
     selectedTeamCoaches.forEach(id => {
         const coach = dataCache.coaches[id];
         if (coach) {
@@ -1417,7 +1453,8 @@ function renderTeamCoachTags() {
             const tag = document.createElement('div');
             tag.className = 'tag';
             tag.style.cssText = 'background: var(--primary); color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;';
-            tag.innerHTML = `${displayName} <i class="fas fa-times" style="cursor:pointer;" onclick="removeTeamCoach('${id}')"></i>`;
+            const removeBtn = !isCoach ? `<i class="fas fa-times" style="cursor:pointer;" onclick="removeTeamCoach('${id}')"></i>` : '';
+            tag.innerHTML = `${displayName} ${removeBtn}`;
             container.appendChild(tag);
         }
     });
@@ -1946,7 +1983,8 @@ async function loadTeams() {
         }
 
         // COACH FILTER: If current user is a coach (and not super-admin), show only their teams
-        if (window.currentUserCoachId && window.currentUserMainRole !== 'super-admin') {
+        const isCoachLocal = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId;
+        if (isCoachLocal && window.currentUserMainRole !== 'super-admin') {
             teamsArr = teamsArr.filter(t => (t.coachIds || []).includes(window.currentUserCoachId));
         }
 
@@ -2059,6 +2097,9 @@ async function loadTeams() {
         });
 
         setupClickableCard('.team-card', 'teams', 'team-modal', 'team-id', async (data) => {
+            const isCoach = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId;
+            const teamForm = document.getElementById('team-form');
+
             document.getElementById('team-category').value = data.category || '';
             document.getElementById('team-gender').value = data.gender || '';
 
@@ -2073,6 +2114,31 @@ async function loadTeams() {
             loadTeamPlayers(document.getElementById('team-id').value);
             // Populate available players for addition
             populateTeamPlayerSelect('team-add-player-select');
+
+            // Coach Restrictions
+            if (isCoach) {
+                document.getElementById('team-category').disabled = true;
+                document.getElementById('team-gender').disabled = true;
+                document.getElementById('team-season').disabled = true;
+
+                // Hide Coach Assignment Section
+                const coachAssignment = document.getElementById('team-coach-add-select')?.closest('.form-group');
+                if (coachAssignment) coachAssignment.style.display = 'none';
+
+                // Hide Save Button
+                const saveBtn = teamForm?.querySelector('button[type="submit"]');
+                if (saveBtn) saveBtn.style.display = 'none';
+            } else {
+                document.getElementById('team-category').disabled = false;
+                document.getElementById('team-gender').disabled = false;
+                document.getElementById('team-season').disabled = false;
+
+                const coachAssignment = document.getElementById('team-coach-add-select')?.closest('.form-group');
+                if (coachAssignment) coachAssignment.style.display = 'block';
+
+                const saveBtn = teamForm?.querySelector('button[type="submit"]');
+                if (saveBtn) saveBtn.style.display = 'block';
+            }
         });
 
         setupDeleteButton('.delete-team', 'teams', () => loadTeams());
@@ -2684,11 +2750,52 @@ async function loadInventory() {
     if (!targetList) return;
 
     // Use Cache
-    const items = Object.values(dataCache.inventory || {});
+    let items = Object.values(dataCache.inventory || {});
+    const isRestricted = window.isRestrictedCoach;
+
+    // Permissions check for UI elements
+    const addBtn = document.getElementById('open-inventory-modal');
+    const batchBtn = document.getElementById('open-inventory-batch-modal');
+    if (addBtn) addBtn.style.display = isRestricted ? 'none' : 'block';
+    if (batchBtn) batchBtn.style.display = isRestricted ? 'none' : 'block';
+
+    // COACH FILTER: If current user is a restricted coach, show items assigned to them OR their players
+    if (isRestricted) {
+        const coachId = window.currentUserCoachId;
+
+        // Find teams coached by this coach
+        const myTeamIds = Object.values(dataCache.teams || {})
+            .filter(t => (t.coachIds || []).includes(coachId))
+            .map(t => t.id);
+
+        // Find players in those teams
+        const myPlayerIds = Object.values(dataCache.players || {})
+            .filter(p => myTeamIds.includes(p.teamId))
+            .map(p => p.id);
+
+        items = items.filter(item => {
+            const distributions = item.distributions || [];
+
+            // 1. Assigned to coach directly in distributions
+            if (distributions.some(d => d.type === 'coach' && d.id === coachId)) return true;
+
+            // 2. Assigned to coach directly in legacy fields
+            if (item.assignedType === 'coach' && item.assignedTo === coachId) return true;
+
+            // 3. Assigned to one of coach's players in distributions
+            if (distributions.some(d => d.type === 'player' && myPlayerIds.includes(d.id))) return true;
+
+            // 4. Assigned to one of coach's players in legacy fields
+            if (item.assignedType === 'player' && myPlayerIds.includes(item.assignedTo)) return true;
+
+            return false;
+        });
+    }
+
     targetList.innerHTML = '';
 
     if (items.length === 0) {
-        targetList.innerHTML = '<p style="text-align:center; padding: 20px;">Aucun article inventorié.</p>';
+        targetList.innerHTML = `<p style="text-align:center; padding: 20px;">${isRestricted ? 'Aucun article ne vous est actuellement attribué (à vous ou à vos joueurs).' : 'Aucun article inventorié.'}</p>`;
         return;
     }
 
@@ -2800,7 +2907,7 @@ async function loadInventory() {
 
                 if (distributedCount > 0) subtitle += `<br><span style="color:var(--primary); font-size:0.85rem;"><i class="fas fa-share-alt"></i> ${distributedCount} distribué(s)</span>`;
 
-                const card = createCard(data.imageUrl, data.name, subtitle, data.id, 'edit-inv', 'delete-inv', 'fa-box');
+                const card = createCard(data.imageUrl, data.name, subtitle, data.id, isRestricted ? null : 'edit-inv', isRestricted ? null : 'delete-inv', 'fa-box');
                 card.setAttribute('data-id', data.id);
                 card.classList.add('inv-card');
 
@@ -2833,7 +2940,7 @@ async function loadInventory() {
 
 
                 // Use the batch title
-                const card = createCard(data.imageUrl, b.title, subtitle, b.id, 'edit-inv-batch', 'delete-inv-batch', 'fa-boxes');
+                const card = createCard(data.imageUrl, b.title, subtitle, b.id, isRestricted ? null : 'edit-inv-batch', isRestricted ? null : 'delete-inv-batch', 'fa-boxes');
                 card.setAttribute('data-id', b.id);
                 card.setAttribute('data-batch-id', b.id);
                 card.classList.add('inv-batch-card');
@@ -2987,6 +3094,13 @@ async function loadInventory() {
             card.className = "batch-item-row";
             card.style.cssText = 'background: white; border: 1px solid #eee; padding: 12px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.02);';
 
+            const isRestricted = window.isRestrictedCoach;
+            const manageBtnText = isRestricted ? 'Voir' : (isDist ? 'Gérer' : 'Associer');
+            const deleteBtnHtml = !isRestricted ? `
+                <button type="button" class="btn-delete-individual" style="background: white; color: var(--danger); border: 1px solid var(--danger); padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" title="Supprimer cet article">
+                    <i class="fas fa-trash-alt"></i>
+                </button>` : '';
+
             let assignedTo = isDist ? item.distributions[0].name : '<span style="color: #28a745; font-style: italic;">Disponible</span>';
 
             card.innerHTML = `
@@ -3000,34 +3114,23 @@ async function loadInventory() {
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <button type="button" class="btn-manage-individual" style="background: ${isDist ? '#f1f3f5' : 'var(--primary)'}; color: ${isDist ? '#495057' : 'white'}; border: none; padding: 8px 15px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 600; transition: transform 0.2s;">
-                        ${isDist ? 'Gérer' : 'Associer'}
+                    <button type="button" class="btn-manage-individual" style="background: ${isDist || isRestricted ? '#f1f3f5' : 'var(--primary)'}; color: ${isDist || isRestricted ? '#495057' : 'white'}; border: none; padding: 8px 15px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 600; transition: transform 0.2s;">
+                        ${manageBtnText}
                     </button>
-                    <button type="button" class="btn-delete-individual" style="background: white; color: var(--danger); border: 1px solid var(--danger); padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" title="Supprimer cet article">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
+                    ${deleteBtnHtml}
                 </div>
             `;
 
             grid.appendChild(card);
 
             card.querySelector('.btn-manage-individual').addEventListener('click', () => {
-                // To manage an individual item, we just re-open the modal as a single item
-                document.getElementById('inv-batch-badge').style.display = 'none';
-                document.getElementById('inv-id').value = item.id;
-                document.getElementById('inv-id').removeAttribute('data-is-batch');
-
-                const cardEl = document.querySelector(`.inv-card[data-id="${item.id}"]`);
-                if (cardEl) {
-                    cardEl.click();
-                } else {
-                    fillInventoryModal(item);
-                }
-                // Ensure we stay on Stock tab
+                // To manage an individual item, we re-open the modal as a single item
+                openSingleInventoryModal(item);
+                // Switch back to stock tab to see/add distributions for this specific item
                 switchToInventoryStockTab();
             });
 
-            card.querySelector('.btn-delete-individual').addEventListener('click', async () => {
+            card.querySelector('.btn-delete-individual')?.addEventListener('click', async () => {
                 if (await showConfirm(`Supprimer définitivement l'article n°${item.number} de ce lot ?`)) {
                     try {
                         const row = card.closest('.batch-item-row');
@@ -3058,45 +3161,96 @@ async function loadInventory() {
     }
 
     function fillInventoryModal(data) {
+        const isRestricted = window.isRestrictedCoach;
+
         document.getElementById('inv-name').value = data.name;
+        document.getElementById('inv-name').disabled = isRestricted;
+
         document.getElementById('inv-cat').value = data.category;
+        document.getElementById('inv-cat').disabled = isRestricted;
+
         document.getElementById('inv-qty').value = data.quantity;
-        document.getElementById('inv-qty').disabled = false;
+        document.getElementById('inv-qty').disabled = isRestricted;
+
         if (document.getElementById('inv-qty-stock')) {
             document.getElementById('inv-qty-stock').value = data.quantity;
-            document.getElementById('inv-qty-stock').disabled = false;
+            document.getElementById('inv-qty-stock').disabled = isRestricted;
         }
+
         document.getElementById('inv-status').value = data.status;
+        document.getElementById('inv-status').disabled = isRestricted;
+
         document.getElementById('inv-model').value = data.model || "";
+        document.getElementById('inv-model').disabled = isRestricted;
+
         document.getElementById('inv-size').value = data.size || "";
+        document.getElementById('inv-size').disabled = isRestricted;
+
         document.getElementById('inv-number').value = data.number || "";
-        document.getElementById('inv-number').disabled = false;
+        document.getElementById('inv-number').disabled = isRestricted;
 
-        document.getElementById('inv-dist-helper-form').style.display = 'flex';
-        document.getElementById('inv-dist-label').style.display = 'block';
+        const imgInput = document.getElementById('inv-image');
+        if (imgInput) {
+            imgInput.disabled = isRestricted;
+            if (imgInput.parentElement) {
+                imgInput.parentElement.style.display = isRestricted ? 'none' : 'block';
+            }
+        }
 
-        // switchToInventoryStockTab is handled by the caller or needed here if manual
-        // but for safety we don't reset to 0 if we want to stay
-        // resetInventoryModalTabs(); <--- Removed reset to allow staying on current tab
+        // Hide Save Button in Footer
+        const saveBtn = document.querySelector('#inventory-modal .inventory-modal-footer .btn-save');
+        if (saveBtn) saveBtn.style.display = isRestricted ? 'none' : 'block';
 
-        // Distribution logic refresh (borrowed from setupClickableCard handler)
+        // Hide add distribution form
+        const distForm = document.getElementById('inv-dist-helper-form');
+        if (distForm) distForm.style.display = isRestricted ? 'none' : 'flex';
+        // document.getElementById('inv-dist-label').style.display = 'block';
+
+        // Distribution logic refresh
         renderSingleInventoryDistributions(data);
     }
 
     function renderSingleInventoryDistributions(data) {
+        const isRestricted = window.isRestrictedCoach;
+        const coachId = window.currentUserCoachId;
         const currentInvId = data.id;
         let distributions = data.distributions || [];
+
+        // Determine which teams the coach manages
+        const myTeamIds = isRestricted ? Object.values(dataCache.teams || {})
+            .filter(t => (t.coachIds || []).includes(coachId))
+            .map(t => t.id) : [];
+
+        // Players in those teams
+        const myPlayerIds = isRestricted ? Object.values(dataCache.players || {})
+            .filter(p => myTeamIds.includes(p.teamId))
+            .map(p => p.id) : [];
+
+        // Filter distributions for coaches (only show theirs or their players')
+        if (isRestricted) {
+            distributions = distributions.filter(d =>
+                (d.type === 'coach' && d.id === coachId) ||
+                (d.type === 'player' && myPlayerIds.includes(d.id))
+            );
+        }
+
         // Migration logic for UI
         if ((!distributions || distributions.length === 0) && data.assignedType && data.assignedType !== 'none' && data.assignedTo) {
-            let name = "Inconnu";
-            if (data.assignedType === 'coach' && dataCache.coaches[data.assignedTo]) name = dataCache.coaches[data.assignedTo].name;
-            if (data.assignedType === 'player' && dataCache.players[data.assignedTo]) name = dataCache.players[data.assignedTo].name;
-            distributions = [{
-                type: data.assignedType,
-                id: data.assignedTo,
-                qty: 1,
-                name: name
-            }];
+            const isMatch = !isRestricted ||
+                (data.assignedType === 'coach' && data.assignedTo === coachId) ||
+                (data.assignedType === 'player' && myPlayerIds.includes(data.assignedTo));
+
+            if (isMatch) {
+                let name = "Inconnu";
+                if (data.assignedType === 'coach' && dataCache.coaches[data.assignedTo]) name = dataCache.coaches[data.assignedTo].name;
+                if (data.assignedType === 'player' && dataCache.players[data.assignedTo]) name = dataCache.players[data.assignedTo].name;
+                distributions = [{
+                    type: data.assignedType,
+                    id: data.assignedTo,
+                    qty: 1,
+                    name: name
+                }];
+            }
         }
 
         const distTypeSel = document.getElementById('dist-type');
@@ -3120,6 +3274,12 @@ async function loadInventory() {
                     if (d.type === 'coach' && dataCache.coaches && dataCache.coaches[d.id]) name = dataCache.coaches[d.id].name;
                     if (d.type === 'player' && dataCache.players && dataCache.players[d.id]) name = dataCache.players[d.id].name;
 
+                    const isRestrictedLocal = window.isRestrictedCoach;
+                    const deleteBtn = !isRestrictedLocal ? `
+                        <button type="button" class="del-dist-btn" data-index="${index}" style="background:none; border:none; color:#dc3545; cursor:pointer; font-size: 1.1rem;">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>` : '';
+
                     const div = document.createElement('div');
                     div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 10px 0; font-size: 0.9rem;';
                     div.innerHTML = `
@@ -3127,9 +3287,7 @@ async function loadInventory() {
                             <span style="font-weight:700; color: var(--primary); background: #eef2f7; padding: 2px 8px; border-radius: 4px; margin-right: 10px;">x${d.qty}</span> 
                             <span style="font-weight: 500;">${name}</span> <i style="font-size:0.8em; color:#999; margin-left: 5px;">(${d.type === 'coach' ? 'Coach' : 'Joueur'})</i>
                         </span>
-                        <button type="button" class="del-dist-btn" data-index="${index}" style="background:none; border:none; color:#dc3545; cursor:pointer; font-size: 1.1rem;">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
+                        ${deleteBtn}
                      `;
                     listEl.appendChild(div);
                 });
@@ -3955,7 +4113,7 @@ const navAdminsBtn = document.getElementById('nav-admins-btn');
 const ROLE_DESCRIPTIONS = {
     'super-admin': 'Accès total à tout le système (visionner, modifier, supprimer). Aucune restriction.',
     'secretaire': 'Gestion des joueurs, des inscriptions, des matchs et visionnement des équipes.',
-    'coach-general': 'Visionnement restreint de ses propres équipes. Accès en lecture seule aux détails des joueurs (santé, parents, naissance).',
+    'coach-general': 'Visionnement du calendrier et des joueurs de ses équipes. Accès en lecture seule (ne peut pas modifier l\'équipe ou les assignations).',
     'arbitre-general': 'Visionnement du calendrier des matchs uniquement. Ne peut pas modifier ou voir les détails du match (sauf sa disponibilité).',
     'tresorier': 'Gestion de la facturation, de la boutique et visionnement de l\'inventaire.',
     'custom': 'Aucune permission de base. Utilisez la grille ci-dessous pour définir les accès spécifiques.'
@@ -4240,9 +4398,10 @@ document.getElementById('nav-admins-btn')?.addEventListener('click', loadAdmins)
 const ROLE_PERMISSIONS = {
     'super-admin': { all: 'edit' },
     'secretaire': { Dashboard: 'view', Joueurs: 'edit', Inscriptions: 'edit', Matchs: 'edit', Equipes: 'view' },
-    'coach-general': { Dashboard: 'view', Equipes: 'view' },
+    'coach-general': { Equipes: 'view', Matchs: 'view', Inventaire: 'view' },
     'arbitre-general': { Matchs: 'view' },
     'tresorier': { Dashboard: 'view', Facturation: 'edit', Boutique: 'edit', Inventaire: 'view' },
+    'gestionnaire': { Matchs: 'edit' },
     'custom': {}
 };
 
@@ -4320,8 +4479,19 @@ window.checkAdminAndSetupUI = async (user) => {
     // Also check if user is a coach
     window.currentUserCoachId = null;
     try {
-        const coaches = Object.values(dataCache.coaches || {});
-        const coachEntry = coaches.find(c => c.email && c.email.toLowerCase() === user.email.toLowerCase());
+        let coaches = Object.values(dataCache.coaches || {});
+
+        // Force fetch if cache is empty
+        if (coaches.length === 0) {
+            const coachSnap = await getDocs(collection(db, "coaches"));
+            dataCache.coaches = {};
+            coachSnap.forEach(doc => {
+                dataCache.coaches[doc.id] = { id: doc.id, ...doc.data() };
+            });
+            coaches = Object.values(dataCache.coaches);
+        }
+
+        const coachEntry = coaches.find(c => c.email && c.email.toLowerCase().trim() === user.email.toLowerCase().trim());
         if (coachEntry) {
             window.currentUserCoachId = coachEntry.id;
             console.log("Logged in as Coach:", window.currentUserCoachId);
@@ -4334,18 +4504,22 @@ window.checkAdminAndSetupUI = async (user) => {
     let mainRole = 'custom';
     const extraRoles = [];
 
-    roles.forEach(r => {
-        if (ROLE_PERMISSIONS[r]) {
-            mainRole = r;
-        } else if (r === 'SuperAdmin') {
-            mainRole = 'super-admin';
-        } else {
-            extraRoles.push(r);
-        }
-    });
+    // Priority: SuperAdmin > Others
+    if (roles.includes('SuperAdmin')) {
+        mainRole = 'super-admin';
+    } else {
+        roles.forEach(r => {
+            if (ROLE_PERMISSIONS[r]) {
+                mainRole = r;
+            } else {
+                extraRoles.push(r);
+            }
+        });
+    }
 
     const isSuper = mainRole === 'super-admin';
     window.currentUserMainRole = mainRole;
+    window.isRestrictedCoach = (mainRole === 'coach-general' || !!window.currentUserCoachId) && !isSuper;
 
     // Define permission mapping
     const permissionMap = {
@@ -4504,9 +4678,24 @@ window.checkAdminAndSetupUI = async (user) => {
 
     // Redirect if current view is now forbidden
     const activeView = document.querySelector('.view.active');
-    if (activeView && !allowedViews.includes(activeView.id)) {
-        const dashboardBtn = document.querySelector('.nav-btn[data-target="view-dashboard"]');
-        if (dashboardBtn) dashboardBtn.click();
+
+    // Check if we need to redirect (either current view is forbidden, or we are on dashboard but dashboard is not allowed)
+    const isForbidden = activeView && !allowedViews.includes(activeView.id);
+
+    if (isForbidden || (activeView && activeView.id === 'view-dashboard' && !allowedViews.includes('view-dashboard'))) {
+        console.log("Redirecting to authorized view...", allowedViews);
+        if (allowedViews.length > 0) {
+            const firstTarget = allowedViews[0];
+            const btn = document.querySelector(`.nav-btn[data-target="${firstTarget}"]`);
+            if (btn) {
+                btn.click();
+            } else {
+                // Fallback if button not found for some reason
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                const targetView = document.getElementById(firstTarget);
+                if (targetView) targetView.classList.add('active');
+            }
+        }
     }
 
     return roles;
@@ -4814,8 +5003,8 @@ if (saveSettingsBtn) {
                 if (existingPreview) settings.sizeGuideUrl = existingPreview.href;
             }
 
-            // Use a fixed ID 'current_season' for easy retrieval
-            await setDoc(doc(db, "settings", "current_season"), settings);
+            // Use updateDoc to avoid overwriting extra fields like calendarConfig
+            await updateDoc(doc(db, "settings", "current_season"), settings);
 
             // Clear file input
             document.getElementById('setting-size-guide').value = '';
@@ -5080,6 +5269,7 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
             endTime: document.getElementById('match-end-time').value,
             type: document.getElementById('match-type').value,
             category: document.getElementById('match-category').value,
+            teamId: document.getElementById('match-team').value,
             opponent: document.getElementById('match-opponent').value,
             fieldIds: selectedMatchFields, // Array of field IDs
             fields: fieldNames, // Comma-separated field names for display
@@ -5151,7 +5341,12 @@ async function loadMatches(skipFetch = false) {
         // by the centralized onSnapshot listeners in initRealTimeListeners.
 
         const activeFields = Object.values(dataCache.fields).filter(f => f.active !== false && !f.isCombined);
-        activeFields.sort((a, b) => a.name.localeCompare(b.name));
+        activeFields.sort((a, b) => {
+            const orderA = (a.order !== undefined && a.order !== null && a.order !== '') ? parseInt(a.order) : 9999;
+            const orderB = (b.order !== undefined && b.order !== null && b.order !== '') ? parseInt(b.order) : 9999;
+            if (orderA !== orderB) return orderA - orderB;
+            return (a.name || '').localeCompare(b.name || '');
+        });
 
         if (activeFields.length === 0) {
             calEl.innerHTML = '<div class="alert alert-warning">Veuillez configurer au moins un terrain actif pour voir le calendrier.</div>';
@@ -5181,21 +5376,41 @@ async function loadMatches(skipFetch = false) {
             const card = createCard(null, `${data.category} vs ${data.opponent}`, subtitle, data.id, 'edit-match', 'delete-match', 'fa-futbol');
             card.classList.add('match-card');
 
-            // Add Dispo button in list view for referees
-            if (window.currentUserRefereeId) {
-                const isAvailable = (data.availableRefs || []).includes(window.currentUserRefereeId);
+            // Add Availability buttons in list view for referees (Hidden for Managers)
+            if (window.currentUserRefereeId && window.currentUserMainRole !== 'gestionnaire') {
+                const availableRefs = data.availableRefs || [];
+                const unavailableRefs = data.unavailableRefs || [];
+                const isAvailable = availableRefs.includes(window.currentUserRefereeId);
+                const isUnavailable = unavailableRefs.includes(window.currentUserRefereeId);
+
+                const btnContainer = document.createElement('div');
+                btnContainer.style.cssText = 'display:flex; gap:10px; margin-top:10px;';
+
                 const dispoBtn = document.createElement('button');
                 dispoBtn.className = `btn-dispo ${isAvailable ? 'btn-dispo-active' : 'btn-dispo-inactive'}`;
-                dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Dispo' : 'Dispo ?';
-                dispoBtn.style.cssText = 'width: 100%; margin-top: 10px; padding: 8px; font-size: 0.8rem;';
+                dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Disponible' : 'Disponible';
+                dispoBtn.style.cssText = 'flex:1; padding: 8px; font-size: 0.8rem;';
                 dispoBtn.onclick = (e) => {
                     e.stopPropagation();
-                    toggleMatchAvailability(data.id);
+                    toggleMatchAvailability(data.id, 'available');
                 };
-                // Safety check: only append if .card-body exists, otherwise append to card
+
+                const unavailBtn = document.createElement('button');
+                unavailBtn.className = `btn-dispo ${isUnavailable ? 'btn-dispo-unavail-active' : 'btn-dispo-inactive'}`;
+                unavailBtn.innerHTML = isUnavailable ? '<i class="fas fa-times"></i> Pas dispo' : 'Pas dispo';
+                unavailBtn.style.cssText = 'flex:1; padding: 8px; font-size: 0.8rem;';
+                if (isUnavailable) unavailBtn.style.background = 'var(--danger)';
+                unavailBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    toggleMatchAvailability(data.id, 'unavailable');
+                };
+
+                btnContainer.appendChild(dispoBtn);
+                btnContainer.appendChild(unavailBtn);
+
                 const body = card.querySelector('.card-body');
-                if (body) body.appendChild(dispoBtn);
-                else card.appendChild(dispoBtn);
+                if (body) body.appendChild(btnContainer);
+                else card.appendChild(btnContainer);
             }
 
             list.appendChild(card);
@@ -5237,7 +5452,7 @@ function renderCustomCalendarGrid(container, fields) {
         </div>
         <h3 style="margin:0; text-transform: capitalize;">Semaine du ${weekRange.start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</h3>
         <div>
-            ${!window.currentUserRefereeId ? '<button class="btn-action" id="cal-settings-btn"><i class="fas fa-cog"></i> Config</button>' : ''}
+            ${(window.currentUserMainRole === 'super-admin' || (window.currentPermissions && window.currentPermissions['Matchs'] === 'edit')) ? '<button class="btn-action" id="cal-settings-btn"><i class="fas fa-cog"></i> Config</button>' : ''}
         </div>
     `;
     container.appendChild(nav);
@@ -5386,23 +5601,41 @@ function renderDaySection(container, date, fields) {
 
                     if (!isGhostConflict) {
                         // If simple referee or arbitre role, show availability toggle
-                        if (window.currentUserRefereeId || window.currentUserMainRole === 'arbitre-general') {
-                            const isAvailable = (match.availableRefs || []).includes(window.currentUserRefereeId);
+                        if ((window.currentUserRefereeId || window.currentUserMainRole === 'arbitre-general') && window.currentUserMainRole !== 'gestionnaire') {
+                            const availableRefs = match.availableRefs || [];
+                            const unavailableRefs = match.unavailableRefs || [];
+                            const isAvailable = availableRefs.includes(window.currentUserRefereeId);
+                            const isUnavailable = unavailableRefs.includes(window.currentUserRefereeId);
+
+                            const btnContainer = document.createElement('div');
+                            btnContainer.style.cssText = 'display:flex; gap:4px; margin-top:auto; padding:4px; z-index:20;';
+
                             const dispoBtn = document.createElement('button');
                             dispoBtn.className = `btn-dispo ${isAvailable ? 'btn-dispo-active' : 'btn-dispo-inactive'}`;
-                            dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Dispo' : 'Dispo ?';
-                            dispoBtn.title = "Indiquer ma disponibilité pour ce match";
-                            dispoBtn.style.cssText = 'margin-top:auto; font-size:0.7rem; padding:6px; z-index:20;';
-
+                            dispoBtn.innerHTML = isAvailable ? '<i class="fas fa-check"></i> Disponible' : 'Disponible';
+                            dispoBtn.title = "Je suis disponible";
+                            dispoBtn.style.cssText = 'flex:1; font-size:0.65rem; padding:4px;';
                             dispoBtn.onclick = (e) => {
                                 e.stopPropagation();
-                                if (window.currentUserRefereeId) {
-                                    toggleMatchAvailability(match.id);
-                                } else {
-                                    showAlert("Votre compte administrateur n'est pas lié à un profil d'arbitre.", "warning");
-                                }
+                                if (window.currentUserRefereeId) toggleMatchAvailability(match.id, 'available');
+                                else showAlert("Votre compte n'est pas lié à un profil d'arbitre.", "warning");
                             };
-                            evt.appendChild(dispoBtn);
+
+                            const unavailBtn = document.createElement('button');
+                            unavailBtn.className = `btn-dispo ${isUnavailable ? 'btn-dispo-unavail-active' : 'btn-dispo-inactive'}`;
+                            unavailBtn.innerHTML = isUnavailable ? '<i class="fas fa-times"></i> Pas dispo' : 'Pas dispo';
+                            unavailBtn.title = "Je ne suis pas disponible";
+                            unavailBtn.style.cssText = 'flex:1; font-size:0.65rem; padding:4px;';
+                            if (isUnavailable) unavailBtn.style.background = 'var(--danger)';
+                            unavailBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                if (window.currentUserRefereeId) toggleMatchAvailability(match.id, 'unavailable');
+                                else showAlert("Votre compte n'est pas lié à un profil d'arbitre.", "warning");
+                            };
+
+                            btnContainer.appendChild(dispoBtn);
+                            btnContainer.appendChild(unavailBtn);
+                            evt.appendChild(btnContainer);
                         }
 
                         evt.onclick = (e) => {
@@ -5412,11 +5645,16 @@ function renderDaySection(container, date, fields) {
                                 return;
                             }
                             // Redirect to toggle availability for referees, open modal for others
-                            if (window.currentUserRefereeId || window.currentUserMainRole === 'arbitre-general') {
-                                if (window.currentUserRefereeId) {
-                                    toggleMatchAvailability(match.id);
-                                }
-                                // If arbitre but not linked to a referee profile, just block modal
+                            if ((window.currentUserRefereeId || window.currentUserMainRole === 'arbitre-general') && window.currentUserMainRole !== 'gestionnaire') {
+                                // For referees, clicking the card itself could toggle availability, 
+                                // but now that we have two buttons, maybe we should just open the modal if they are arbitre-general 
+                                // OR if they want to see details. 
+                                // Actually, user said "Ajoute un Bouton Indisponible dans le calendrier pour les matchs".
+                                // Let's keep it consistent: buttons for quick toggle, card click for detail?
+                                // Previous logic was toggle on card click. Let's stick to 'available' toggle as default if they click card?
+                                // Better: for referees, maybe open the detail modal anyway since they can't edit but can see who else is there?
+                                // User said: "clicking on a match in the calendar opens the match details popup" in a previous part of the summary.
+                                openMatchModal(match);
                             } else {
                                 openMatchModal(match);
                             }
@@ -5491,130 +5729,134 @@ function setupMatchInteractions(el, match, date) {
         return; // No drag/resize for referees
     }
 
-    let isDragging = false;
-    let isResizing = false;
-    let hasMoved = false;
-    let startY, startH, initialX, initialY;
-
     el.onmousedown = (e) => {
-        if (e.target.classList.contains('resize-handle')) {
-            isResizing = true;
-            startY = e.pageY;
-            startH = el.offsetHeight;
-            e.preventDefault();
-            e.stopPropagation();
-        } else if (e.target.tagName !== 'BUTTON') {
-            isDragging = true;
-            hasMoved = false;
-            initialX = e.clientX;
-            initialY = e.clientY;
-            // Don't add dragging class immediately to avoid visual jump on simple click
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    };
+        // Prevent interaction if clicking buttons/inputs inside
+        if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
 
-    window.addEventListener('mousemove', (e) => {
-        if (isResizing) {
-            const diff = e.pageY - startY;
-            if (Math.abs(diff) > 3) hasMoved = true;
-            const slotPixels = el.parentElement.offsetHeight || 35;
-            const newH = startH + diff;
-            const snappedH = Math.max(slotPixels, Math.round(newH / slotPixels) * slotPixels);
-            el.style.height = (snappedH - 4) + 'px';
-        } else if (isDragging) {
-            const dx = e.clientX - initialX;
-            const dy = e.clientY - initialY;
+        let isResizing = e.target.classList.contains('resize-handle');
+        let isDragging = !isResizing;
 
-            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-                if (!hasMoved) {
-                    hasMoved = true;
-                    el.classList.add('dragging');
-                }
-                el.style.transform = `translate(${dx}px, ${dy}px)`;
-                el.style.zIndex = "1000";
+        let startY = e.pageY;
+        let startH = el.offsetHeight;
+        let initialX = e.clientX;
+        let initialY = e.clientY;
+        let hasMoved = false;
 
-                // Visual Cue: Highlight target cell
-                el.style.pointerEvents = 'none';
-                const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-                el.style.pointerEvents = '';
+        e.preventDefault();
+        e.stopPropagation();
 
-                // Remove previous highlights
-                document.querySelectorAll('.grid-cell.drop-target').forEach(c => c.classList.remove('drop-target'));
+        const onMouseMove = (ev) => {
+            if (isResizing) {
+                const diff = ev.pageY - startY;
+                if (Math.abs(diff) > 3) hasMoved = true;
+                const slotPixels = el.parentElement.offsetHeight || 35; // Default slot height
 
-                const cell = dropTarget?.closest('.grid-cell');
-                if (cell) {
-                    cell.classList.add('drop-target');
+                const newH = startH + diff;
+                const snappedH = Math.max(slotPixels, Math.round(newH / slotPixels) * slotPixels);
+                el.style.height = (snappedH - 4) + 'px';
+            } else if (isDragging) {
+                const dx = ev.clientX - initialX;
+                const dy = ev.clientY - initialY;
+                if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                    if (!hasMoved) {
+                        hasMoved = true;
+                        el.classList.add('dragging');
+                        el.style.zIndex = "1000";
+                    }
+                    el.style.transform = `translate(${dx}px, ${dy}px)`;
+
+                    // Visual cue logic
+                    el.style.pointerEvents = 'none'; // allowing to see what's under
+                    const dropTarget = document.elementFromPoint(ev.clientX, ev.clientY);
+                    el.style.pointerEvents = '';
+
+                    document.querySelectorAll('.grid-cell.drop-target').forEach(c => c.classList.remove('drop-target'));
+                    const cell = dropTarget?.closest('.grid-cell');
+                    if (cell) cell.classList.add('drop-target');
                 }
             }
-        }
-    });
+        };
 
-    window.addEventListener('mouseup', async (e) => {
-        if (isResizing) {
-            isResizing = false;
-            if (hasMoved) el.dataset.preventClick = 'true';
+        const onMouseUp = async (ev) => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
 
-            if (hasMoved) {
-                const settings = window.calendarSettings || { slotDuration: 15 };
-                const slotPixels = el.parentElement.offsetHeight || 35;
-                const newDurationSlots = Math.round(el.offsetHeight / slotPixels);
-                const durationMins = newDurationSlots * settings.slotDuration;
-                const startMins = timeToMinutes(match.time);
-                const newEndTime = minutesToTime(startMins + durationMins);
-
-                if (newEndTime !== match.endTime) {
-                    match.endTime = newEndTime;
-                    loadMatches(true);
-                    await updateDoc(doc(db, "matches", match.id), { endTime: newEndTime });
-                }
-            }
-        } else if (isDragging) {
-            isDragging = false;
-            if (hasMoved) el.dataset.preventClick = 'true';
+            // Clean up visual states
+            document.querySelectorAll('.grid-cell.drop-target').forEach(c => c.classList.remove('drop-target'));
             el.classList.remove('dragging');
             el.style.transform = '';
-            el.style.zIndex = "";
+            el.style.zIndex = '';
 
             if (hasMoved) {
-                // Remove highlights
-                document.querySelectorAll('.grid-cell.drop-target').forEach(c => c.classList.remove('drop-target'));
+                el.dataset.preventClick = 'true'; // Prevent modal opening on click immediately after release
 
-                // Find cell under mouse
-                el.style.pointerEvents = 'none';
-                const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-                el.style.pointerEvents = '';
+                if (isResizing) {
+                    const settings = window.calendarSettings || { slotDuration: 15 };
+                    const slotPixels = el.parentElement.offsetHeight || 35;
+                    const newDurationSlots = Math.round(el.offsetHeight / slotPixels);
+                    const durationMins = newDurationSlots * settings.slotDuration;
+                    const startMins = timeToMinutes(match.time);
+                    const newEndTime = minutesToTime(startMins + durationMins);
 
-                const cell = dropTarget?.closest('.grid-cell');
-                if (cell) {
-                    const newTime = cell.dataset.time;
-                    const newFieldId = cell.dataset.fieldId;
-                    const newDate = cell.dataset.date;
-
-                    if (newTime !== match.time || !match.fieldIds.includes(newFieldId) || newDate !== match.date) {
-                        const durationMins = timeToMinutes(match.endTime || match.time) - timeToMinutes(match.time);
-                        const newStartMins = timeToMinutes(newTime);
-                        const newEndTimeStr = minutesToTime(newStartMins + Math.max(15, durationMins));
-
-                        // Optimistic UI update
-                        match.time = newTime;
-                        match.endTime = newEndTimeStr;
-                        match.date = newDate;
-                        match.fieldIds = [newFieldId];
+                    if (newEndTime !== match.endTime) {
+                        // Update match locally
+                        match.endTime = newEndTime;
                         loadMatches(true);
 
-                        // For now, replace fieldIds if moved (simplification)
-                        await updateDoc(doc(db, "matches", match.id), {
-                            time: newTime,
-                            endTime: newEndTimeStr,
-                            date: newDate,
-                            fieldIds: [newFieldId]
-                        });
+                        try {
+                            await updateDoc(doc(db, "matches", match.id), { endTime: newEndTime });
+                        } catch (e) {
+                            console.error("Resize update failed", e);
+                            showAlert("Erreur lors de la mise à jour de la durée", "error");
+                        }
+                    }
+
+                } else if (isDragging) {
+                    el.style.pointerEvents = 'none';
+                    const dropTarget = document.elementFromPoint(ev.clientX, ev.clientY);
+                    el.style.pointerEvents = '';
+                    const cell = dropTarget?.closest('.grid-cell');
+
+                    if (cell) {
+                        const newTime = cell.dataset.time; // "HH:MM"
+                        const newFieldId = cell.dataset.fieldId;
+                        const newDate = cell.dataset.date;
+
+                        if (newTime && newFieldId && (newTime !== match.time || !match.fieldIds.includes(newFieldId))) {
+                            // Calc new end time to preserve duration
+                            const oldDuration = timeToMinutes(match.endTime || match.time) - timeToMinutes(match.time);
+                            const safeDuration = oldDuration > 0 ? oldDuration : (window.calendarSettings?.defaultDuration || 60);
+
+                            const newStartMins = timeToMinutes(newTime);
+                            const newEndTimeStr = minutesToTime(newStartMins + safeDuration);
+
+                            match.time = newTime;
+                            match.endTime = newEndTimeStr;
+                            if (newDate) match.date = newDate;
+                            match.fieldIds = [newFieldId];
+
+                            loadMatches(true);
+
+                            try {
+                                await updateDoc(doc(db, "matches", match.id), {
+                                    time: newTime,
+                                    endTime: newEndTimeStr,
+                                    date: newDate || match.date,
+                                    fieldIds: [newFieldId]
+                                });
+                            } catch (e) {
+                                console.error("Move update failed", e);
+                                showAlert("Erreur lors du déplacement du match", "error");
+                            }
+                        }
                     }
                 }
             }
-        }
-    });
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    };
 }
 
 function openMatchModal(data = null, date = null, time = null, fieldId = null) {
@@ -5628,6 +5870,8 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
         btnDelete.style.display = data ? 'block' : 'none';
     }
 
+    const isCoach = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId;
+
     if (data) {
         document.getElementById('match-date').value = data.date;
         document.getElementById('match-time').value = data.time;
@@ -5640,7 +5884,21 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
         document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
         document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
         document.getElementById('match-played').checked = data.played || false;
+
+        // Populate Team Select
+        const teamSelect = document.getElementById('match-team');
+        if (teamSelect) {
+            teamSelect.innerHTML = '<option value="">-- Non assigné --</option>';
+            Object.values(dataCache.teams || {}).sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name;
+                if (t.id === data.teamId) opt.selected = true;
+                teamSelect.appendChild(opt);
+            });
+        }
     } else {
+        // ... (existing new match logic)
         document.getElementById('match-date').value = date || '';
         document.getElementById('match-type').value = 'match';
         document.getElementById('match-time').value = time || '18:00';
@@ -5658,9 +5916,55 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
         }
 
         selectedMatchFields = fieldId ? [fieldId] : [];
+
+        // Populate Team Select for new match
+        const teamSelect = document.getElementById('match-team');
+        if (teamSelect) {
+            teamSelect.innerHTML = '<option value="">-- Non assigné --</option>';
+            Object.values(dataCache.teams || {}).sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name;
+                teamSelect.appendChild(opt);
+            });
+        }
+    }
+
+    // Coach Restrictions for Match Modal
+    if (isCoach) {
+        document.getElementById('match-type').disabled = true;
+        document.getElementById('match-date').disabled = true;
+        document.getElementById('match-time').disabled = true;
+        document.getElementById('match-end-time').disabled = true;
+        document.getElementById('match-category').disabled = true;
+        document.getElementById('match-team').disabled = true;
+        document.getElementById('match-opponent').disabled = true;
+        document.getElementById('match-played').disabled = true;
+        document.getElementById('btn-add-match-field').style.display = 'none';
+
+        // Hide Save/Delete
+        if (document.querySelector('#match-modal .btn-save')) document.querySelector('#match-modal .btn-save').style.display = 'none';
+        if (document.getElementById('btn-delete-match')) document.getElementById('btn-delete-match').style.display = 'none';
+    } else {
+        document.getElementById('match-type').disabled = false;
+        document.getElementById('match-date').disabled = false;
+        document.getElementById('match-time').disabled = false;
+        document.getElementById('match-end-time').disabled = false;
+        document.getElementById('match-category').disabled = false;
+        document.getElementById('match-team').disabled = false;
+        document.getElementById('match-opponent').disabled = false;
+        document.getElementById('match-played').disabled = false;
+        document.getElementById('btn-add-match-field').style.display = 'block';
+
+        if (document.querySelector('#match-modal .btn-save')) document.querySelector('#match-modal .btn-save').style.display = 'block';
+        // Delete button handle already by if(data) logic above but let's be safe
+        if (data && document.getElementById('btn-delete-match')) document.getElementById('btn-delete-match').style.display = 'block';
     }
 
     loadRefereesIntoSelects(data).then(() => {
+        // Render Availability
+        renderRefereeAvailability(data ? data.date : (date || document.getElementById('match-date').value));
+
         loadFieldsIntoAddSelect().then(() => {
             renderMatchFieldTags();
             document.getElementById('match-modal').classList.add('active');
@@ -5679,7 +5983,7 @@ function getWeekRange(d) {
     return { start, end };
 }
 
-async function toggleMatchAvailability(matchId) {
+async function toggleMatchAvailability(matchId, status = 'available') {
     if (!window.currentUserRefereeId) return;
 
     try {
@@ -5689,16 +5993,29 @@ async function toggleMatchAvailability(matchId) {
 
         const data = matchSnap.data();
         let availableRefs = data.availableRefs || [];
+        let unavailableRefs = data.unavailableRefs || [];
 
-        if (availableRefs.includes(window.currentUserRefereeId)) {
-            // Remove
-            availableRefs = availableRefs.filter(id => id !== window.currentUserRefereeId);
-        } else {
-            // Add
-            availableRefs.push(window.currentUserRefereeId);
+        if (status === 'available') {
+            if (availableRefs.includes(window.currentUserRefereeId)) {
+                // Already marked as available, just remove it (toggle off)
+                availableRefs = availableRefs.filter(id => id !== window.currentUserRefereeId);
+            } else {
+                // Mark as available and remove from unavailable if present
+                availableRefs.push(window.currentUserRefereeId);
+                unavailableRefs = unavailableRefs.filter(id => id !== window.currentUserRefereeId);
+            }
+        } else if (status === 'unavailable') {
+            if (unavailableRefs.includes(window.currentUserRefereeId)) {
+                // Already marked as unavailable, toggle off
+                unavailableRefs = unavailableRefs.filter(id => id !== window.currentUserRefereeId);
+            } else {
+                // Mark as unavailable and remove from available if present
+                unavailableRefs.push(window.currentUserRefereeId);
+                availableRefs = availableRefs.filter(id => id !== window.currentUserRefereeId);
+            }
         }
 
-        await updateDoc(matchRef, { availableRefs });
+        await updateDoc(matchRef, { availableRefs, unavailableRefs });
         loadMatches(); // Refresh UI
     } catch (e) {
         console.error("Error toggling availability:", e);
@@ -5746,6 +6063,7 @@ calendarSettingsForm?.addEventListener('submit', async (e) => {
         console.log("Calendar settings saved to Firestore");
     } catch (err) {
         console.error("Error saving calendar settings:", err);
+        showAlert("Erreur lors de l'enregistrement des paramètres: " + err.message, "error");
     }
 
     calendarSettingsModal.classList.remove('active');
@@ -5852,6 +6170,111 @@ if (seasonModal) {
             document.getElementById(target).classList.add('active');
         });
     });
+}
+
+function renderRefereeAvailability(matchDate) {
+    const container = document.getElementById('match-referee-availability');
+    if (!container) return;
+
+    container.innerHTML = '<p style="color:#888; font-style:italic;">Chargement des disponibilités...</p>';
+
+    if (!matchDate) {
+        container.innerHTML = '<p style="color:#888; font-style:italic;">Veuillez sélectionner une date pour voir les disponibilités.</p>';
+        return;
+    }
+
+    try {
+        const referees = Object.values(dataCache.referees || {}).filter(r => r.visible !== false);
+
+        const matchId = document.getElementById('match-id').value;
+        const matchData = matchId ? (dataCache.matches && dataCache.matches[matchId]) : null;
+        const explicitlyAvailableIds = matchData ? (matchData.availableRefs || []) : [];
+        const explicitlyUnavailableIds = matchData ? (matchData.unavailableRefs || []) : [];
+
+        const explicitlyAvailable = [];
+        const implicitlyAvailable = [];
+        const unavailable = [];
+
+        referees.forEach(ref => {
+            const generalUnavails = ref.unavails || '';
+            const isGenerallyUnavailable = generalUnavails.includes(matchDate);
+            const isExplicitlyUnavailable = explicitlyUnavailableIds.includes(ref.id);
+            const isExplicitlyAvailable = explicitlyAvailableIds.includes(ref.id);
+
+            if (isGenerallyUnavailable || isExplicitlyUnavailable) {
+                unavailable.push(ref);
+            } else if (isExplicitlyAvailable) {
+                explicitlyAvailable.push(ref);
+            } else {
+                implicitlyAvailable.push(ref);
+            }
+        });
+
+        // Sort each list by name
+        const sortFn = (a, b) => (a.name || '').localeCompare(b.name || '');
+        explicitlyAvailable.sort(sortFn);
+        implicitlyAvailable.sort(sortFn);
+        unavailable.sort(sortFn);
+
+        let html = '';
+
+        // Render in 3 Columns
+        html = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+            <!-- Column 1: Explicitly Available -->
+            <div style="background: #f0fff4; padding: 10px; border-radius: 8px; border: 1px solid #c6f6d5;">
+                <h5 style="margin: 0 0 10px 0; color: #2f855a; font-size: 0.9rem; border-bottom: 1px solid #c6f6d5; padding-bottom: 5px;">
+                    <i class="fas fa-check-circle"></i> Disponibles
+                    <span style="font-size:0.8em; opacity:0.8;">(${explicitlyAvailable.length})</span>
+                </h5>
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    ${explicitlyAvailable.length > 0 ? explicitlyAvailable.map(ref =>
+            `<div style="font-size: 0.85rem; padding: 4px 8px; background: white; border-radius: 4px; border: 1px solid #e2e8f0; display:flex; align-items:center; gap:5px;">
+                            <div style="width:6px; height:6px; background:#48bb78; border-radius:50%;"></div>
+                            ${ref.name}
+                        </div>`
+        ).join('') : '<span style="font-size:0.8rem; color:#718096; font-style:italic;">Aucun arbitre confirmé.</span>'}
+                </div>
+            </div>
+
+            <!-- Column 2: Implicitly Available (No indication) -->
+            <div style="background: #ebf8ff; padding: 10px; border-radius: 8px; border: 1px solid #bee3f8;">
+                <h5 style="margin: 0 0 10px 0; color: #2b6cb0; font-size: 0.9rem; border-bottom: 1px solid #bee3f8; padding-bottom: 5px;">
+                    <i class="fas fa-question-circle"></i> Pas de réponse
+                    <span style="font-size:0.8em; opacity:0.8;">(${implicitlyAvailable.length})</span>
+                </h5>
+                 <div style="display: flex; flex-direction: column; gap: 5px; max-height: 300px; overflow-y: auto;">
+                    ${implicitlyAvailable.length > 0 ? implicitlyAvailable.map(ref =>
+            `<div style="font-size: 0.85rem; padding: 4px 8px; background: white; border-radius: 4px; border: 1px solid #e2e8f0; color:#4a5568;">
+                            ${ref.name}
+                        </div>`
+        ).join('') : '<span style="font-size:0.8rem; color:#718096; font-style:italic;">Tous ont répondu.</span>'}
+                </div>
+            </div>
+
+            <!-- Column 3: Unavailable -->
+            <div style="background: #fff5f5; padding: 10px; border-radius: 8px; border: 1px solid #fed7d7;">
+                <h5 style="margin: 0 0 10px 0; color: #c53030; font-size: 0.9rem; border-bottom: 1px solid #fed7d7; padding-bottom: 5px;">
+                    <i class="fas fa-times-circle"></i> Indisponibles
+                     <span style="font-size:0.8em; opacity:0.8;">(${unavailable.length})</span>
+                </h5>
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    ${unavailable.length > 0 ? unavailable.map(ref =>
+            `<div style="font-size: 0.85rem; padding: 4px 8px; background: white; border-radius: 4px; border: 1px solid #e2e8f0; color:#e53e3e; text-decoration: line-through;">
+                            ${ref.name}
+                        </div>`
+        ).join('') : '<span style="font-size:0.8rem; color:#718096; font-style:italic;">Aucune indisponibilité.</span>'}
+                </div>
+            </div>
+        </div>
+        `;
+
+        container.innerHTML = html;
+
+    } catch (e) {
+        console.error("Error rendering referee availability:", e);
+        container.innerHTML = '<p style="color:red">Erreur lors du calcul des disponibilités.</p>';
+    }
 }
 
 function resetSeasonModalTabs() {
@@ -6106,6 +6529,7 @@ if (openFieldModalBtn) {
     openFieldModalBtn.addEventListener('click', () => {
         document.getElementById('field-form').reset();
         document.getElementById('field-id').value = '';
+        document.getElementById('field-order').value = 99;
 
         // Reset combined fields UI
         const combinedCheckbox = document.getElementById('field-is-combined');
@@ -6178,6 +6602,7 @@ document.getElementById('field-form')?.addEventListener('submit', async (e) => {
         name: document.getElementById('field-name').value,
         location: document.getElementById('field-location').value,
         type: document.getElementById('field-type').value,
+        order: parseInt(document.getElementById('field-order').value) || 99,
         isCombined: isCombined,
         constituentFieldIds: constituentFieldIds
     };
@@ -6212,7 +6637,12 @@ async function loadFields() {
             return;
         }
 
-        fields.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(data => {
+        fields.sort((a, b) => {
+            const orderA = a.order !== undefined ? a.order : 99;
+            const orderB = b.order !== undefined ? b.order : 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return (a.name || '').localeCompare(b.name || '');
+        }).forEach(data => {
             const id = data.id;
             const isCombined = data.isCombined === true;
             const subtitle = `
@@ -6229,6 +6659,7 @@ async function loadFields() {
             document.getElementById('field-name').value = data.name;
             document.getElementById('field-location').value = data.location || '';
             document.getElementById('field-type').value = data.type || 'gazon';
+            document.getElementById('field-order').value = data.order || 99;
 
             const isCombined = data.isCombined === true;
             const combinedCheckbox = document.getElementById('field-is-combined');

@@ -5,16 +5,40 @@ const { Resend } = require("resend");
 const cors = require("cors")({ origin: true });
 
 admin.initializeApp();
-const db = admin.firestore();
 
-// Initialize Resend
+// --- MULTI-ENVIRONMENT CONFIG ---
+const ENV_CONFIG = {
+    staging: {
+        firestoreDb: "(default)",
+        stripeSecretKey: process.env.STRIPE_SECRET_KEY || 'YOUR_STRIPE_TEST_KEY',
+        resendApiKey: process.env.RESEND_API_KEY || 'YOUR_RESEND_KEY'
+    },
+    production: {
+        firestoreDb: "prod",
+        stripeSecretKey: process.env.STRIPE_SECRET_KEY_PROD || process.env.STRIPE_SECRET_KEY,
+        resendApiKey: process.env.RESEND_API_KEY_PROD || process.env.RESEND_API_KEY
+    }
+};
+
+function getContext(req) {
+    const env = req && req.headers['x-environment'] === 'production' ? 'production' : 'staging';
+    const config = ENV_CONFIG[env];
+
+    return {
+        env,
+        db: admin.firestore(config.firestoreDb),
+        stripe: require('stripe')(config.stripeSecretKey),
+        resend: new Resend(config.resendApiKey)
+    };
+}
+
+// Default instances for legacy/internal use (defaults to staging)
+const db = admin.firestore();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'YOUR_STRIPE_KEY');
 const resend = new Resend(process.env.RESEND_API_KEY || 'YOUR_RESEND_KEY');
 
-// Initialize Stripe (Test Key)
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'YOUR_STRIPE_KEY');
-
 // --- AUTH HELPER: VERIFY ADMIN ---
-async function authenticateAdmin(req) {
+async function authenticateAdmin(req, db) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
         throw new Error("Unauthorized: Missing or invalid token");
@@ -34,7 +58,7 @@ async function authenticateAdmin(req) {
 }
 
 // --- STRIPE HELPER: CREATE/GET CUSTOMER ---
-async function getOrCreateStripeCustomer(email, name) {
+async function getOrCreateStripeCustomer(stripe, email, name) {
     const existing = await stripe.customers.list({ email: email, limit: 1 });
     if (existing.data.length > 0) {
         return existing.data[0].id;
@@ -50,13 +74,14 @@ async function getOrCreateStripeCustomer(email, name) {
 exports.createRegistrationPayment = onRequest({ cors: true }, async (req, res) => {
     try {
         const { paymentMethodId, amount, email, parentName, installments, description, sessionId } = req.body;
+        const { db, stripe } = getContext(req);
 
         if (!amount || !email || !paymentMethodId) {
             return res.status(400).json({ error: "Missing required fields (amount, email, paymentMethodId)" });
         }
 
         // 1. Get Customer
-        const customerId = await getOrCreateStripeCustomer(email, parentName || "Parent Celtics");
+        const customerId = await getOrCreateStripeCustomer(stripe, email, parentName || "Parent Celtics");
 
         // 2. Attach Payment Method to Customer (Required for future charges)
         await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
@@ -260,6 +285,13 @@ exports.createRegistrationPayment = onRequest({ cors: true }, async (req, res) =
 // --- SCHEDULED FUNCTION: PROCESS FUTURE PAYMENTS ---
 // Runs every day to check for due payments and generate invoices
 exports.processScheduledPayments = onSchedule("every 24 hours", async (event) => {
+    for (const env of ['staging', 'production']) {
+        const { db, stripe } = getContext({ headers: { 'x-environment': env } });
+        await runScheduledPaymentsForEnv(db, stripe);
+    }
+});
+
+async function runScheduledPaymentsForEnv(db, stripe) {
     const now = admin.firestore.Timestamp.now();
     const paymentsRef = db.collection("scheduled_payments");
 
@@ -268,7 +300,6 @@ exports.processScheduledPayments = onSchedule("every 24 hours", async (event) =>
     const snapshot = await q.get();
 
     if (snapshot.empty) {
-        console.log("No scheduled payments due.");
         return;
     }
 
@@ -321,16 +352,17 @@ exports.processScheduledPayments = onSchedule("every 24 hours", async (event) =>
     });
 
     await Promise.all(promises);
-});
+}
 
 // --- STRIPE LOGIC: MANUAL INVOICE ---
 exports.createManualInvoice = onRequest({ cors: true }, async (req, res) => {
     try {
-        await authenticateAdmin(req);
+        const { db, stripe } = getContext(req);
+        await authenticateAdmin(req, db);
         const { email, name, items, dueDate } = req.body;
         // items = [{ description, amount }]
 
-        const customerId = await getOrCreateStripeCustomer(email, name);
+        const customerId = await getOrCreateStripeCustomer(stripe, email, name);
 
         // 1. Create Invoice (Draft)
         const invoice = await stripe.invoices.create({
@@ -366,15 +398,17 @@ exports.createManualInvoice = onRequest({ cors: true }, async (req, res) => {
 
 // --- STRIPE WEBHOOK (Sync to Firestore) ---
 exports.stripeWebhook = onRequest(async (req, res) => {
-    const endpointSecret = "whsec_YOUR_STRIPE_WEBHOOK_SECRET"; // Configure this in specific deployment
+    const env = req.query.env === 'production' ? 'production' : 'staging';
+    const { db, stripe } = getContext({ headers: { 'x-environment': env } });
+
     const sig = req.headers['stripe-signature'];
+    const endpointSecret = env === 'production' ? process.env.STRIPE_WEBHOOK_SECRET_PROD : process.env.STRIPE_WEBHOOK_SECRET;
 
     let event;
 
     try {
         if (!sig || !endpointSecret || endpointSecret === "whsec_YOUR_STRIPE_WEBHOOK_SECRET") {
             // If secret not configured, we allow body directly ONLY in development/testing
-            // In production, this SHOULD fail if sig is missing
             event = req.body;
         } else {
             event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
@@ -479,7 +513,8 @@ const getEmailTemplate = (content, title = "Celtics de l'Ouest") => {
 // --- HTTP FUNCTION: SEND CAMPAIGN (Immediate or Test) ---
 exports.sendCampaign = onRequest({ cors: true }, async (req, res) => {
     try {
-        await authenticateAdmin(req);
+        const { db, resend } = getContext(req);
+        await authenticateAdmin(req, db);
         const { campaignId, testEmail, testContent, testSubject } = req.body;
 
         // CASE 1: TEST EMAIL
@@ -596,6 +631,13 @@ exports.sendCampaign = onRequest({ cors: true }, async (req, res) => {
 // --- SCHEDULED FUNCTION: PROCESS CAMPAIGNS ---
 // Runs every 15 minutes to check for scheduled campaigns
 exports.processScheduledCampaigns = onSchedule("every 15 minutes", async (event) => {
+    for (const env of ['staging', 'production']) {
+        const { db, resend } = getContext({ headers: { 'x-environment': env } });
+        await runScheduledCampaignsForEnv(db, resend);
+    }
+});
+
+async function runScheduledCampaignsForEnv(db, resend) {
     const now = admin.firestore.Timestamp.now();
     const campaignsRef = db.collection("campaigns");
 
@@ -681,7 +723,7 @@ exports.processScheduledCampaigns = onSchedule("every 15 minutes", async (event)
     });
 
     await Promise.all(promises);
-});
+}
 
 const { Webhook } = require("svix");
 
@@ -689,7 +731,10 @@ const { Webhook } = require("svix");
 
 // --- WEBHOOK: RESEND EVENTS ---
 exports.resendWebhook = onRequest(async (req, res) => {
-    const secret = "whsec_YOUR_SIGNING_SECRET"; // TODO: Use process.env.WEBHOOK_SECRET
+    const env = req.query.env === 'production' ? 'production' : 'staging';
+    const { db } = getContext({ headers: { 'x-environment': env } });
+
+    const secret = env === 'production' ? process.env.RESEND_WEBHOOK_SECRET_PROD : process.env.RESEND_WEBHOOK_SECRET;
 
     // Verify Signature
     if (secret && secret !== "whsec_YOUR_SIGNING_SECRET") {
@@ -739,6 +784,7 @@ exports.resendWebhook = onRequest(async (req, res) => {
 // Original function kept
 exports.sendConfirmationEmail = onRequest({ cors: true }, async (req, res) => {
     try {
+        const { resend } = getContext(req);
         const { parentEmail, emailHtml } = req.body;
         if (!parentEmail || !emailHtml) return res.status(400).json({ error: "Missing parentEmail or emailHtml" });
 
@@ -765,7 +811,8 @@ exports.sendConfirmationEmail = onRequest({ cors: true }, async (req, res) => {
 // --- ADMIN INVITATION LOGIC ---
 exports.inviteAdmin = onRequest({ cors: true }, async (req, res) => {
     try {
-        await authenticateAdmin(req);
+        const { db, resend } = getContext(req);
+        await authenticateAdmin(req, db);
         const { email, name } = req.body;
         if (!email) return res.status(400).json({ error: "Missing email" });
 
@@ -833,7 +880,7 @@ exports.inviteAdmin = onRequest({ cors: true }, async (req, res) => {
 // --- PASSWORD RESET: SEND ADMIN PASSWORD RESET EMAIL ---
 exports.sendAdminPasswordReset = onRequest({ cors: true }, async (req, res) => {
     try {
-        // await authenticateAdmin(req); // REMOVED: Must be public for forgot password flow
+        const { resend } = getContext(req);
         const { email } = req.body;
 
         if (!email) {

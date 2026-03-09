@@ -154,6 +154,8 @@
                         <span>Configuration</span></button>
                     <button class="nav-btn" data-target="view-billing"><i class="fas fa-file-invoice-dollar"></i>
                         <span>Facturation</span></button>
+                    <button class="nav-btn" data-target="view-summer-camp"><i class="fas fa-campground"></i>
+                        <span>Camp de soccer</span></button>
                     <button class="nav-btn" data-target="view-admins" id="nav-admins-btn" style="display:none;"><i
                             class="fas fa-users-cog"></i> <span>Utilisateurs</span></button>
                 </nav>
@@ -190,6 +192,10 @@
                     <!-- Dashboard Home -->
                     <div id="view-billing" class="view">
                         <!-- Content Injected by billing.js -->
+                    </div>
+
+                    <div id="view-summer-camp" class="view">
+                        <!-- Content Injected by summer-camp.js -->
                     </div>
 
                     <div id="view-dashboard" class="view">
@@ -1568,13 +1574,15 @@
                         <div class="col-6">
                             <div class="form-group">
                                 <label>Date de Début</label>
-                                <input type="date" id="season-start" required>
+                                <input type="date" id="season-start" required onclick="this.showPicker()"
+                                    style="cursor: pointer;">
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="form-group">
                                 <label>Date de Fin</label>
-                                <input type="date" id="season-end" required>
+                                <input type="date" id="season-end" required onclick="this.showPicker()"
+                                    style="cursor: pointer;">
                             </div>
                         </div>
                     </div>
@@ -1699,8 +1707,8 @@
                 </div>
                 <div class="form-group">
                     <label>Fin de mandat</label>
-                    <input type="date" id="board-mandate"
-                        style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="date" id="board-mandate" onclick="this.showPicker()" style="cursor: pointer;">
+                    style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px;">
                 </div>
                 <div class="form-group">
                     <label>Photo de profil</label>
@@ -1834,176 +1842,279 @@
         </div>
     </div>
 
-    <!-- ADMIN MODAL (REGISTRATION) -->
-    <div class="modal modal-full" id="registration-modal" style="padding: 0;">
+    <div id="registration-modal" class="modal" style="padding: 0;">
         <div class="modal-content"
-            style="width: 100%; height: 100%; max-width: none; margin: 0; padding: 0; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: #f8f9fa;">
-
+            style="width: 50%; height: 96vh; max-width: 900px; margin: 2vh auto; padding: 0; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; background: #f8f9fa; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
             <div
                 style="background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10;">
                 <h2 style="margin: 0; font-size: 1.2rem; color: var(--primary);">Détails Inscription</h2>
-                <span class="close-modal" style="position: static; font-size: 2rem; line-height: 1; color: #666;"
+                <span class="close-modal"
+                    style="position: static; font-size: 2rem; line-height: 1; color: #666; cursor: pointer;"
                     onclick="document.getElementById('registration-modal').classList.remove('active')">&times;</span>
             </div>
 
             <form id="registration-form-admin"
-                style="flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 140px; scroll-behavior: smooth;">
+                style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
                 <input type="hidden" id="reg-id">
 
-                <!-- 1. Enfant -->
-                <div style="background:#f0f8ff; padding:15px; border-radius:8px; margin-bottom:15px;">
-                    <h4 style="margin-top:0; color:#333; margin-bottom:10px;"><i class="fas fa-child"></i> Enfant
-                    </h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                        <div class="form-group">
-                            <label>Prénom</label>
-                            <input type="text" id="reg-child-first">
-                        </div>
-                        <div class="form-group">
-                            <label>Nom</label>
-                            <input type="text" id="reg-child-last">
-                        </div>
-                        <div class="form-group">
-                            <label>Date de Naissance</label>
-                            <input type="date" id="reg-dob">
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
-                        <div class="form-group">
-                            <label>Sexe</label>
-                            <select id="reg-gender">
-                                <option value="M">Masculin</option>
-                                <option value="F">Féminin</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Médical / Allergies</label>
-                            <input type="text" id="reg-medical">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 2. Parents & Contact -->
-                <div style="background:#fff3e0; padding:15px; border-radius:8px; margin-bottom:15px;">
-                    <h4 style="margin-top:0; color:#333; margin-bottom:10px;"><i class="fas fa-users"></i> Parents &
-                        Contact</h4>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom:10px;">
-                        <!-- Parent 1 -->
-                        <div>
-                            <label style="font-weight:bold; display:block; margin-bottom:5px;">Parent 1
-                                (Responsable)</label>
-                            <div class="form-group" style="margin-bottom:8px;">
-                                <input type="text" id="reg-parent1-name" placeholder="Nom Complet">
+                <!-- Scrollable Body -->
+                <div class="modal-body-scrollable"
+                    style="flex: 1; overflow-y: auto; padding: 20px; scroll-behavior: smooth;">
+                    <!-- 1. Enfant -->
+                    <div style="background:#f0f8ff; padding:15px; border-radius:8px; margin-bottom:15px;">
+                        <h4 style="margin-top:0; color:#333; margin-bottom:10px;"><i class="fas fa-child"></i> Enfant
+                        </h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label>Prénom</label>
+                                <input type="text" id="reg-child-first">
                             </div>
                             <div class="form-group">
-                                <input type="email" id="reg-parent1-email" placeholder="Courriel">
-                            </div>
-                        </div>
-                        <!-- Parent 2 -->
-                        <div>
-                            <label style="font-weight:bold; display:block; margin-bottom:5px;">Parent 2
-                                (Optionnel)</label>
-                            <div class="form-group" style="margin-bottom:8px;">
-                                <input type="text" id="reg-parent2-name" placeholder="Nom Complet">
+                                <label>Nom</label>
+                                <input type="text" id="reg-child-last">
                             </div>
                             <div class="form-group">
-                                <input type="email" id="reg-parent2-email" placeholder="Courriel">
+                                <label>Date de Naissance</label>
+                                <input type="date" id="reg-dob" onclick="this.showPicker()" style="cursor: pointer;">
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
+                            <div class="form-group">
+                                <label>Sexe</label>
+                                <select id="reg-gender">
+                                    <option value="M">Masculin</option>
+                                    <option value="F">Féminin</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Médical / Allergies</label>
+                                <input type="text" id="reg-medical">
                             </div>
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                        <div class="form-group">
-                            <label>Adresse</label>
-                            <input type="text" id="reg-address">
+                    <!-- 2. Parents & Contact -->
+                    <div style="background:#fff3e0; padding:15px; border-radius:8px; margin-bottom:15px;">
+                        <h4 style="margin-top:0; color:#333; margin-bottom:10px;"><i class="fas fa-users"></i> Parents &
+                            Contact</h4>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom:10px;">
+                            <!-- Parent 1 -->
+                            <div>
+                                <label style="font-weight:bold; display:block; margin-bottom:5px;">Parent 1
+                                    (Responsable)</label>
+                                <div class="form-group" style="margin-bottom:8px;">
+                                    <input type="text" id="reg-parent1-name" placeholder="Nom Complet">
+                                </div>
+                                <div class="form-group">
+                                    <input type="email" id="reg-parent1-email" placeholder="Courriel">
+                                </div>
+                            </div>
+                            <!-- Parent 2 -->
+                            <div>
+                                <label style="font-weight:bold; display:block; margin-bottom:5px;">Parent 2
+                                    (Optionnel)</label>
+                                <div class="form-group" style="margin-bottom:8px;">
+                                    <input type="text" id="reg-parent2-name" placeholder="Nom Complet">
+                                </div>
+                                <div class="form-group">
+                                    <input type="email" id="reg-parent2-email" placeholder="Courriel">
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Ville</label>
-                            <input type="text" id="reg-city">
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>Adresse</label>
+                                <input type="text" id="reg-address">
+                            </div>
+                            <div class="form-group">
+                                <label>Ville</label>
+                                <input type="text" id="reg-city">
+                            </div>
+                            <div class="form-group">
+                                <label>Code Postal</label>
+                                <input type="text" id="reg-postal">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Code Postal</label>
-                            <input type="text" id="reg-postal">
+                        <div class="form-group" style="margin-top:10px;">
+                            <label>Téléphone Famille</label>
+                            <input type="tel" id="reg-phone">
                         </div>
                     </div>
-                    <div class="form-group" style="margin-top:10px;">
-                        <label>Téléphone Famille</label>
-                        <input type="tel" id="reg-phone">
+
+                    <!-- 3. Equipement & Divers -->
+                    <div style="background:#e8f5e9; padding:15px; border-radius:8px; margin-bottom:15px;">
+                        <h4 style="margin-top:0; color:#333; margin-bottom:10px;"><i class="fas fa-tshirt"></i>
+                            Équipement & Options</h4>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label>Chandail (Taille)</label>
+                                <select id="reg-jersey-size" class="form-control">
+                                    <option value="">Choisir une taille...</option>
+                                    <option value="Enfant Petit">Enfant Petit</option>
+                                    <option value="Enfant Moyen">Enfant Moyen</option>
+                                    <option value="Enfant Large">Enfant Large</option>
+                                    <option value="Adulte Petit">Adulte Petit</option>
+                                    <option value="Adulte Moyen">Adulte Moyen</option>
+                                    <option value="Adulte Large">Adulte Large</option>
+                                    <option value="Adulte X-Large">Adulte X-Large</option>
+                                    <option value="Adulte XX-Large">Adulte XX-Large</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Short (Taille)</label>
+                                <select id="reg-short-info" class="form-control">
+                                    <option value="">Choisir une taille...</option>
+                                    <option value="Enfant Petit">Enfant Petit</option>
+                                    <option value="Enfant Moyen">Enfant Moyen</option>
+                                    <option value="Enfant Large">Enfant Large</option>
+                                    <option value="Adulte Petit">Adulte Petit</option>
+                                    <option value="Adulte Moyen">Adulte Moyen</option>
+                                    <option value="Adulte Large">Adulte Large</option>
+                                    <option value="Adulte X-Large">Adulte X-Large</option>
+                                    <option value="Adulte XX-Large">Adulte XX-Large</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr; margin-top: 10px;">
+                            <div class="form-group">
+                                <label>Option pour le Short</label>
+                                <select id="reg-short-opt" class="form-control">
+                                    <option value="">Choisir...</option>
+                                    <option value="achat">Achat de short vert (30$)</option>
+                                    <option value="pret">Prêt de short vert (15$)</option>
+                                    <option value="possede">Je possède déjà un short (0$)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div
+                            style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 15px; margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;">
+                            <div class="form-group">
+                                <label>Achat de bas</label>
+                                <select id="reg-socks-opt" class="form-control">
+                                    <option value="Non">Non</option>
+                                    <option value="Oui">Oui</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Taille des bas</label>
+                                <select id="reg-socks-info" class="form-control">
+                                    <option value="">Choisir...</option>
+                                    <option value="Très Petit">Très Petit (enfant 9-13)</option>
+                                    <option value="Petit">Petit (1-4)</option>
+                                    <option value="Moyen">Moyen (5-8)</option>
+                                    <option value="Large">Large (9-13)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Qté</label>
+                                <input type="number" id="reg-socks-qty" value="1" min="1" class="form-control">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top:10px;">
+                            <div class="form-group">
+                                <label>Autorisation Photos</label>
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                                    <label class="switch">
+                                        <input type="checkbox" id="reg-photo-auth-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span id="reg-photo-auth-label">Non</span>
+                                    <input type="hidden" id="reg-photo-auth">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3b. Demandes Particulières -->
+                    <div id="reg-special-requests-section"
+                        style="background:#fff8e1; padding:15px; border-radius:8px; margin-bottom:15px; border-left: 4px solid #f59e0b;">
+                        <h4 style="margin-top:0; color:#92400e; margin-bottom:10px;">
+                            <i class="fas fa-exclamation-circle"></i> Demandes Particulières
+                        </h4>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <textarea id="reg-special-requests" rows="3"
+                                style="width:100%; padding:10px; border:1px solid #f59e0b; border-radius:6px; background:#fffbf2; font-family:inherit; font-size:0.95rem; resize:vertical;"
+                                placeholder="Aucune demande particulière"></textarea>
+                            <p style="font-size:0.8rem; color:#92400e; margin-top:6px; margin-bottom:0;">
+                                <i class="fas fa-info-circle"></i> Information saisie par le parent lors de
+                                l'inscription.
+                                Ces demandes doivent être étudiées par le C.A.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 4. Admin Status -->
+                    <div style="background:#ddd; padding:15px; border-radius:8px; margin-bottom:15px;">
+                        <h4 style="margin-top:0; color:#333; margin-bottom:10px;"><i class="fas fa-cogs"></i>
+                            Administration</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label>Saison</label>
+                                <select id="reg-season">
+                                    <option value="">-- Choisir --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Programme / Catégorie</label>
+                                <select id="reg-program">
+                                    <option value="">-- Choisir --</option>
+                                    <option value="U4">U4</option>
+                                    <option value="U5">U5</option>
+                                    <option value="U6">U6</option>
+                                    <option value="U7">U7</option>
+                                    <option value="U8">U8</option>
+                                    <option value="U9">U9</option>
+                                    <option value="U10">U10</option>
+                                    <option value="U11">U11</option>
+                                    <option value="U12">U12</option>
+                                    <option value="U13">U13</option>
+                                    <option value="U14">U14</option>
+                                    <option value="U15">U15</option>
+                                    <option value="U16">U16</option>
+                                    <option value="U17">U17</option>
+                                    <option value="U18">U18</option>
+                                    <option value="Senior">Senior</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Prix Final ($)</label>
+                                <input type="number" id="reg-price">
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                            <div class="form-group">
+                                <label>Statut Paiement / Dossier</label>
+                                <select id="reg-status">
+                                    <option value="Nouveau">Nouveau</option>
+                                    <option value="Payé">Payé</option>
+                                    <option value="Annulé">Annulé</option>
+                                    <option value="Migré">Migré</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>ID Session / Groupe</label>
+                                <input type="text" id="reg-session-id" readonly style="font-size:0.8rem; color:#666;">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 3. Equipement & Divers -->
-                <div style="background:#e8f5e9; padding:15px; border-radius:8px; margin-bottom:15px;">
-                    <h4 style="margin-top:0; color:#333; margin-bottom:10px;"><i class="fas fa-tshirt"></i>
-                        Équipement & Options</h4>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                        <div class="form-group">
-                            <label>Chandail (Taille)</label>
-                            <input type="text" id="reg-jersey-size">
-                        </div>
-                        <div class="form-group">
-                            <label>Short</label>
-                            <input type="text" id="reg-short-info" placeholder="Option + Taille">
-                        </div>
-                        <div class="form-group">
-                            <label>Bas</label>
-                            <input type="text" id="reg-socks-info" placeholder="Info">
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top:10px;">
-                        <div class="form-group">
-                            <label>Autorisation Photos</label>
-                            <input type="text" id="reg-photo-auth">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 4. Admin Status -->
-                <div style="background:#ddd; padding:15px; border-radius:8px; margin-bottom:15px;">
-                    <h4 style="margin-top:0; color:#333; margin-bottom:10px;"><i class="fas fa-cogs"></i>
-                        Administration</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                        <div class="form-group">
-                            <label>Saison</label>
-                            <select id="reg-season">
-                                <option value="">-- Choisir --</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Programme / Catégorie</label>
-                            <input type="text" id="reg-program" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>Prix Final ($)</label>
-                            <input type="number" id="reg-price">
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
-                        <div class="form-group">
-                            <label>Statut Paiement / Dossier</label>
-                            <select id="reg-status">
-                                <option value="Nouveau">Nouveau</option>
-                                <option value="Payé">Payé</option>
-                                <option value="Annulé">Annulé</option>
-                                <option value="Migré">Migré</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>ID Session / Groupe</label>
-                            <input type="text" id="reg-session-id" readonly style="font-size:0.8rem; color:#666;">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn-save">
+                <!-- Floating Footer -->
+                <div
+                    style="background: white; padding: 15px 20px; border-top: 1px solid #ddd; box-shadow: 0 -5px 20px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 10px; z-index: 100; border-radius: 0 0 12px 12px;">
+                    <button type="submit" class="btn-save"
+                        style="width: 100%; margin: 0; padding: 12px; font-weight: 600; font-size: 1rem;">
                         <i class="fas fa-save"></i> Enregistrer
                     </button>
                     <button type="button" class="btn-close-custom"
-                        onclick="document.getElementById('registration-modal').classList.remove('active')">
+                        onclick="document.getElementById('registration-modal').classList.remove('active')"
+                        style="width: 100%; padding: 12px; background: white; color: var(--primary); border: 2px solid var(--primary); border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: 600;">
                         Fermer
                     </button>
                 </div>
@@ -2275,13 +2386,15 @@
                     <div class="col-6">
                         <div class="form-group">
                             <label>Expiration Filiation Policière</label>
-                            <input type="date" id="coach-police-expiry">
+                            <input type="date" id="coach-police-expiry" onclick="this.showPicker()"
+                                style="cursor: pointer;">
                         </div>
                     </div>
                     <div class="col-6">
                         <div class="form-group">
                             <label>Formation Sport et Respect</label>
-                            <input type="date" id="coach-sport-respect-expiry">
+                            <input type="date" id="coach-sport-respect-expiry" onclick="this.showPicker()"
+                                style="cursor: pointer;">
                         </div>
                     </div>
                 </div>
@@ -2458,7 +2571,8 @@
                     </div>
                     <div class="form-group">
                         <label>Date</label>
-                        <input type="date" id="match-date" required>
+                        <input type="date" id="match-date" required onclick="this.showPicker()"
+                            style="cursor: pointer;">
                     </div>
                     <div style="display: flex; gap: 15px;">
                         <div class="form-group" style="flex: 1;">
@@ -2831,7 +2945,8 @@
                             </div>
                             <div class="form-group" style="flex: 1;">
                                 <label>Date de Naissance</label>
-                                <input type="date" id="ep-dob" required class="form-control">
+                                <input type="date" id="ep-dob" required class="form-control" onclick="this.showPicker()"
+                                    style="cursor: pointer;">
                             </div>
                         </div>
 
@@ -2904,42 +3019,43 @@
                             <div class="form-group" style="flex: 1;">
                                 <label>Taille Chandail</label>
                                 <select id="ep-jersey-size" class="form-control">
-                                    <option value="">-- Choisir --</option>
-                                    <option value="YXS">YXS</option>
-                                    <option value="YS">YS</option>
-                                    <option value="YM">YM</option>
-                                    <option value="YL">YL</option>
-                                    <option value="YXL">YXL</option>
-                                    <option value="AS">AS</option>
-                                    <option value="AM">AM</option>
-                                    <option value="AL">AL</option>
-                                    <option value="AXL">AXL</option>
+                                    <option value="">Choisir une taille...</option>
+                                    <option value="Enfant Petit">Enfant Petit</option>
+                                    <option value="Enfant Moyen">Enfant Moyen</option>
+                                    <option value="Enfant Large">Enfant Large</option>
+                                    <option value="Adulte Petit">Adulte Petit</option>
+                                    <option value="Adulte Moyen">Adulte Moyen</option>
+                                    <option value="Adulte Large">Adulte Large</option>
+                                    <option value="Adulte X-Large">Adulte X-Large</option>
+                                    <option value="Adulte XX-Large">Adulte XX-Large</option>
                                 </select>
                             </div>
                             <div class="form-group" style="flex: 1;">
                                 <label>Taille Short</label>
                                 <select id="ep-short-size" class="form-control">
-                                    <option value="">-- Choisir --</option>
-                                    <option value="YXS">YXS</option>
-                                    <option value="YS">YS</option>
-                                    <option value="YM">YM</option>
-                                    <option value="YL">YL</option>
-                                    <option value="YXL">YXL</option>
-                                    <option value="AS">AS</option>
-                                    <option value="AM">AM</option>
-                                    <option value="AL">AL</option>
-                                    <option value="AXL">AXL</option>
+                                    <option value="">Choisir une taille...</option>
+                                    <option value="Enfant Petit">Enfant Petit</option>
+                                    <option value="Enfant Moyen">Enfant Moyen</option>
+                                    <option value="Enfant Large">Enfant Large</option>
+                                    <option value="Adulte Petit">Adulte Petit</option>
+                                    <option value="Adulte Moyen">Adulte Moyen</option>
+                                    <option value="Adulte Large">Adulte Large</option>
+                                    <option value="Adulte X-Large">Adulte X-Large</option>
+                                    <option value="Adulte XX-Large">Adulte XX-Large</option>
                                 </select>
                             </div>
                         </div>
 
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label>Option Short</label>
-                            <select id="ep-short-opt" class="form-control">
-                                <option value="">-- Non spécifié --</option>
-                                <option value="achat">Achat</option>
-                                <option value="pret">Prêt</option>
-                            </select>
+                        <div class="form-row" style="margin-bottom: 15px;">
+                            <div class="form-group">
+                                <label>Option Short</label>
+                                <select id="ep-short-opt" class="form-control">
+                                    <option value="">-- Choisir --</option>
+                                    <option value="achat">Achat de short vert (30$)</option>
+                                    <option value="pret">Prêt de short vert (15$)</option>
+                                    <option value="possede">Je possède déjà un short (0$)</option>
+                                </select>
+                            </div>
                         </div>
 
                         <h4
@@ -2956,11 +3072,11 @@
                             <div class="form-group" style="flex: 1;">
                                 <label>Taille</label>
                                 <select id="ep-socks-size" class="form-control">
-                                    <option value="">-- Choisir --</option>
-                                    <option value="Très Petit">Très Petit</option>
-                                    <option value="Petit">Petit</option>
-                                    <option value="Moyen">Moyen</option>
-                                    <option value="Large">Large</option>
+                                    <option value="">Choisir une taille...</option>
+                                    <option value="Très Petit">Très Petit (chaussure enfant 9 à 13)</option>
+                                    <option value="Petit">Petit (chaussure 1 à 4)</option>
+                                    <option value="Moyen">Moyen (chaussure 5 à 8)</option>
+                                    <option value="Large">Large (chaussure 9 à 13)</option>
                                 </select>
                             </div>
                             <div class="form-group" style="width: 80px;">

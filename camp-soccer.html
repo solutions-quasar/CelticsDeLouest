@@ -4,15 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boutique | Celtics de l'Ouest de Portneuf</title>
+    <title>Camp de Soccer - Celtics de l'Ouest</title>
 
     <!-- Social Share Metadata -->
-    <meta name="description" content="Procurez-vous les vêtements et accessoires aux couleurs des Celtics de l'Ouest.">
-    <meta property="og:title" content="Boutique | Celtics de l'Ouest de Portneuf">
+    <meta name="description"
+        content="Inscrivez vos enfants au Camp de Soccer des Celtics de l'Ouest ! Soccer, plaisir et développement à Portneuf.">
+    <meta property="og:title" content="Camp de Soccer | Celtics de l'Ouest de Portneuf">
     <meta property="og:description"
-        content="Procurez-vous les vêtements et accessoires aux couleurs des Celtics de l'Ouest.">
+        content="Inscrivez vos enfants au Camp de Soccer des Celtics de l'Ouest ! Soccer, plaisir et développement à Portneuf.">
     <meta property="og:image" content="https://celticsdelouest.org/images/og-share.png">
-    <meta property="og:url" content="https://celticsdelouest.org/boutique.html">
+    <meta property="og:url" content="https://celticsdelouest.org/camp-soccer.html">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:image" content="https://celticsdelouest.org/images/og-share.png">
@@ -45,7 +46,6 @@
             </div>
             <ul class="nav-menu">
                 <li><a href="index.html" class="nav-link">Accueil</a></li>
-                <li><a href="camp-soccer.html" class="nav-link">Camp de Soccer</a></li>
                 <li><a href="index.html#equipes" class="nav-link">Nos Équipes</a></li>
                 <li><a href="inscription.html" class="nav-link">Inscriptions</a></li>
                 <li><a href="index.html#valeurs" class="nav-link">Nos Valeurs</a></li>
@@ -60,7 +60,8 @@
                         <li><a href="index.html#sponsors" class="nav-link dropdown-link">Nos Commanditaires</a></li>
                     </ul>
                 </li>
-                <li><a href="boutique.html" class="nav-link active">Boutique en ligne</a></li>
+                <li><a href="camp-soccer.html" class="nav-link active">Camp de Soccer</a></li>
+                <li><a href="boutique.html" class="nav-link">Boutique en ligne</a></li>
                 <li><a href="index.html#contact" class="nav-link">Nous Joindre</a></li>
                 <!-- Mobile Menu Footer -->
                 <li class="nav-footer">
@@ -85,32 +86,30 @@
     <header class="section-bg"
         style="padding-top: 120px; padding-bottom: 40px; background-color: var(--celtics-green); color: white;">
         <div class="container" style="text-align: center;">
-            <h1>Boutique en Ligne</h1>
-            <p>Affichez vos couleurs !</p>
+            <h1>Camp de Soccer <span id="season-year-display">2026</span></h1>
+            <p>Notre camp de soccer offre une expérience unique...</p>
         </div>
     </header>
 
-    <!-- Boutique Content -->
+    <!-- Camp Content -->
     <section class="section">
         <div class="container">
-            <div id="boutique-loader" style="text-align: center; padding: 50px;">
+            <div id="camp-loader" style="text-align: center; padding: 50px;">
                 <i class="fas fa-circle-notch fa-spin fa-3x" style="color: var(--celtics-green);"></i>
             </div>
 
-            <div id="boutique-content" style="display: none; max-width: 800px; margin: 0 auto;">
-                <div id="boutique-text" style="font-size: 1.1rem; line-height: 1.8; color: #333; margin-bottom: 40px;">
+            <div id="camp-content" style="display: none; max-width: 800px; margin: 0 auto;">
+                <div id="camp-text" class="content-formatted"
+                    style="font-size: 1.1rem; line-height: 1.8; color: #333; margin-bottom: 40px;">
                     <!-- Content injected by JS -->
                 </div>
 
-                <div style="text-align: center;">
-                    <a id="boutique-link-btn" href="#" target="_blank" class="btn btn-primary big-btn">
-                        <i class="fas fa-shopping-bag" style="margin-right: 10px;"></i> Accéder à la Boutique en Ligne
-                    </a>
+                <div style="text-align: center;" id="camp-status-area">
+                    <!-- Button injected by JS -->
                 </div>
             </div>
         </div>
     </section>
-
 
     <!-- Footer -->
     <footer>
@@ -137,6 +136,7 @@
                         <li><a href="index.html">Accueil</a></li>
                         <li><a href="index.html#equipes">Nos Équipes</a></li>
                         <li><a href="inscription.html">Inscriptions</a></li>
+                        <li><a href="camp-soccer.html">Camp de Soccer</a></li>
                         <li><a href="boutique.html">Boutique en ligne</a></li>
                         <li><a href="index.html#contact">Nous Joindre</a></li>
                     </ul>
@@ -193,47 +193,38 @@
 
         document.querySelectorAll('.current-year').forEach(el => el.textContent = new Date().getFullYear());
 
-        // Helper to ensure absolute URL
-        function ensureAbsoluteUrl(url) {
-            if (!url) return '';
-            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
-                return url;
-            }
-            return 'https://' + url;
-        }
+        const loader = document.getElementById('camp-loader');
+        const content = document.getElementById('camp-content');
+        const textContainer = document.getElementById('camp-text');
+        const statusArea = document.getElementById('camp-status-area');
 
-        // Load Boutique Settings
-        const loader = document.getElementById('boutique-loader');
-        const content = document.getElementById('boutique-content');
-        const textContainer = document.getElementById('boutique-text');
-        const linkBtn = document.getElementById('boutique-link-btn');
-
-        async function loadBoutique() {
+        async function loadCampData() {
             try {
-                const docSnap = await getDoc(doc(db, "settings", "boutique"));
+                const docSnap = await getDoc(doc(db, "settings", "camp_ete"));
                 if (docSnap.exists()) {
                     const data = docSnap.data();
 
-                    // Set Text (HTML from Quill)
-                    if (data.description) {
-                        textContainer.innerHTML = data.description;
+                    if (data.presentationText) {
+                        textContainer.innerHTML = data.presentationText;
                     } else {
-                        textContainer.innerHTML = "<p>Visitez notre boutique en ligne pour découvrir nos produits !</p>";
+                        textContainer.innerHTML = "<p>Détails du camp de soccer à venir. Restez à l'affût!</p>";
                     }
 
-                    // Set Link
-                    if (data.link) {
-                        linkBtn.href = ensureAbsoluteUrl(data.link);
-                        linkBtn.style.display = 'inline-block';
+                    if (data.registrationOpen) {
+                        statusArea.innerHTML = `<a href="inscription-camp.html" class="btn btn-primary big-btn">
+                            <i class="fas fa-campground" style="margin-right: 10px;"></i> S'inscrire au Camp
+                        </a>`;
                     } else {
-                        linkBtn.style.display = 'none';
+                        statusArea.innerHTML = `<div style="padding: 15px; background: #eee; border-radius: 6px; display: inline-block; font-weight: bold; color: #555;">
+                            Les inscriptions sont actuellement fermées.
+                        </div>`;
                     }
                 } else {
-                    textContainer.innerHTML = "<p>La boutique est actuellement fermée ou en maintenance.</p>";
-                    linkBtn.style.display = 'none';
+                    textContainer.innerHTML = "<p>La page du camp de soccer est en construction.</p>";
+                    statusArea.innerHTML = "";
                 }
             } catch (error) {
-                console.error("Error loading boutique:", error);
+                console.error("Error loading camp:", error);
                 textContainer.innerHTML = "<p>Erreur lors du chargement des informations.</p>";
             } finally {
                 if (loader) loader.style.display = 'none';
@@ -241,7 +232,7 @@
             }
         }
 
-        loadBoutique();
+        loadCampData();
     </script>
     <script src="script.js"></script>
 </body>

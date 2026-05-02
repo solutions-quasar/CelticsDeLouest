@@ -5,6 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Celtics de l'Ouest de Portneuf | Club de Soccer</title>
+
+    <!-- Social Share Metadata -->
+    <meta name="description" content="De Portneuf à St-Ubalde, nous cultivons la passion du soccer depuis 2013.">
+    <meta property="og:title" content="Celtics de l'Ouest de Portneuf | Club de Soccer">
+    <meta property="og:description" content="De Portneuf à St-Ubalde, nous cultivons la passion du soccer depuis 2013.">
+    <meta property="og:image" content="https://celticsdelouest.org/images/og-share.png">
+    <meta property="og:url" content="https://celticsdelouest.org">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://celticsdelouest.org/images/og-share.png">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,6 +44,7 @@
             </div>
             <ul class="nav-menu">
                 <li><a href="#hero" class="nav-link">Accueil</a></li>
+                <li><a href="camp-soccer.html" class="nav-link">Camp de Soccer</a></li>
                 <li><a href="#equipes" class="nav-link">Nos Équipes</a></li>
                 <li><a href="inscription.html" class="nav-link">Inscriptions</a></li>
                 <li><a href="#valeurs" class="nav-link">Nos Valeurs</a></li>
@@ -72,7 +84,7 @@
         <div class="container hero-content">
             <h1>Club de Soccer <br>Celtics de l'Ouest de Portneuf</h1>
             <p>De Portneuf à St-Ubalde, cultiver la passion depuis 2013.</p>
-            <li><a href="inscription.html" class="nav-link">Inscription</a></li>
+            <a href="inscription.html" class="btn btn-primary">Inscription</a>
         </div>
     </header>
 
@@ -646,7 +658,7 @@
                         card.className = 'referee-card';
                         let imgHtml = '';
                         if (data.imageUrl && data.imageUrl.length > 10) {
-                            imgHtml = `<a href="${data.url || '#'}" target="_blank" style="display:block; width:100%; height:120px; display:flex; align-items:center; justify-content:center;">
+                            imgHtml = `<a href="${ensureAbsoluteUrl(data.url)}" target="_blank" style="display:block; width:100%; height:120px; display:flex; align-items:center; justify-content:center;">
                                 <img src="${data.imageUrl}" alt="${data.name}" style="max-height:100%; max-width:100%; width:auto; height:auto; border-radius:0; object-fit:contain;">
                             </a>`;
                         } else {
@@ -657,7 +669,7 @@
 
                         // 2. Fill Floating Banner
                         const bannerItem = document.createElement('a');
-                        bannerItem.href = data.url || '#';
+                        bannerItem.href = ensureAbsoluteUrl(data.url);
                         bannerItem.target = "_blank";
                         bannerItem.className = 'banner-sponsor-item';
 
@@ -678,6 +690,15 @@
             } catch (e) {
                 console.error("Sponsors load error", e);
             }
+        }
+
+        // Helper to ensure absolute URL
+        function ensureAbsoluteUrl(url) {
+            if (!url) return '';
+            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
+                return url;
+            }
+            return 'https://' + url;
         }
 
         window.addEventListener('DOMContentLoaded', () => {

@@ -504,7 +504,7 @@ body {
 }
 
 #content-area {
-    padding: 0;
+    padding: 30px;
     overflow-y: auto;
     flex: 1;
 }
@@ -1366,4 +1366,50 @@ th {
     .team-gender-column {
         width: 100%;
     }
+}
+
+/* Billing Status Badges */
+.badge {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+    text-transform: capitalize;
+}
+
+.status-paid {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+}
+
+.status-pending {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+}
+
+.status-void {
+    background-color: #f3f4f6 !important;
+    color: #374151 !important;
+}
+
+/* Table Actions Styling */
+.btn-outline-success {
+    border: 1.5px solid var(--primary) !important;
+    color: var(--primary) !important;
+    background: transparent !important;
+    padding: 6px 14px !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.btn-outline-success:hover {
+    background: var(--primary) !important;
+    color: white !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 128, 64, 0.2);
 }

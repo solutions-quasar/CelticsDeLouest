@@ -7,6 +7,9 @@
       "hosting": {
         "staging": [
           "celticsdelouest"
+        ],
+        "production": [
+          "celtics-production"
         ]
       }
     }

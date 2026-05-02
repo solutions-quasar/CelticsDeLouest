@@ -28,6 +28,13 @@ function initCampaignModule() {
 
     // Attach Event Listeners
     document.getElementById('camp-audience-type')?.addEventListener('change', updateAudienceUI);
+    document.getElementById('camp-audience-team')?.addEventListener('change', updateAudienceUI);
+    document.getElementById('camp-specific-emails')?.addEventListener('input', () => {
+        // debounce slightly or just call
+        clearTimeout(window.campEmailTimer);
+        window.campEmailTimer = setTimeout(updateAudienceUI, 500);
+    });
+
     document.getElementById('btn-new-campaign')?.addEventListener('click', () => openCampaignEditor());
     document.getElementById('btn-save-draft')?.addEventListener('click', () => saveCampaign('draft'));
     document.getElementById('btn-send-campaign')?.addEventListener('click', () => confirmAndSend());
@@ -76,42 +83,89 @@ function updateAudienceUI() {
     const teamWrapper = document.getElementById('camp-audience-team-wrapper');
     const specificWrapper = document.getElementById('camp-audience-specific-wrapper');
     const display = document.getElementById('camp-audience-estimate');
+    const btnView = document.getElementById('btn-view-audience');
 
     teamWrapper.style.display = (type === 'team') ? 'block' : 'none';
     specificWrapper.style.display = (type === 'specific') ? 'block' : 'none';
 
     // Estimate Count
-    calculateAudience(type).then(count => {
-        display.textContent = `Estimation: ${count} destinataires`;
+    display.textContent = `Calcul en cours...`;
+    btnView.style.display = 'none';
+
+    calculateAudience(type).then(emails => {
+        window.currentAudienceEmails = emails;
+        display.textContent = `${emails.length} destinataire(s)`;
+        if (emails.length > 0) {
+            btnView.style.display = 'inline-block';
+        }
     });
 }
 
-async function calculateAudience(type) {
-    // Quick estimation based on local cache or query count
-    // Real implementation would be more robust
-    if (type === 'specific') return 'Manuel';
+document.getElementById('btn-view-audience')?.addEventListener('click', () => {
+    const modal = document.getElementById('audience-list-modal');
+    if (!modal) return;
 
-    try {
-        if (type === 'all_active') {
-            const snap = await window.getCountFromServer(window.collection(window.db, "players")); // Simple count, assumes most have emails
-            return snap.data().count; // Approx
-        }
-        if (type === 'coaches') {
-            const snap = await window.getCountFromServer(window.collection(window.db, "coaches"));
-            return snap.data().count;
-        }
-        if (type === 'team') {
-            const tid = document.getElementById('camp-audience-team').value;
-            if (!tid) return 0;
-            const q = window.query(window.collection(window.db, "players"), window.where("teamId", "==", tid));
-            const snap = await window.getCountFromServer(q);
-            return snap.data().count;
-        }
-    } catch (e) {
-        console.warn("Est failed", e);
-        return '?';
+    const countDisplay = document.getElementById('audience-list-count');
+    const content = document.getElementById('audience-list-content');
+
+    const emails = window.currentAudienceEmails || [];
+    countDisplay.textContent = emails.length;
+
+    const title = modal.querySelector('h2');
+    if (title) title.innerHTML = `<i class="fas fa-users" style="color: var(--primary);"></i> Liste des destinataires`;
+
+    if (emails.length === 0) {
+        content.innerHTML = '<span style="color:var(--danger)">Aucun destinataire.</span>';
+    } else {
+        content.innerHTML = emails.map(e => `<div>${e}</div>`).join('');
     }
-    return '?';
+
+    modal.classList.add('active');
+});
+
+async function calculateAudience(type) {
+    let emails = [];
+    emails.push("celtics.portneuf@gmail.com"); // "Toujours mettre l'adresse du Celtics en copie"
+
+    if (type === 'specific') {
+        const raw = document.getElementById('camp-specific-emails').value;
+        const specific = raw.split(',').map(e => e.trim()).filter(e => e.includes('@'));
+        emails.push(...specific);
+    } else {
+        try {
+            if (type === 'all_active') {
+                const snap = await window.getDocs(window.collection(window.db, "players"));
+                snap.forEach(d => { if (d.data().email) emails.push(d.data().email); });
+            } else if (type === 'parents') {
+                const snap = await window.getDocs(window.collection(window.db, "players"));
+                snap.forEach(d => {
+                    const data = d.data();
+                    if (data.parentEmail) emails.push(data.parentEmail);
+                    if (data.parent1Email) emails.push(data.parent1Email);
+                    if (data.parent2Email) emails.push(data.parent2Email);
+                });
+            } else if (type === 'coaches') {
+                const snap = await window.getDocs(window.collection(window.db, "coaches"));
+                snap.forEach(d => { if (d.data().email && d.data().visible !== false) emails.push(d.data().email); });
+            } else if (type === 'referees') {
+                const snap = await window.getDocs(window.collection(window.db, "referees"));
+                snap.forEach(d => { if (d.data().email && d.data().visible !== false) emails.push(d.data().email); });
+            } else if (type === 'board') {
+                const snap = await window.getDocs(window.collection(window.db, "board_members"));
+                snap.forEach(d => { if (d.data().email && d.data().visible !== false) emails.push(d.data().email); });
+            } else if (type === 'team') {
+                const tid = document.getElementById('camp-audience-team').value;
+                if (tid) {
+                    const q = window.query(window.collection(window.db, "players"), window.where("teamId", "==", tid));
+                    const snap = await window.getDocs(q);
+                    snap.forEach(d => { if (d.data().email) emails.push(d.data().email); });
+                }
+            }
+        } catch (e) {
+            console.warn("Audience calculation failed", e);
+        }
+    }
+    return Array.from(new Set(emails)); // deduplicate
 }
 
 function openCampaignEditor(campaign = null) {
@@ -350,31 +404,94 @@ async function loadCampaigns(filter) {
 
         campaigns.forEach(data => {
             const date = data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toLocaleDateString() : new Date(data.createdAt.seconds * 1000).toLocaleDateString()) : '?';
-            const stats = data.stats || { sentCount: 0, openCount: 0 };
+            const stats = data.stats || {};
+            const sentCount = stats.sentCount || 0;
+            const openCount = stats.openCount || 0;
 
             // Calculate open rate
-            const openRate = stats.sentCount > 0 ? Math.round((stats.openCount / stats.sentCount) * 100) : 0;
+            const openRate = sentCount > 0 ? Math.round((openCount / sentCount) * 100) : 0;
 
             const card = document.createElement('div');
             card.className = 'campaign-card card';
             card.style.cssText = 'padding:15px; border:1px solid #eee; border-radius:8px; cursor:pointer; transition:shadow 0.2s;';
             card.innerHTML = `
-                <div style="display:flex; justify-content:space-between;">
-                    <strong style="font-size:1.1rem;">${data.subject}</strong>
-                    <span class="badge" style="background:${getStatusColor(data.status)}; padding:4px 8px; border-radius:4px; color:white; font-size:0.8rem;">${data.status}</span>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <strong style="font-size:1.1rem; flex:1;">${data.subject}</strong>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <span class="badge" style="background:${getStatusColor(data.status)}; padding:4px 8px; border-radius:4px; color:white; font-size:0.8rem;">${data.status}</span>
+                        <button class="btn-icon delete-campaign" title="Supprimer la campagne" style="color: var(--danger); background: none; border: none; font-size: 1.1rem; padding: 4px; cursor: pointer; transition: 0.2s;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
                 <div style="color:#666; font-size:0.9rem; margin:8px 0;">
                     <i class="fas fa-calendar"></i> ${date} &bull; ${data.category || 'Info'}
                 </div>
                 <div style="display:flex; gap:15px; font-size:0.9rem;">
-                    <span><i class="fas fa-paper-plane"></i> ${stats.sentCount}</span>
-                    <span><i class="fas fa-envelope-open"></i> ${openRate}% (${stats.openCount})</span>
+                    <span title="Nombre d'emails envoyés"><i class="fas fa-paper-plane"></i> ${sentCount}</span>
+                    <span class="open-stats" title="Cliquez pour voir qui a ouvert le courriel" style="cursor: pointer; text-decoration: underline; color: var(--primary);">
+                        <i class="fas fa-envelope-open"></i> ${openRate}% (${openCount})
+                    </span>
                 </div>
             `;
 
             card.addEventListener('click', () => {
                 openCampaignEditor(data);
             });
+
+            const openStatsBtn = card.querySelector('.open-stats');
+            if (openStatsBtn) {
+                openStatsBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Do not open editor
+                    const modal = document.getElementById('audience-list-modal');
+                    if (!modal) return;
+
+                    const countDisplay = document.getElementById('audience-list-count');
+                    const content = document.getElementById('audience-list-content');
+
+                    const openedEmails = data.openedBy || [];
+                    countDisplay.textContent = openedEmails.length;
+
+                    const title = modal.querySelector('h2');
+                    if (title) title.innerHTML = `<i class="fas fa-users" style="color: var(--primary);"></i> Ont ouvert le courriel :`;
+
+                    if (openedEmails.length === 0) {
+                        content.innerHTML = '<span style="color:var(--danger)">Aucune ouverture enregistrée.</span>';
+                    } else {
+                        content.innerHTML = openedEmails.map(email => `<div><i class="fas fa-envelope-open" style="color:var(--success); margin-right:5px;"></i> ${email}</div>`).join('');
+                    }
+
+                    modal.classList.add('active');
+                });
+            }
+
+            const delBtn = card.querySelector('.delete-campaign');
+            if (delBtn) {
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation(); // Do not open editor
+                    if (await window.showConfirm("Voulez-vous vraiment supprimer cette campagne ? Cette action est irréversible.")) {
+                        try {
+                            const oldText = delBtn.innerHTML;
+                            delBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                            delBtn.disabled = true;
+
+                            // It assumes 'data.id' maps to mapping from Object.keys inside dataCache
+                            const cid = data.id;
+                            if (cid) {
+                                await window.deleteDoc(window.doc(window.db, "campaigns", cid));
+                                loadCampaigns(document.getElementById('campaign-filter-select')?.value || 'all');
+                            } else {
+                                throw new Error("ID de campagne introuvable");
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            if (window.showAlert) window.showAlert("Erreur lors de la suppression: " + err.message, "error");
+                            delBtn.innerHTML = '<i class="fas fa-trash"></i>';
+                            delBtn.disabled = false;
+                        }
+                    }
+                });
+            }
 
             container.appendChild(card);
         });

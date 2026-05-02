@@ -2,10 +2,11 @@
 import { activeConfig } from "../../env-config.js";
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, where, orderBy, serverTimestamp, getCountFromServer, Timestamp, onSnapshot, writeBatch, increment } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { loadBilling } from "./billing.js";
+import { loadSummerCamp } from "./summer-camp.js";
 
 const app = initializeApp(activeConfig.firebase);
 const analytics = getAnalytics(app);
@@ -56,6 +57,8 @@ window.getDocs = getDocs;
 window.collection = collection;
 window.deleteDoc = deleteDoc;
 window.doc = doc;
+window.getDoc = getDoc;
+window.setDoc = setDoc;
 window.addDoc = addDoc;
 window.updateDoc = updateDoc;
 window.serverTimestamp = serverTimestamp;
@@ -65,6 +68,8 @@ window.orderBy = orderBy;
 window.getCountFromServer = getCountFromServer;
 window.Timestamp = Timestamp;
 window.writeBatch = writeBatch;
+window.increment = increment;
+window.onSnapshot = onSnapshot;
 
 // --- Rich Text Editors ---
 let quillWelcome;
@@ -314,6 +319,16 @@ function setupDeleteButton(btnClass, collectionName, callback) {
             e.stopPropagation();
             if (await showConfirm('Voulez-vous vraiment supprimer cet élément ?')) {
                 const id = e.target.closest('button').getAttribute('data-id');
+
+                // --- AUDIT LOGGING ---
+                try {
+                    // Try to find a name or title in the row to make the log more readable
+                    const row = e.target.closest('tr') || e.target.closest('.card') || e.target.closest('div');
+                    const details = row ? (row.innerText.split('\n')[0].substring(0, 50)) : id;
+                    window.logAction('DELETE', collectionName, id, `Suppression: ${details}`);
+                } catch (err) { console.error("Audit error:", err); }
+                // ---------------------
+
                 await deleteDoc(doc(db, collectionName, id));
                 callback();
             }
@@ -321,7 +336,7 @@ function setupDeleteButton(btnClass, collectionName, callback) {
     });
 }
 
-async function uploadAndSave(collectionName, id, data, imageFile) {
+async function uploadAndSave(collectionName, id, data, imageFile, auditDetails = null) {
     // Default imageUrl to empty string if creating new and no image
     if (!data.imageUrl && !imageFile && !id) data.imageUrl = '';
 
@@ -343,8 +358,20 @@ async function uploadAndSave(collectionName, id, data, imageFile) {
 
     if (id) {
         await updateDoc(doc(db, collectionName, id), data);
+        // --- AUDIT LOGGING ---
+        try {
+            const label = auditDetails || (data.name || data.title || data.label || id);
+            window.logAction('UPDATE', collectionName, id, `Mise à jour: ${label}`, null, data);
+        } catch (err) { console.error("Audit error:", err); }
+        // ---------------------
     } else {
-        await addDoc(collection(db, collectionName), data);
+        const docRef = await addDoc(collection(db, collectionName), data);
+        // --- AUDIT LOGGING ---
+        try {
+            const label = auditDetails || (data.name || data.title || data.label || "Nouveau");
+            window.logAction('CREATE', collectionName, docRef.id, `Création: ${label}`, null, data);
+        } catch (err) { console.error("Audit error:", err); }
+        // ---------------------
     }
 }
 
@@ -353,7 +380,7 @@ let activeUnsubscribes = [];
 
 function syncCollection(collectionName, cacheKey, refreshCallback) {
     // Whitelist essential metadata that is public-read and needed for many views (like calendar)
-    const essential = ['matches', 'fields', 'seasons', 'referees', 'settings', 'teams', 'inventory', 'players'];
+    const essential = ['matches', 'fields', 'seasons', 'referees', 'settings', 'teams', 'inventory', 'players', 'board_members', 'board', 'coaches', 'sponsors'];
     const isEssential = essential.includes(collectionName) || essential.includes(cacheKey);
 
     // Check if user has at least view permission for this module
@@ -412,6 +439,11 @@ function initRealTimeListeners() {
         if (visualModal && visualModal.style.display === 'flex') {
             if (typeof renderVisualTeams === 'function') renderVisualTeams();
         }
+    });
+
+    syncCollection("audit_logs", "audit_logs", () => {
+        const view = document.getElementById('view-history');
+        if (view && view.classList.contains('active')) loadAuditLogs();
     });
 
     syncCollection("teams", "teams", () => {
@@ -563,15 +595,7 @@ function initRealTimeListeners() {
         }
     });
 
-    syncCollection("invoices", "invoices", () => {
-        const view = document.getElementById('view-billing');
-        if (view && view.classList.contains('active')) loadBilling();
-    });
-
-    syncCollection("scheduled_payments", "scheduled_payments", () => {
-        const view = document.getElementById('view-billing');
-        if (view && view.classList.contains('active')) loadBilling();
-    });
+    // Invoice sync and Scheduled Payments sync removed in favor of direct Stripe fetch in billing.js
 
     syncCollection("admins", "admins", () => {
         if (typeof loadAdmins === 'function') loadAdmins();
@@ -704,62 +728,34 @@ if (logoutBtn) {
 }
 
 onAuthStateChanged(auth, async (user) => {
-    if (initLoader) {
-        initLoader.classList.remove('active');
-        initLoader.style.display = 'none';
-    }
-
     if (user) {
         authScreen.classList.remove('active');
+
+        // CHECK ROLE AND SETUP UI BEFORE SHOWING DASHBOARD
+        if (window.checkAdminAndSetupUI) {
+            await window.checkAdminAndSetupUI(user);
+        }
+
         dashboardScreen.classList.add('active');
-
-        // CHECK ROLE
-        if (window.checkAdminAndSetupUI) await window.checkAdminAndSetupUI(user);
-
         document.getElementById('user-email').textContent = user.email;
 
         // Initialize Real-time Listeners
         initRealTimeListeners();
-
-        // Determine allowed views
-        const allowedViews = [];
-        document.querySelectorAll('.nav-btn').forEach(btn => {
-            if (btn.style.display !== 'none') allowedViews.push(btn.dataset.target);
-        });
-
-        // Restore last view OR Redirect to first allowed view
-        let lastView = localStorage.getItem('celtics_admin_last_view');
-
-        // If last view is stored but not allowed anymore (e.g. role changed), clear it
-        if (lastView && !allowedViews.includes(lastView)) {
-            lastView = null;
-        }
-
-        if (lastView && allowedViews.includes(lastView)) {
-            const btn = document.querySelector(`.nav-btn[data-target="${lastView}"]`);
-            if (btn) btn.click();
-            else if (allowedViews.includes('view-dashboard')) loadDashboardData();
-        } else {
-            // Redirect to the first permitted view
-            if (allowedViews.length > 0) {
-                const firstTarget = allowedViews[0];
-                const firstBtn = document.querySelector(`.nav-btn[data-target="${firstTarget}"]`);
-                if (firstBtn) firstBtn.click();
-                else if (firstTarget === 'view-dashboard') loadDashboardData();
-            } else {
-                // Fallback if nothing allowed (weird case)
-                loadDashboardData();
-            }
-        }
-
-        seedDatabase();
-        await loadSettings(); // Load global settings (including calendar)
     } else {
-        dashboardScreen.classList.remove('active');
         authScreen.classList.add('active');
-        stopRealTimeListeners();
+        dashboardScreen.classList.remove('active');
+    }
+
+    if (initLoader) {
+        initLoader.classList.remove('active');
+        initLoader.style.display = 'none';
     }
 });
+
+seedDatabase();
+await loadSettings(); // Load global settings (including calendar)
+
+
 
 // --- Navigation ---
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -828,6 +824,12 @@ navBtns.forEach(btn => {
         if (targetId === 'view-sponsors') loadSponsors();
         if (targetId === 'view-seasons') loadSeasons();
         if (targetId === 'view-billing') loadBilling();
+        if (targetId === 'view-summer-camp') loadSummerCamp();
+        if (targetId === 'view-treasurer') loadTreasurer();
+        if (targetId === 'view-history') {
+            populateAuditAdminFilter();
+            loadAuditLogs();
+        }
 
         // Init Email Campaigns
         if (targetId === 'view-email-campaigns') {
@@ -860,7 +862,10 @@ document.querySelectorAll('.view-toggle-btn').forEach(btn => {
                 if (viewType === 'calendar') {
                     calView.style.display = 'block';
                     listView.style.display = 'none';
-                    // Trigger resize for FullCalendar
+                    // Trigger a reload to ensure the Calendar grid has the most recent caching state 
+                    // without any ghost elements if the user just deleted an item in list view.
+                    if (typeof loadMatches === 'function') loadMatches();
+                    // Trigger resize for FullCalendar (if any leftover existences)
                     setTimeout(() => { if (window.calendarAPI) window.calendarAPI.updateSize(); }, 50);
                 } else {
                     calView.style.display = 'none';
@@ -1047,11 +1052,11 @@ async function loadBoard() {
 
     // Sorting Logic
     boardList.sort((a, b) => {
-        if (sortBy === 'active') {
-            const visA = a.visible !== false;
-            const visB = b.visible !== false;
-            if (visA !== visB) return visA ? -1 : 1;
-        } else if (sortBy === 'email') {
+        const visA = a.visible !== false;
+        const visB = b.visible !== false;
+        if (visA !== visB) return visA ? -1 : 1;
+
+        if (sortBy === 'email') {
             return (a.email || '').localeCompare(b.email || '');
         }
         return (a.name || '').localeCompare(b.name || '');
@@ -1173,11 +1178,11 @@ async function loadReferees() {
 
     // Sorting Logic
     refList.sort((a, b) => {
-        if (sortBy === 'active') {
-            const visA = a.visible !== false;
-            const visB = b.visible !== false;
-            if (visA !== visB) return visA ? -1 : 1;
-        } else if (sortBy === 'email') {
+        const visA = a.visible !== false;
+        const visB = b.visible !== false;
+        if (visA !== visB) return visA ? -1 : 1;
+
+        if (sortBy === 'email') {
             return (a.email || '').localeCompare(b.email || '');
         }
         return (a.name || '').localeCompare(b.name || '');
@@ -1609,6 +1614,7 @@ if (btnConfirmGenerate) {
             }
 
             await commitBatch();
+            window.logAction('CREATE', 'teams', 'BATCH', `Génération automatique d'équipes pour la saison: ${seasonId}`, null, { seasonId });
             showAlert("Équipes générées avec succès !", "success");
             teamGenModal.classList.remove('active');
             // Refresh logic will happen via listeners
@@ -1702,6 +1708,9 @@ function renderVisualTeams() {
     visualContainer.innerHTML = '';
     const seasonId = document.getElementById('team-filter-season').value;
     let teams = Object.values(dataCache.teams || {}).filter(t => t.seasonId === seasonId);
+
+    const season = dataCache.seasons?.[seasonId];
+    const seasonYear = season ? parseInt(season.year) : new Date().getFullYear();
 
     // Filters
     if (!visualEditorMode) {
@@ -1815,6 +1824,7 @@ function renderVisualTeams() {
                     renderVisualTeams();
 
                     // 2. Update DB
+                    window.logAction('UPDATE', 'players', playerId, `Déplacement joueur (${playerId}) vers l'équipe ${team.name}`);
                     await updateDoc(doc(db, "players", playerId), { teamId: team.id });
 
                     // 3. Keep old team if not empty (handled by listener usually, but here we check for deletion)
@@ -1836,8 +1846,29 @@ function renderVisualTeams() {
         }
 
         players.forEach(p => {
+            const dob = p.dob || p.birthDate;
+            let bgColor = 'white';
+
+            if (dob) {
+                const bYear = parseInt(dob.split('-')[0]);
+                const playerAge = seasonYear - bYear;
+
+                const cat = team.category || '';
+                const match = cat.match(/\d+/);
+                const teamAge = match ? parseInt(match[0]) : null;
+
+                if (teamAge !== null) {
+                    if (playerAge > teamAge) bgColor = '#ffcccc'; // Trop vieux
+                    else if (playerAge < teamAge) bgColor = '#ffffee'; // Plus jeune
+                } else if (cat === 'Senior') {
+                    if (playerAge < 18) bgColor = '#ffffee';
+                } else if (cat === 'Timbits') {
+                    if (playerAge >= 4) bgColor = '#ffcccc';
+                }
+            }
+
             const row = document.createElement('div');
-            row.style.cssText = 'padding: 8px; margin-bottom: 5px; background: white; border: 1px solid #eee; border-radius: 4px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;';
+            row.style.cssText = `padding: 8px; margin-bottom: 5px; background: ${bgColor}; border: 1px solid #eee; border-radius: 4px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;`;
             if (visualEditorMode) {
                 row.draggable = true;
                 row.style.cursor = 'grab';
@@ -1846,14 +1877,14 @@ function renderVisualTeams() {
                 };
             }
 
-            const dob = p.dob || p.birthDate;
             row.innerHTML = `
                 <div style="width: 25px; height: 25px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #555; flex-shrink: 0;">
                     ${p.firstName ? p.firstName.charAt(0) : 'U'}
                 </div>
-                <div style="display:flex; flex-direction:column; line-height: 1.2;">
+                <div style="display:flex; flex-direction:column; line-height: 1.2; flex: 1;">
                     <div>${p.firstName} ${p.lastName}</div>
                     ${dob ? `<small style="color: #888; font-size: 0.75rem;">${dob}</small>` : ''}
+                    ${p.specialRequests ? `<div style="color: #e67e22; font-size: 0.75rem; margin-top: 4px; font-weight: 500; display: flex; align-items: flex-start; gap: 4px; white-space: normal;"><i class="fas fa-comment-dots" style="margin-top: 2px; flex-shrink: 0;"></i> <span>${p.specialRequests}</span></div>` : ''}
                 </div>
             `;
             body.appendChild(row);
@@ -1935,8 +1966,10 @@ document.getElementById('team-form')?.addEventListener('submit', async (e) => {
 
         if (id) {
             await updateDoc(doc(db, "teams", id), data);
+            window.logAction('UPDATE', 'teams', id, `Mise à jour équipe: ${finalName}`, null, data);
         } else {
-            await addDoc(collection(db, "teams"), data);
+            const docRef = await addDoc(collection(db, "teams"), data);
+            window.logAction('CREATE', 'teams', docRef.id, `Création équipe: ${finalName}`, null, data);
         }
 
         teamModal.classList.remove('active');
@@ -2240,6 +2273,7 @@ document.getElementById('btn-add-player-to-team')?.addEventListener('click', asy
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     try {
+        window.logAction('UPDATE', 'players', playerId, `Ajout du joueur à l'équipe ID: ${teamId}`);
         await updateDoc(doc(db, "players", playerId), { teamId: teamId });
         // Refresh lists
         loadTeamPlayers(teamId);
@@ -2289,11 +2323,18 @@ async function loadTeamPlayers(teamId) {
                 const phone = player.phone || player.parentPhone || '-';
                 const email = player.parentEmail || '-';
 
+                const auth = String(player.photoAuth || '').trim().toLowerCase();
+                const photoStatus = (player.photoAuth === true || auth === 'true' || auth === 'oui' || auth === 'yes')
+                    ? '<span style="color:#27ae60; font-weight:600;">Autorisé</span>'
+                    : '<span style="color:#e74c3c; font-weight:600;">Refusé</span>';
+
                 playerDetails = `
-                    <div style="font-size: 0.8rem; color: #666; margin-top: 5px; padding-left: 20px;">
+                    <div style="font-size: 0.8rem; color: #666; margin-top: 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
                         <div><i class="fas fa-birthday-cake" style="width:14px;"></i> <b>Né(e):</b> ${dob}</div>
                         <div><i class="fas fa-heartbeat" style="width:14px;"></i> <b>Santé:</b> ${health}</div>
                         <div><i class="fas fa-user-friends" style="width:14px;"></i> <b>Parent:</b> ${parents} (${phone}, ${email})</div>
+                        <div><i class="fas fa-tshirt" style="width:14px;"></i> <b>Maillot:</b> ${player.jerseyNumber || '-'}</div>
+                        <div><i class="fas fa-camera" style="width:14px;"></i> <b>Photos:</b> ${photoStatus}</div>
                     </div>
                 `;
             }
@@ -2308,7 +2349,7 @@ async function loadTeamPlayers(teamId) {
             });
             div.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 500;"><i class="fas fa-user" style="color:#666; margin-right:8px;"></i> ${name}</span>
+                    <span style="font-weight: 500;"><i class="fas fa-user" style="color:#666; margin-right:8px;"></i> ${name} ${player.jerseyNumber ? `(<b>#${player.jerseyNumber}</b>)` : ''}</span>
                     ${!isCoach ? `
                     <button class="btn-delete-player" data-player-id="${player.id}" style="background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
                         <i class="fas fa-times"></i>
@@ -2333,7 +2374,11 @@ async function loadTeamPlayers(teamId) {
                 const playerId = btn.getAttribute('data-player-id');
                 if (await showConfirm('Retirer ce joueur de l\'équipe?')) {
                     try {
+                        const oldData = window.dataCache.players ? window.dataCache.players[playerId] : null;
                         await updateDoc(doc(db, "players", playerId), { teamId: null });
+
+                        window.logAction('UPDATE', 'players', playerId, `Retrait du joueur de l'équipe`, { teamId: teamId }, { teamId: null });
+
                         loadTeamPlayers(teamId);
                         populateTeamPlayerSelect('team-add-player-select'); // Make available again
                     } catch (error) {
@@ -2412,6 +2457,7 @@ window.openPlayerModal = async function (data = null) {
         document.getElementById('ep-p2-email').value = data.parent2Email || '';
 
         document.getElementById('ep-jersey-size').value = data.jerseySize || '';
+        document.getElementById('ep-jersey-number').value = data.jerseyNumber || '';
         document.getElementById('ep-short-size').value = data.shortSize || '';
         document.getElementById('ep-short-opt').value = data.shortOption || '';
         document.getElementById('ep-socks-opt').value = data.socksOption || 'Non';
@@ -2479,6 +2525,7 @@ document.getElementById('player-form')?.addEventListener('submit', async (e) => 
             parent2Email: document.getElementById('ep-p2-email').value,
 
             jerseySize: document.getElementById('ep-jersey-size').value,
+            jerseyNumber: document.getElementById('ep-jersey-number').value,
             shortSize: document.getElementById('ep-short-size').value,
             shortOption: document.getElementById('ep-short-opt').value,
             socksOption: document.getElementById('ep-socks-opt').value,
@@ -2494,10 +2541,12 @@ document.getElementById('player-form')?.addEventListener('submit', async (e) => 
 
         if (id) {
             await updateDoc(doc(db, "players", id), data);
+            window.logAction('UPDATE', 'players', id, `Mise à jour joueur: ${data.firstName} ${data.lastName}`, null, data);
         } else {
             // New Player
             data.createdAt = serverTimestamp();
-            await addDoc(collection(db, "players"), data);
+            const docRef = await addDoc(collection(db, "players"), data);
+            window.logAction('CREATE', 'players', docRef.id, `Création joueur: ${data.firstName} ${data.lastName}`, null, data);
         }
 
         showAlert("Joueur enregistré avec succès !", "success");
@@ -2743,6 +2792,7 @@ document.getElementById('inventory-form')?.addEventListener('submit', async (e) 
             for (const item of toUpdate) {
                 await updateDoc(doc(db, "inventory", item.id), commonData);
             }
+            window.logAction('UPDATE', 'inventory', batchId, `Mise à jour en lot (${toUpdate.length} articles)`, null, commonData);
             showAlert(`Lot mis à jour (${toUpdate.length} articles).`, "success");
         } else {
             // Preserve distributions if editing existing item
@@ -3022,6 +3072,7 @@ async function loadInventory() {
                     for (const item of toDelete) {
                         await deleteDoc(doc(db, "inventory", item.id));
                     }
+                    window.logAction('DELETE', 'inventory', bid, `Suppression en lot (${toDelete.length} articles)`);
                     showAlert("Lot supprimé avec succès.", "success");
                     loadInventory();
                     updateStats();
@@ -3095,6 +3146,7 @@ async function loadInventory() {
                             for (const item of batchItems) {
                                 await deleteDoc(doc(db, "inventory", item.id));
                             }
+                            window.logAction('DELETE', 'inventory', batchId, `Suppression en lot (${batchItems.length} articles)`);
                             inventoryModal.classList.remove('active');
                             showAlert("Lot supprimé avec succès.", "success");
                             loadInventory();
@@ -3514,24 +3566,34 @@ window.openRegistrationModal = async function (data = null) {
         document.getElementById('reg-medical').value = data.medical || '';
 
         // Parents
-        document.getElementById('reg-parent1-name').value = data.parent1Name || `${data.parentFirstName || ''} ${data.parentLastName || ''}`.trim();
-        document.getElementById('reg-parent1-email').value = data.parent1Email || data.email || '';
+        document.getElementById('reg-parent1-name').value = data.parent1Name || data.parentName || `${data.parentFirstName || ''} ${data.parentLastName || ''}`.trim();
+        document.getElementById('reg-parent1-email').value = data.parent1Email || data.parentEmail || data.email || '';
         document.getElementById('reg-parent2-name').value = data.parent2Name || '';
         document.getElementById('reg-parent2-email').value = data.parent2Email || '';
         document.getElementById('reg-phone').value = data.phoneFamily || data.phone || '';
 
         // Address
-        document.getElementById('reg-address').value = data.addressLine || '';
+        document.getElementById('reg-address').value = data.addressLine || data.address || '';
         document.getElementById('reg-city').value = data.city || '';
-        document.getElementById('reg-postal').value = data.postalCode || '';
+        document.getElementById('reg-postal').value = data.postalCode || data.postal || '';
 
         // Equipment
         document.getElementById('reg-jersey-size').value = data.jerseySize || '';
-        document.getElementById('reg-short-info').value = (data.shortOption || '') + ' ' + (data.shortSize || '');
-        document.getElementById('reg-socks-info').value = (data.socksOption || '') + ' ' + (data.socksSize || '') + (data.socksQuantity ? ' (Qté: ' + data.socksQuantity + ')' : '');
+        document.getElementById('reg-short-info').value = data.shortSize || '';
+        document.getElementById('reg-socks-info').value = data.socksSize || '';
+        document.getElementById('reg-short-opt').value = data.shortOption || '';
+        document.getElementById('reg-socks-opt').value = data.socksOption || 'Non';
 
         // Other
-        document.getElementById('reg-photo-auth').value = data.photoAuth || '';
+        const photoAuthValue = data.photoAuth || 'Non';
+        document.getElementById('reg-photo-auth').value = photoAuthValue;
+        const photoToggle = document.getElementById('reg-photo-auth-toggle');
+        const photoLabel = document.getElementById('reg-photo-auth-label');
+        if (photoToggle && photoLabel) {
+            photoToggle.checked = (photoAuthValue === 'Oui');
+            photoLabel.textContent = photoAuthValue;
+        }
+        document.getElementById('reg-special-requests').value = data.specialRequests || '';
         document.getElementById('reg-program').value = data.programCat || data.program || '';
         document.getElementById('reg-price').value = data.finalPrice || 0;
 
@@ -3569,6 +3631,13 @@ window.openRegistrationModal = async function (data = null) {
 if (openRegModalBtn) openRegModalBtn.addEventListener('click', () => openRegistrationModal(null));
 if (regModal) regModal.querySelector('.close-modal').addEventListener('click', () => regModal.classList.remove('active'));
 
+// Toggle Photo Auth logic
+document.getElementById('reg-photo-auth-toggle')?.addEventListener('change', (e) => {
+    const val = e.target.checked ? 'Oui' : 'Non';
+    document.getElementById('reg-photo-auth').value = val;
+    document.getElementById('reg-photo-auth-label').textContent = val;
+});
+
 document.getElementById('registration-form-admin')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -3598,7 +3667,12 @@ document.getElementById('registration-form-admin')?.addEventListener('submit', a
 
             // Equipment & Other
             jerseySize: document.getElementById('reg-jersey-size').value,
+            shortSize: document.getElementById('reg-short-info').value,
+            socksSize: document.getElementById('reg-socks-info').value,
+            shortOption: document.getElementById('reg-short-opt').value,
+            socksOption: document.getElementById('reg-socks-opt').value,
             photoAuth: document.getElementById('reg-photo-auth').value,
+            specialRequests: document.getElementById('reg-special-requests').value,
 
             // Legacy / List View Mapping
             firstName: document.getElementById('reg-child-first').value,
@@ -3703,12 +3777,20 @@ async function loadRegistrations() {
             headerEl.innerHTML = `Demandes d'inscription <span style="font-size:0.9rem; color:#666; font-weight:normal;">(${seasonText} - ${regs.length} inscrits)</span>`;
         }
 
+        const specialReqHtml = data.specialRequests
+            ? `<br><span title="${data.specialRequests.replace(/"/g, '&quot;')}" style="display:inline-flex; align-items:center; gap:4px; margin-top:4px; background:#fff8e1; color:#92400e; border:1px solid #f59e0b; border-radius:12px; padding:2px 8px; font-size:0.75rem; font-weight:600; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help;">
+                <i class="fas fa-exclamation-circle"></i> ${data.specialRequests.length > 35 ? data.specialRequests.substring(0, 35) + '…' : data.specialRequests}
+              </span>`
+            : '';
+
+        const genderLabel = data.gender ? ` (${data.gender})` : '';
+
         row.innerHTML = `<td>${date}</td>
-                         <td><strong>${data.childFirstName} ${data.childLastName}</strong><br><small>Né(e): ${data.dob || data.birthYear || '?'}</small></td>
+                         <td><strong>${data.childFirstName} ${data.childLastName}</strong><br><small>Né(e): ${data.dob || data.birthYear || '?'}</small>${specialReqHtml}</td>
                          <td>
                             ${teamName !== '-' && teamName !== 'Non assigné' ?
-                `<strong style="color:#007A33;">${teamName}</strong>` :
-                `<strong>${data.program || data.programCat || ''}</strong>`
+                `<strong style="color:#007A33;">${teamName}${genderLabel}</strong>` :
+                `<strong>${data.program || data.programCat || ''}${genderLabel}</strong>`
             }
                          </td>
                          <td>${statusHtml}</td>
@@ -3741,8 +3823,18 @@ if (migrateBtn) {
     migrateBtn.addEventListener('click', () => {
         migrateRegistrations();
     });
-} else {
-    console.error("Migrate button NOT FOUND");
+}
+const btnCopyRequests = document.getElementById('btn-copy-special-requests');
+if (btnCopyRequests) {
+    btnCopyRequests.addEventListener('click', () => {
+        copySpecialRequestsBatch();
+    });
+}
+const syncRegPlayersBtn = document.getElementById('btn-sync-registrations-players');
+if (syncRegPlayersBtn) {
+    syncRegPlayersBtn.addEventListener('click', () => {
+        syncRegistrationsToPlayersBatch();
+    });
 }
 
 // --- REUSE GLOBAL UTILS ---
@@ -3836,6 +3928,181 @@ async function migrateRegistrations() {
     }
 }
 
+async function copySpecialRequestsBatch() {
+    if (!await showConfirm("Voulez-vous copier les demandes particulières des inscrits vers tous les joueurs correspondants ? (Pour ceux qui existent déjà)", "Démarrer Copie")) return;
+
+    const container = document.querySelector('#view-registrations .card');
+    setLoading(container, true);
+
+    try {
+        const registrations = Object.values(dataCache.registrations || {});
+        const players = Object.values(dataCache.players || {});
+        let updatedCount = 0;
+
+        for (const r of registrations) {
+            const rFirst = (r.childFirstName || '').trim();
+            const rLast = (r.childLastName || '').trim();
+            if (!rFirst || !rLast) continue;
+
+            const rName = `${rFirst} ${rLast}`.toLowerCase().trim();
+            const rRequests = r.specialRequests || '';
+
+            if (rRequests) {
+                const match = players.find(p => {
+                    const pName = (p.name || `${p.firstName || ''} ${p.lastName || ''}`).toLowerCase().trim();
+                    return pName === rName;
+                });
+
+                if (match && match.specialRequests !== rRequests) {
+                    await updateDoc(doc(db, "players", match.id), { specialRequests: rRequests });
+                    // Update Cache optimistically
+                    match.specialRequests = rRequests;
+                    updatedCount++;
+                }
+            }
+        }
+
+        await showAlert(`Copie terminée. ${updatedCount} joueur(s) mis à jour avec succès !`, "success");
+        updateVisualEditorUI(); // Refresh visual editor UI if needed
+    } catch (e) {
+        console.error(e);
+        await showAlert("Erreur lors de la copie: " + e.message, "error");
+    } finally {
+        setLoading(container, false);
+    }
+}
+
+async function syncRegistrationsToPlayersBatch() {
+    if (!await showConfirm("Voulez-vous synchroniser les informations des inscrits (vêtements, parents, médical) vers tous les joueurs correspondants ?", "Démarrer Synchronisation")) return;
+
+    const container = document.querySelector('#view-registrations .card');
+    setLoading(container, true);
+
+    try {
+        const registrations = Object.values(dataCache.registrations || {});
+        const playersArr = Object.values(dataCache.players || {});
+        let updatedCount = 0;
+
+        for (const r of registrations) {
+            // Match logic (by name) - Normalized to handle spaces and accents
+            const normalize = (s) => (s || '').toString().toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+                .trim();
+
+            const rFirst = normalize(r.childFirstName);
+            const rLast = normalize(r.childLastName);
+            if (!rFirst || !rLast) continue;
+            const rName = `${rFirst} ${rLast}`;
+
+            const match = playersArr.find(p => {
+                const pFirst = normalize(p.firstName);
+                const pLast = normalize(p.lastName);
+                const pFullName = normalize(p.name || `${p.firstName || ''} ${p.lastName || ''}`);
+
+                return (pFirst === rFirst && pLast === rLast) || pFullName === rName;
+            });
+
+            if (match) {
+                const updates = {};
+
+                // 1. Clothing
+                if (r.shortOption && match.shortOption !== r.shortOption) updates.shortOption = r.shortOption;
+                if (r.shortSize && match.shortSize !== r.shortSize) updates.shortSize = r.shortSize;
+                if (r.socksOption && match.socksOption !== r.socksOption) updates.socksOption = r.socksOption;
+                if (r.socksSize && match.socksSize !== r.socksSize) updates.socksSize = r.socksSize;
+                if (r.socksQuantity && match.socksQuantity !== r.socksQuantity) updates.socksQuantity = r.socksQuantity;
+                if (r.jerseySize && match.jerseySize !== r.jerseySize) updates.jerseySize = r.jerseySize;
+
+                // 2. Parents & Contact
+                const rP1Name = (r.parent1Name || r.parentName || `${r.parentFirstName || ''} ${r.parentLastName || ''}`.trim()).trim();
+                if (rP1Name && match.parent1Name !== rP1Name) {
+                    updates.parent1Name = rP1Name;
+                    updates.parentName = rP1Name;
+
+                    const parts = rP1Name.split(' ');
+                    updates.parentFirstName = parts[0];
+                    updates.parentLastName = parts.slice(1).join(' ') || '';
+                }
+                const rP1Email = (r.parent1Email || r.parentEmail || r.email || '').trim();
+                if (rP1Email && match.parent1Email !== rP1Email) {
+                    updates.parent1Email = rP1Email;
+                    updates.parentEmail = rP1Email;
+                    updates.email = rP1Email;
+                }
+                if (r.parent2Name && match.parent2Name !== r.parent2Name) updates.parent2Name = r.parent2Name;
+                if (r.parent2Email && match.parent2Email !== r.parent2Email) updates.parent2Email = r.parent2Email;
+
+                const rPhone = (r.phoneFamily || r.phone || '').trim();
+                if (rPhone && (match.phone !== rPhone || match.parentPhone !== rPhone)) {
+                    updates.phone = rPhone;
+                    updates.parentPhone = rPhone;
+                }
+
+                // 3. Medical & Misc
+                const rMed = (r.medical || r.medicalCondition || '').trim();
+                const pMed = (match.medical || match.medicalCondition || '').trim();
+                if (rMed && rMed !== pMed) {
+                    updates.medical = rMed;
+                    updates.medicalCondition = rMed;
+                }
+
+                if (r.photoAuth && match.photoAuth !== r.photoAuth) updates.photoAuth = r.photoAuth;
+
+                const rAddress = (r.addressLine || r.address || '').trim();
+                if (rAddress && match.address !== rAddress) {
+                    updates.address = rAddress;
+                    updates.addressLine = rAddress; // Ensure modern key is set
+                }
+                if (r.city && match.city !== r.city) updates.city = r.city;
+                const rPostal = (r.postalCode || r.postal || '').trim();
+                if (rPostal && match.postalCode !== rPostal) {
+                    updates.postalCode = rPostal;
+                    updates.postal = rPostal;
+                }
+
+                if (r.dob && match.dob !== r.dob) {
+                    updates.dob = r.dob;
+                    updates.birthDate = r.dob;
+                }
+
+                // Auto-healing: If player has legacy but lacks modern keys, fill them even if registration has nothing new
+                if (!match.parent1Name && match.parentName) {
+                    updates.parent1Name = match.parentName;
+                    const parts = match.parentName.trim().split(' ');
+                    updates.parentFirstName = parts[0];
+                    updates.parentLastName = parts.slice(1).join(' ') || '';
+                }
+                if (!match.parent1Email && (match.parentEmail || match.email)) {
+                    updates.parent1Email = match.parentEmail || match.email;
+                }
+                if (!match.addressLine && match.address) {
+                    updates.addressLine = match.address;
+                }
+                if (!match.postalCode && match.postal) {
+                    updates.postalCode = match.postal;
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    await updateDoc(doc(db, "players", match.id), updates);
+                    // Update cache for visual updates
+                    Object.assign(match, updates);
+                    updatedCount++;
+                }
+            }
+        }
+
+        await showAlert(`Synchronisation terminée. ${updatedCount} joueur(s) mis à jour avec succès !`, "success");
+        if (window.logAction) {
+            await window.logAction("UPDATE_BATCH", "players", "multiple", `${updatedCount} joueurs synchronisés depuis les inscriptions`);
+        }
+    } catch (e) {
+        console.error(e);
+        await showAlert("Erreur lors de la synchronisation: " + e.message, "error");
+    } finally {
+        setLoading(container, false);
+    }
+}
+
 function showMigrationConflictModal(conflicts, cleanList, activeTeams) {
     const modal = document.getElementById('migration-conflict-modal');
     const tbody = document.querySelector('#migration-conflict-table tbody');
@@ -3855,6 +4122,7 @@ function showMigrationConflictModal(conflicts, cleanList, activeTeams) {
             <td>
                 <select class="form-control migration-decision" data-id="${c.regId}" style="font-size:0.9rem; padding: 5px;">
                     <option value="skip">Marquer comme déjà migré</option>
+                    <option value="update">Mettre à jour (Copier demandes)</option>
                     <option value="force">Forcer la création (Homonyme)</option>
                 </select>
             </td>
@@ -3876,6 +4144,21 @@ function showMigrationConflictModal(conflicts, cleanList, activeTeams) {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
 
+    // Add "Apply to All" Button
+    let batchBtn = document.getElementById('migration-apply-all-update');
+    if (!batchBtn) {
+        batchBtn = document.createElement('button');
+        batchBtn.id = 'migration-apply-all-update';
+        batchBtn.className = 'btn-action';
+        batchBtn.style.cssText = 'background: #e67e22; margin-right: 10px; font-size: 0.85rem;';
+        batchBtn.innerHTML = '<i class="fas fa-magic"></i> Tout Mettre à Jour';
+        newBtn.parentNode.insertBefore(batchBtn, newBtn);
+    }
+
+    batchBtn.onclick = () => {
+        document.querySelectorAll('.migration-decision').forEach(sel => sel.value = 'update');
+    };
+
     newBtn.addEventListener('click', async () => {
         // Gather decisions
         const finalToMigrate = cleanList.map(x => ({ ...x, action: 'migrate' }));
@@ -3890,6 +4173,8 @@ function showMigrationConflictModal(conflicts, cleanList, activeTeams) {
                 finalToMigrate.push({ id: rid, data: c.regData, action: 'migrate' });
             } else if (val === 'skip') {
                 finalToMigrate.push({ id: rid, data: c.regData, action: 'statusOnly' });
+            } else if (val === 'update') {
+                finalToMigrate.push({ id: rid, data: c.regData, action: 'update', playerId: c.matchId });
             }
         });
 
@@ -3938,15 +4223,21 @@ async function executeMigration(list, activeTeams = []) {
                     firstName: r.childFirstName,
                     lastName: r.childLastName,
                     name: `${r.childFirstName} ${r.childLastName}`,
+                    birthDate: r.dob || '',
                     dob: r.dob || '',
                     year: r.dob ? parseInt(r.dob.split('-')[0]) : (r.yearOfBirth || new Date().getFullYear()),
                     gender: r.gender || '',
                     medical: r.medical || '',
+                    medicalCondition: r.medical || '',
 
+                    parent1Name: r.parent1Name || '',
+                    parent1Email: r.parent1Email || r.email || '',
                     parentName: r.parent1Name || '',
                     parentFirstName: r.parentFirstName || (r.parent1Name ? r.parent1Name.split(' ')[0] : ''),
                     parentLastName: r.parentLastName || (r.parent1Name ? r.parent1Name.split(' ').slice(1).join(' ') : ''),
                     parentEmail: r.parent1Email || r.email || '',
+                    parent2Name: r.parent2Name || '',
+                    parent2Email: r.parent2Email || '',
                     phone: r.phoneFamily || r.phone || '',
 
                     address: r.addressLine || '',
@@ -3956,10 +4247,15 @@ async function executeMigration(list, activeTeams = []) {
                     jerseySize: r.jerseySize || '',
                     shortSize: r.shortSize || '',
                     socksSize: r.socksSize || '',
+                    shortOption: r.shortOption || '',
+                    socksOption: r.socksOption || 'Non',
+                    socksQuantity: r.socksQuantity || 1,
+
+
 
                     teamId: assignedTeamId || r.teamId || '',
                     photoAuth: r.photoAuth || '',
-
+                    specialRequests: r.specialRequests || '',
                     sourceRegistrationId: rid,
                     createdAt: new Date(),
                     skill: 1, // Default to lowest skill or unrated
@@ -3970,6 +4266,12 @@ async function executeMigration(list, activeTeams = []) {
 
                 // Add to Players
                 await addDoc(collection(db, "players"), newPlayer);
+            } else if (item.action === 'update') {
+                // Update Existing Player with special requests
+                const playerRef = doc(db, "players", item.playerId);
+                await updateDoc(playerRef, {
+                    specialRequests: r.specialRequests || ''
+                });
             }
 
             // Update Registration Status to Migré for both 'migrate' and 'statusOnly'
@@ -4044,7 +4346,14 @@ async function loadDashboardData() {
     const playersTask = wrap("Players", async () => {
         const playersCountEl = document.getElementById('dash-players-count');
         const playersCount = Object.keys(dataCache.players || {}).length;
-        if (playersCountEl) playersCountEl.textContent = `${playersCount} joueurs au total`;
+        if (playersCountEl) playersCountEl.innerHTML = `<strong>${playersCount}</strong> joueurs au total`;
+
+        const activeTeamsEl = document.getElementById('dash-active-teams-count');
+        if (activeTeamsEl) {
+            const activeSeason = Object.values(dataCache.seasons || {}).find(s => s.active);
+            const activeTeamsCount = activeSeason ? Object.values(dataCache.teams || {}).filter(t => t.seasonId === activeSeason.id).length : 0;
+            activeTeamsEl.innerHTML = `<strong>${activeTeamsCount}</strong> équipes actives`;
+        }
     });
 
     // 3. Coaches Task
@@ -4054,12 +4363,19 @@ async function loadDashboardData() {
 
         coachContainer.innerHTML = '';
         const coaches = Object.values(dataCache.coaches || {});
+
+        const coachesCountEl = document.getElementById('dash-coaches-count');
+        if (coachesCountEl) {
+            const activeCoachesCount = coaches.filter(c => c.visible !== false).length;
+            coachesCountEl.innerHTML = `<strong>${activeCoachesCount}</strong> coachs actifs`;
+        }
+
         const now = new Date();
         const sixMonthsFromNow = new Date();
         sixMonthsFromNow.setMonth(now.getMonth() + 6);
 
         let alertCount = 0;
-        coaches.forEach(c => {
+        coaches.filter(c => c.visible !== false).forEach(c => {
             const expiry = c.policeExpiry ? new Date(c.policeExpiry) : null;
             const displayName = c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Inconnu';
 
@@ -4079,23 +4395,32 @@ async function loadDashboardData() {
     });
     // 4. Referees Task
     const refereesTask = wrap("Referees", async () => {
+        const referees = Object.values(dataCache.referees || {});
+
+        const refereesCountEl = document.getElementById('dash-referees-count');
+        if (refereesCountEl) {
+            const activeRefereesCount = referees.filter(r => r.visible !== false).length;
+            refereesCountEl.innerHTML = `<strong>${activeRefereesCount}</strong> arbitres actifs`;
+        }
+
         const refTbody = document.getElementById('dash-ref-stats');
         if (!refTbody) return;
 
         refTbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Calcul...</td></tr>';
 
         const matches = Object.values(dataCache.matches || {});
-        const referees = Object.values(dataCache.referees || {});
 
         const refCounts = {};
         matches.forEach(m => {
-            [m.refCenter, m.refAsst1, m.refAsst2].forEach(id => {
-                if (id) refCounts[id] = (refCounts[id] || 0) + 1;
-            });
+            if (m.played && m.scoreHome !== null && m.scoreAway !== null && m.scoreHome !== undefined && m.scoreAway !== undefined) {
+                [m.refCenter, m.refAsst1, m.refAsst2].forEach(id => {
+                    if (id) refCounts[id] = (refCounts[id] || 0) + 1;
+                });
+            }
         });
 
         refTbody.innerHTML = '';
-        referees.forEach(r => {
+        referees.filter(r => r.visible !== false).forEach(r => {
             const count = refCounts[r.id] || 0;
             const fullName = r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Inconnu';
             refTbody.innerHTML += `<tr><td>${fullName}</td><td style="text-align:center; font-weight:bold;">${count}</td></tr>`;
@@ -4155,8 +4480,44 @@ async function loadDashboardData() {
         renderList(socksEl, totals.socks);
     });
 
+    // 6. Photo Restriction Task
+    const photoRestrictionTask = wrap("Photo Restriction", async () => {
+        const photoListEl = document.getElementById('dash-photo-opt-out-list');
+        if (!photoListEl) return;
+
+        const players = Object.values(dataCache.players || {});
+        // Try getting both general missing players or seasonal depending on how data is handled. We will tie it to activeSeason if possible.
+        const activeSeason = Object.values(dataCache.seasons || {}).find(s => s.active);
+
+        const restrictedPlayers = players.filter(p => {
+            const auth = p.photoAuth ? p.photoAuth.trim().toLowerCase() : '';
+            return auth === 'non' || auth === 'refusé';
+        });
+
+        // if there's an active season, let's just filter players matching it, but if none return it all
+        const activeRestrictedPlayers = activeSeason ? restrictedPlayers.filter(p => p.seasonId === activeSeason.id) : restrictedPlayers;
+
+        if (activeRestrictedPlayers.length === 0) {
+            photoListEl.innerHTML = '<span style="color: green; text-align:center;">Aucune interdiction trouvée.</span>';
+        } else {
+            photoListEl.innerHTML = activeRestrictedPlayers.map(p => {
+                const displayName = p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Inconnu';
+                const teamData = (dataCache.teams && p.teamId) ? dataCache.teams[p.teamId] : null;
+                const teamName = teamData ? (teamData.name || teamData.category) : 'Sans équipe';
+                return `
+                    <div style="padding: 10px; margin-bottom: 5px; border-left: 4px solid #e74c3c; background: #fff; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong style="color: #333; font-size:0.95rem;">${displayName}</strong>
+                            <span style="font-size:0.8rem; background:#f2f2f2; padding:2px 6px; border-radius:10px;">${teamName}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    });
+
     // Fire all tasks in parallel
-    await Promise.all([seasonTask, playersTask, coachesTask, refereesTask, equipmentTask]);
+    await Promise.all([seasonTask, playersTask, coachesTask, refereesTask, equipmentTask, photoRestrictionTask]);
     console.timeEnd("DashboardLoad");
 }
 
@@ -4245,9 +4606,11 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
             // If editing, we might need to handle ID change if they changed email
             // But for now, let's keep it simple: use the ID provided by the table
             await updateDoc(doc(db, "admins", id), data);
+            window.logAction('UPDATE', 'admins', id, `Mise à jour administrateur: ${data.name} (${data.email})`, null, data);
         } else {
             // ALWAYS use lowercase email as the Document ID for security rules
             await setDoc(doc(db, "admins", lowerEmail), data);
+            window.logAction('CREATE', 'admins', lowerEmail, `Création administrateur: ${data.name} (${data.email})`, null, data);
 
             // --- INVITATION LOGIC FOR NEW USERS ---
             try {
@@ -4257,7 +4620,8 @@ document.getElementById('admin-form')?.addEventListener('submit', async (e) => {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${token}`,
+                        'x-environment': window.activeConfig ? window.activeConfig.env : 'staging'
                     },
                     body: JSON.stringify({ email: lowerEmail, name: name })
                 });
@@ -4291,6 +4655,210 @@ document.getElementById('admin-preset-roles')?.addEventListener('change', (e) =>
 
     // Reset all to 'none' when selecting a preset role
     document.querySelectorAll('.permissions-grid input[value="none"]').forEach(r => r.checked = true);
+});
+
+async function logAction(action, collectionName, docId, details, oldData = null, newData = null) {
+    try {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const logEntry = {
+            timestamp: serverTimestamp(),
+            adminEmail: user.email,
+            adminName: dataCache.admins[user.email.toLowerCase()]?.name || user.displayName || user.email,
+            action: action, // CREATE, UPDATE, DELETE, PAYMENT...
+            collection: collectionName,
+            documentId: docId,
+            details: details,
+            environment: activeConfig.env
+        };
+
+        if (oldData) logEntry.oldData = oldData;
+        if (newData) logEntry.newData = newData;
+
+        await addDoc(collection(db, "audit_logs"), logEntry);
+    } catch (e) {
+        console.error("Failed to log audit action:", e);
+        console.log("Audit context:", {
+            authStatus: !!auth.currentUser,
+            userEmail: auth.currentUser?.email,
+            collection: "audit_logs",
+            dbId: activeConfig.firestoreDb
+        });
+    }
+}
+window.logAction = logAction;
+
+async function loadAuditLogs() {
+    const table = document.getElementById('history-table-body');
+    if (!table) return;
+
+    try {
+        const logs = Object.values(dataCache.audit_logs || {});
+        // Sort by timestamp desc (if possible from local cache, though onSnapshot is unordered usually)
+        // Actually Firestore query should have orderBy but syncCollection is generic.
+        // Let's sort manually here or improve syncCollection if needed.
+        const sortedLogs = logs.sort((a, b) => {
+            const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds * 1000 || 0);
+            const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds * 1000 || 0);
+            return timeB - timeA;
+        });
+
+        table.innerHTML = '';
+
+        if (sortedLogs.length === 0) {
+            table.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Aucun log trouvé.</td></tr>';
+            return;
+        }
+
+        const searchText = document.getElementById('history-search')?.value?.toLowerCase() || '';
+        const startDate = document.getElementById('history-date-start')?.value;
+        const endDate = document.getElementById('history-date-end')?.value;
+        const userFilter = document.getElementById('history-filter-user')?.value || 'all';
+
+        sortedLogs.forEach(data => {
+            const logDate = data.timestamp?.toMillis ? new Date(data.timestamp.toMillis()) : (data.timestamp?.seconds ? new Date(data.timestamp.seconds * 1000) : null);
+            const dateStr = logDate ? logDate.toLocaleString('fr-CA') : '...';
+
+            // --- FILTER LOGIC ---
+            // 1. Text Search
+            if (searchText) {
+                const searchStr = `${dateStr} ${data.adminEmail} ${data.adminName} ${data.action} ${data.collection} ${data.details}`.toLowerCase();
+                if (!searchStr.includes(searchText)) return;
+            }
+
+            // 2. User Filter
+            if (userFilter !== 'all' && data.adminEmail !== userFilter) return;
+
+            // 3. Date Range Filter
+            if (logDate) {
+                if (startDate) {
+                    const start = new Date(startDate);
+                    start.setHours(0, 0, 0, 0);
+                    if (logDate < start) return;
+                }
+                if (endDate) {
+                    const end = new Date(endDate);
+                    end.setHours(23, 59, 59, 999);
+                    if (logDate > end) return;
+                }
+            }
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="timestamp-cell">${dateStr}</td>
+                <td class="admin-cell">
+                    <div>${data.adminName}</div>
+                    <div style="font-size: 0.75rem; color: #6b7280; font-weight: 400;">${data.adminEmail}</div>
+                </td>
+                <td><span class="action-badge ${getActionBadge(data.action)}">${data.action || 'N/A'}</span></td>
+                <td>
+                    <div style="font-weight: 500;">${data.collection}</div>
+                    <code style="font-size: 0.75rem; color: #6b7280;">ID: ${data.documentId?.substring(0, 12) || 'N/A'}...</code>
+                </td>
+                <td style="max-width: 300px; color: #4b5563;">${data.details}</td>
+                <td style="text-align: right;">
+                    <button class="btn-outline-success view-log-details" data-id="${data.id}" title="Détails" style="padding: 6px 10px !important;">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            `;
+            table.appendChild(row);
+        });
+
+        // Add event listeners for detail buttons
+        table.querySelectorAll('.view-log-details').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const logId = btn.getAttribute('data-id');
+                const log = dataCache.audit_logs[logId];
+                showLogDetails(log);
+            });
+        });
+
+    } catch (e) {
+        console.error("Error loading audit logs:", e);
+        table.innerHTML = `<tr><td colspan="6" style="color:red">Erreur: ${e.message}</td></tr>`;
+    }
+}
+
+function getActionBadge(action) {
+    if (!action) return 'action-other';
+    if (action.includes('CREATE')) return 'action-create';
+    if (action.includes('UPDATE')) return 'action-update';
+    if (action.includes('DELETE')) return 'action-delete';
+    return 'action-other';
+}
+
+function showLogDetails(log) {
+    const modal = document.getElementById('audit-detail-modal');
+    if (!modal) return;
+
+    // Basic Info
+    const date = log.timestamp?.toMillis ? new Date(log.timestamp.toMillis()) : (log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000) : null);
+    document.getElementById('audit-detail-date').textContent = date ? date.toLocaleString('fr-CA') : 'N/A';
+    document.getElementById('audit-detail-admin').textContent = `${log.adminName} (${log.adminEmail})`;
+    const badge = document.getElementById('audit-detail-action');
+    badge.textContent = log.action;
+    badge.className = 'badge ' + getActionBadge(log.action);
+    document.getElementById('audit-detail-collection').textContent = log.collection;
+    document.getElementById('audit-detail-id').textContent = log.documentId || 'N/A';
+    document.getElementById('audit-detail-text').textContent = log.details;
+
+    // Data Diff / Content
+    const diffContainer = document.getElementById('audit-diff-container');
+    const singleContainer = document.getElementById('audit-single-data-container');
+
+    if (log.oldData && log.newData) {
+        diffContainer.style.display = 'block';
+        singleContainer.style.display = 'none';
+        document.getElementById('audit-old-data').textContent = JSON.stringify(log.oldData, null, 2);
+        document.getElementById('audit-new-data').textContent = JSON.stringify(log.newData, null, 2);
+    } else {
+        diffContainer.style.display = 'none';
+        singleContainer.style.display = 'block';
+        const dataToShow = log.newData || log.oldData || { info: "Aucune donnée de snapshot disponible pour cette action." };
+        document.getElementById('audit-single-data').textContent = JSON.stringify(dataToShow, null, 2);
+    }
+
+    modal.classList.add('active');
+}
+
+// Modal closing logic
+document.getElementById('close-audit-modal')?.addEventListener('click', () => document.getElementById('audit-detail-modal').classList.remove('active'));
+document.getElementById('btn-close-audit-details')?.addEventListener('click', () => document.getElementById('audit-detail-modal').classList.remove('active'));
+
+// Filter change listeners
+document.getElementById('history-date-start')?.addEventListener('change', loadAuditLogs);
+document.getElementById('history-date-end')?.addEventListener('change', loadAuditLogs);
+document.getElementById('history-filter-user')?.addEventListener('change', loadAuditLogs);
+
+/**
+ * Populates the admin filter dropdown in the history view
+ */
+function populateAuditAdminFilter() {
+    const sel = document.getElementById('history-filter-user');
+    if (!sel) return;
+
+    const admins = Object.values(dataCache.admins || {});
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="all">Tous les admins</option>';
+
+    // Sort by name
+    admins.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(admin => {
+        const opt = document.createElement('option');
+        opt.value = admin.email;
+        opt.textContent = admin.name || admin.email;
+        sel.appendChild(opt);
+    });
+
+    sel.value = currentVal;
+}
+
+// Search listener
+document.getElementById('history-search')?.addEventListener('input', loadAuditLogs);
+document.getElementById('refresh-history-btn')?.addEventListener('click', () => {
+    // Force reload isn't needed with sync, but UI feedback is nice
+    loadAuditLogs();
 });
 
 async function loadAdmins() {
@@ -4394,6 +4962,8 @@ async function loadAdmins() {
                 if (await showConfirm("Supprimer cet administrateur ?")) {
                     const id = btn.getAttribute('data-id');
                     try {
+                        const adminData = dataCache.admins[id];
+                        window.logAction('DELETE', 'admins', id, `Suppression administrateur: ${adminData ? adminData.email : id}`);
                         await deleteDoc(doc(db, "admins", id));
                         loadAdmins();
                     } catch (e) {
@@ -4458,8 +5028,8 @@ const ROLE_PERMISSIONS = {
     'coach-general': { Equipes: 'view', Matchs: 'view', Inventaire: 'view' },
     'arbitre-general': { Matchs: 'view' },
     'tresorier': { Dashboard: 'view', Facturation: 'edit', Boutique: 'edit', Inventaire: 'view' },
-    'gestionnaire': { Matchs: 'edit' },
-    'custom': {}
+    'gestionnaire': { Dashboard: 'view', Matchs: 'edit' },
+    'custom': { Dashboard: 'view' }
 };
 
 window.checkAdminAndSetupUI = async (user) => {
@@ -4574,8 +5144,20 @@ window.checkAdminAndSetupUI = async (user) => {
         });
     }
 
+    // Fallback: If no specific admin role, but identified as coach or referee
+    if (mainRole === 'custom') {
+        if (window.currentUserCoachId) {
+            mainRole = 'coach-general';
+            console.log("Fallback: Identified coach role assigned.");
+        } else if (window.currentUserRefereeId) {
+            mainRole = 'arbitre-general';
+            console.log("Fallback: Identified referee role assigned.");
+        }
+    }
+
     const isSuper = mainRole === 'super-admin';
     window.currentUserMainRole = mainRole;
+    console.log("Current User Role:", mainRole);
     window.isRestrictedCoach = (mainRole === 'coach-general' || !!window.currentUserCoachId) && !isSuper;
 
     // Define permission mapping
@@ -4596,7 +5178,8 @@ window.checkAdminAndSetupUI = async (user) => {
         'Terrains': ['view-fields', 'view-fields-list'],
         'Saisons': ['view-seasons'],
         'Config': ['view-settings'],
-        'Dashboard': ['view-dashboard']
+        'Dashboard': ['view-dashboard'],
+        'Historique': ['view-history']
     };
 
     // Determine allowed views and store permissions
@@ -4609,6 +5192,8 @@ window.checkAdminAndSetupUI = async (user) => {
             if (target) allowedViews.push(target);
         });
         window.currentPermissions.all = 'edit';
+        allowedViews.push('view-history'); // Explicitly allow for super-admin
+        document.getElementById('nav-history-btn').style.display = 'flex';
     } else {
         // 1. apply base permissions from role
         const basePerms = ROLE_PERMISSIONS[mainRole] || {};
@@ -4634,6 +5219,14 @@ window.checkAdminAndSetupUI = async (user) => {
         });
     }
 
+    // Ensure ANY identified coach has access to Team Management sidebar
+    if (window.currentUserCoachId) {
+        window.currentPermissions['Equipes'] = window.currentPermissions['Equipes'] || 'view';
+        if (!allowedViews.includes('view-teams')) {
+            allowedViews.push('view-teams');
+        }
+    }
+
     // Sort Listeners
     document.getElementById('coach-sort')?.addEventListener('change', loadCoaches);
     document.getElementById('board-sort')?.addEventListener('change', loadBoard);
@@ -4654,6 +5247,19 @@ window.checkAdminAndSetupUI = async (user) => {
     // Enforce Read-Only UI (disable modifications)
     function enforcePermissions() {
         const isSuper = window.currentPermissions.all === 'edit';
+
+        // 1. Handle .admin-only elements and show them if allowed
+        document.querySelectorAll('.admin-only').forEach(el => {
+            const target = el.dataset.target;
+            const isAllowed = isSuper || (target && allowedViews.includes(target));
+
+            if (isAllowed) {
+                el.classList.remove('admin-only');
+                if (!el.classList.contains('nav-btn')) {
+                    el.style.display = '';
+                }
+            }
+        });
 
         const modMap = {
             'view-dashboard': 'Dashboard',
@@ -4706,8 +5312,6 @@ window.checkAdminAndSetupUI = async (user) => {
 
         // ROLE SPECIFIC ENFORCEMENT
         if (window.currentUserMainRole === 'arbitre-general' || window.currentUserRefereeId) {
-            // Arbitres cannot open match modal (handled by onclick in loadMatches but let's be double sure)
-            // They also shouldn't see 'Ajouter' buttons in match view
             const matchView = document.getElementById('view-matches');
             if (matchView) {
                 const addBtn = matchView.querySelector('#open-match-modal');
@@ -4716,7 +5320,6 @@ window.checkAdminAndSetupUI = async (user) => {
         }
 
         if (window.currentUserMainRole === 'coach-general' || window.currentUserCoachId) {
-            // Coaches cannot edit teams (handled by grid permissions but let's be sure)
             const teamView = document.getElementById('view-teams');
             if (teamView) {
                 const addBtn = teamView.querySelector('#open-team-modal');
@@ -4725,22 +5328,49 @@ window.checkAdminAndSetupUI = async (user) => {
         }
     }
 
-    // Run enforcement after views are rendered
-    setTimeout(enforcePermissions, 500);
+    // Run enforcement immediately
+    enforcePermissions();
 
     // Handle "Users" button specifically
     if (navAdminsBtn) {
         navAdminsBtn.style.display = isSuper ? 'flex' : 'none';
     }
 
-    // Redirect if current view is now forbidden
+    // --- VIEW RESTORATION / REDIRECTION ---
+    // FORCE REDIRECT FOR REFEREES: Always land on Calendar and no dashboard access
+    if (window.currentUserMainRole === 'arbitre-general' || window.currentUserRefereeId) {
+        const matchBtn = document.querySelector(`.nav-btn[data-target="view-matches"]`);
+        if (matchBtn) {
+            matchBtn.click();
+            // We return early to skip lastView restoration
+            return roles;
+        }
+    }
+
+    // FORCE REDIRECT FOR COACHES: Always land on Team Management
+    if (window.currentUserMainRole === 'coach-general' || window.currentUserCoachId) {
+        const teamsBtn = document.querySelector(`.nav-btn[data-target="view-teams"]`);
+        if (teamsBtn) {
+            teamsBtn.click();
+            // We return early to skip lastView restoration
+            return roles;
+        }
+    }
+
+    let lastView = localStorage.getItem('celtics_admin_last_view');
     const activeView = document.querySelector('.view.active');
 
-    // Check if we need to redirect (either current view is forbidden, or we are on dashboard but dashboard is not allowed)
-    const isForbidden = activeView && !allowedViews.includes(activeView.id);
+    // If last view is stored but not allowed anymore (e.g. role changed), clear it
+    if (lastView && !allowedViews.includes(lastView)) {
+        lastView = null;
+    }
 
-    if (isForbidden || (activeView && activeView.id === 'view-dashboard' && !allowedViews.includes('view-dashboard'))) {
-        console.log("Redirecting to authorized view...", allowedViews);
+    if (lastView && allowedViews.includes(lastView)) {
+        const btn = document.querySelector(`.nav-btn[data-target="${lastView}"]`);
+        if (btn) btn.click();
+        else if (allowedViews.includes('view-dashboard')) loadDashboardData();
+    } else if (activeView && !allowedViews.includes(activeView.id)) {
+        // Current view is forbidden, redirect to first allowed
         if (allowedViews.length > 0) {
             const firstTarget = allowedViews[0];
             const btn = document.querySelector(`.nav-btn[data-target="${firstTarget}"]`);
@@ -4753,6 +5383,10 @@ window.checkAdminAndSetupUI = async (user) => {
                 if (targetView) targetView.classList.add('active');
             }
         }
+    } else if (!activeView && allowedViews.length > 0) {
+        // No active view (initial load without lastView), pick first allowed
+        const firstBtn = document.querySelector(`.nav-btn[data-target="${allowedViews[0]}"]`);
+        if (firstBtn) firstBtn.click();
     }
 
     return roles;
@@ -4824,11 +5458,11 @@ async function loadCoaches() {
 
     // Sorting Logic
     coachesList.sort((a, b) => {
-        if (sortBy === 'active') {
-            const visA = a.visible !== false;
-            const visB = b.visible !== false;
-            if (visA !== visB) return visA ? -1 : 1;
-        } else if (sortBy === 'email') {
+        const visA = a.visible !== false;
+        const visB = b.visible !== false;
+        if (visA !== visB) return visA ? -1 : 1;
+
+        if (sortBy === 'email') {
             return (a.email || '').localeCompare(b.email || '');
         } else if (sortBy === 'police') {
             const noDateA = !a.policeExpiry;
@@ -4859,11 +5493,14 @@ async function loadCoaches() {
             subtitle += `<span style="color:red"><i class="fas fa-shield-alt"></i> Enquête Manquante</span><br>`;
         }
 
-        if (data.visible === false) {
-            subtitle += `<span style="badge badge-secondary">Inactif</span>`;
-        }
+        const isInactive = data.visible === false;
+        const displayName = isInactive ? `${data.name} <small style="color:red">(Inactif)</small>` : data.name;
 
-        const card = createCard(data.imageUrl, `${data.name}`, subtitle, data.id, 'edit-coach', 'delete-coach', 'fa-user-tie');
+        const card = createCard(data.imageUrl, displayName, subtitle, data.id, 'edit-coach', 'delete-coach', 'fa-user-tie');
+        card.setAttribute('data-id', data.id);
+        if (isInactive) {
+            card.style.opacity = '0.5';
+        }
         list.appendChild(card);
     });
 
@@ -4953,6 +5590,7 @@ if (saveBoutiqueBtn) {
                 description: quillBoutique ? quillBoutique.root.innerHTML : ''
             };
             await setDoc(doc(db, "settings", "boutique"), data);
+            window.logAction('UPDATE', 'settings', 'boutique', 'Mise à jour: Configuration boutique', null, data);
             showAlert("Configuration boutique sauvegardée !", "success");
         } catch (e) {
             console.error(e);
@@ -5060,8 +5698,16 @@ if (saveSettingsBtn) {
                 if (existingPreview) settings.sizeGuideUrl = existingPreview.href;
             }
 
-            // Use updateDoc to avoid overwriting extra fields like calendarConfig
-            await updateDoc(doc(db, "settings", "current_season"), settings);
+            // Use setDoc with merge: true to handle both creation and updates,
+            // avoiding overwriting extra fields like calendarConfig if document already exists.
+            await setDoc(doc(db, "settings", "current_season"), settings, { merge: true });
+            window.logAction('UPDATE', 'settings', 'current_season', 'Mise à jour: Configuration saison/inscriptions', null, settings);
+
+            // Save Notifications settings
+            const emailsStr = document.getElementById('setting-payment-failure-emails')?.value || "";
+            const emailsArray = emailsStr.split(',').map(e => e.trim()).filter(e => e.length > 0);
+            await setDoc(doc(db, "settings", "notifications"), { paymentFailureEmails: emailsArray }, { merge: true });
+            window.logAction('UPDATE', 'settings', 'notifications', 'Mise à jour: Emails notifications échecs paiement', null, { emails: emailsArray });
 
             // Clear file input
             document.getElementById('setting-size-guide').value = '';
@@ -5075,6 +5721,80 @@ if (saveSettingsBtn) {
         } finally {
             saveSettingsBtn.disabled = false;
             saveSettingsBtn.innerHTML = '<i class="fas fa-save"></i> Sauvegarder Tout';
+        }
+    });
+}
+
+window.currentNotificationEmails = [];
+
+window.renderEmailNotificationsList = function () {
+    const listEl = document.getElementById('email-notifications-list');
+    const emptyMsg = document.getElementById('empty-emails-msg');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    if (window.currentNotificationEmails.length === 0) {
+        if (emptyMsg) emptyMsg.style.display = 'block';
+    } else {
+        if (emptyMsg) emptyMsg.style.display = 'none';
+        window.currentNotificationEmails.forEach((email, index) => {
+            const tag = document.createElement('div');
+            tag.style.cssText = 'background: white; border: 1px solid #ccc; padding: 5px 12px; border-radius: 20px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
+            tag.innerHTML = `
+                <i class="fas fa-envelope text-primary"></i> ${email}
+                <i class="fas fa-times" style="cursor:pointer; color:red; margin-left: 5px;" onclick="removeNotificationEmail(${index})" title="Supprimer"></i>
+            `;
+            listEl.appendChild(tag);
+        });
+    }
+};
+
+window.removeNotificationEmail = function (index) {
+    window.currentNotificationEmails.splice(index, 1);
+    window.renderEmailNotificationsList();
+};
+
+const addEmailBtn = document.getElementById('add-email-btn');
+if (addEmailBtn) {
+    addEmailBtn.addEventListener('click', () => {
+        const input = document.getElementById('setting-new-email');
+        const email = input.value.trim().toLowerCase();
+        if (email && email.includes('@')) {
+            if (!window.currentNotificationEmails.includes(email)) {
+                window.currentNotificationEmails.push(email);
+                window.renderEmailNotificationsList();
+                input.value = '';
+            } else {
+                showAlert('Cette adresse est déjà dans la liste', 'warning');
+            }
+        } else {
+            showAlert('Veuillez entrer une adresse courriel valide', 'error');
+        }
+    });
+}
+
+const saveNotificationsBtn = document.getElementById('save-notifications-btn');
+if (saveNotificationsBtn) {
+    saveNotificationsBtn.addEventListener('click', async () => {
+        saveNotificationsBtn.disabled = true;
+        const originalText = saveNotificationsBtn.innerHTML;
+        saveNotificationsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sauvegarde...';
+        try {
+            await setDoc(doc(db, "settings", "notifications"), { paymentFailureEmails: window.currentNotificationEmails }, { merge: true });
+            window.logAction('UPDATE', 'settings', 'notifications', 'Mise à jour: Paramètres notifications', null, { emails: window.currentNotificationEmails });
+
+            const feedback = document.getElementById('notifications-feedback');
+            if (feedback) {
+                feedback.style.opacity = '1';
+                setTimeout(() => { feedback.style.opacity = '0'; }, 3500);
+            }
+        } catch (e) {
+            console.error(e);
+            showAlert("Erreur de sauvegarde: " + e.message, "error");
+        } finally {
+            saveNotificationsBtn.disabled = false;
+            saveNotificationsBtn.innerHTML = originalText;
         }
     });
 }
@@ -5121,6 +5841,17 @@ async function loadSettings() {
                 } else {
                     sizePreview.innerHTML = '<p style="font-size:0.85rem; color:#888; font-style:italic;">Aucun guide de tailles configuré.</p>';
                 }
+            }
+
+            // Load Notifications settings
+            const ndata = dataCache.settings?.notifications;
+            if (ndata && ndata.paymentFailureEmails) {
+                window.currentNotificationEmails = [...ndata.paymentFailureEmails];
+            } else {
+                window.currentNotificationEmails = [];
+            }
+            if (typeof window.renderEmailNotificationsList === "function") {
+                window.renderEmailNotificationsList();
             }
 
             // Apply Calendar Settings from Firestore if present
@@ -5172,6 +5903,11 @@ if (btnDeleteMatch) {
         if (await showConfirm("Êtes-vous sûr de vouloir supprimer ce match ? Cette action est irréversible.")) {
             try {
                 setLoading(btnDeleteMatch.parentElement, true);
+                window.logAction('DELETE', 'matches', id, `Suppression match ID: ${id}`);
+                // Preemptively remove from cache to prevent ghost matches on calendar rendering
+                if (dataCache.matches && dataCache.matches[id]) {
+                    delete dataCache.matches[id];
+                }
                 await deleteDoc(doc(db, "matches", id));
                 matchModal.classList.remove('active');
                 loadMatches();
@@ -5184,6 +5920,7 @@ if (btnDeleteMatch) {
         }
     });
 }
+
 
 let selectedMatchFields = []; // Array to store selected field IDs
 
@@ -5320,6 +6057,14 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
             return field ? field.name : fid;
         }).join(', ');
 
+        const isPlayed = document.getElementById('match-played').checked;
+        const scoreHome = document.getElementById('match-score-home').value;
+        const scoreAway = document.getElementById('match-score-away').value;
+
+        if (isPlayed && (scoreHome === '' || scoreAway === '')) {
+            throw new Error("Veuillez indiquer le résultat (score) pour un match terminé.");
+        }
+
         const data = {
             date: document.getElementById('match-date').value,
             time: document.getElementById('match-time').value,
@@ -5333,7 +6078,9 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
             refCenter: document.getElementById('match-ref-center').value,
             refAsst1: document.getElementById('match-ref-asst1').value,
             refAsst2: document.getElementById('match-ref-asst2').value,
-            played: document.getElementById('match-played').checked,
+            played: isPlayed,
+            scoreHome: isPlayed ? parseInt(scoreHome) : null,
+            scoreAway: isPlayed ? parseInt(scoreAway) : null,
             timestamp: serverTimestamp() // To sort by creation or date? Better sort by date field in query
         };
 
@@ -5368,9 +6115,27 @@ document.getElementById('match-form')?.addEventListener('submit', async (e) => {
         // ---------------------------
 
         if (id) {
-            await updateDoc(doc(db, "matches", id), data);
+            const isArbitre = (window.currentUserMainRole === 'arbitre-general' || window.currentUserRefereeId) && window.currentUserMainRole !== 'gestionnaire';
+            const isFullEditor = window.currentUserMainRole === 'super-admin' || (window.currentPermissions && window.currentPermissions['Matchs'] === 'edit');
+
+            if (isArbitre && !isFullEditor) {
+                // For referees, only update score-related fields to comply with security rules
+                const refereeData = {
+                    played: data.played,
+                    scoreHome: data.scoreHome,
+                    scoreAway: data.scoreAway,
+                    timestamp: serverTimestamp()
+                };
+                console.log("Referee update data:", refereeData);
+                await updateDoc(doc(db, "matches", id), refereeData);
+                window.logAction('UPDATE', 'matches', id, `Rapport score arbitre: ${data.category} vs ${data.opponent} (${data.scoreHome}-${data.scoreAway})`, null, refereeData);
+            } else {
+                await updateDoc(doc(db, "matches", id), data);
+                window.logAction('UPDATE', 'matches', id, `Mise à jour match: ${data.category} vs ${data.opponent} (${data.date})`, null, data);
+            }
         } else {
-            await addDoc(collection(db, "matches"), data);
+            const docRef = await addDoc(collection(db, "matches"), data);
+            window.logAction('CREATE', 'matches', docRef.id, `Création match: ${data.category} vs ${data.opponent} (${data.date})`, null, data);
         }
 
         matchModal.classList.remove('active');
@@ -5440,6 +6205,14 @@ async function loadMatches(skipFetch = false) {
             `;
             const card = createCard(null, `${data.category} vs ${data.opponent}`, subtitle, data.id, 'edit-match', 'delete-match', 'fa-futbol');
             card.classList.add('match-card');
+            if (data.played) {
+                card.classList.add('match-played');
+                card.style.borderLeft = '5px solid #283593';
+                const badge = document.createElement('div');
+                badge.style.cssText = 'position:absolute; top:10px; right:10px; color:#283593; font-size:0.8rem; font-weight:bold;';
+                badge.innerHTML = '<i class="fas fa-check-circle"></i> Terminé';
+                card.appendChild(badge);
+            }
 
             // Add Availability buttons in list view for referees (Hidden for Managers)
             if (window.currentUserRefereeId && window.currentUserMainRole !== 'gestionnaire') {
@@ -5562,7 +6335,25 @@ function renderDaySection(container, date, fields) {
 
     // Time Slots
     const settings = window.calendarSettings || { startHour: 8, endHour: 22, slotDuration: 15 };
-    for (let h = settings.startHour; h < settings.endHour; h++) {
+    let renderStartHour = settings.startHour;
+    let renderEndHour = settings.endHour;
+
+    const isReferee = window.currentUserMainRole === 'arbitre-general' || window.currentUserRefereeId;
+    const isCoach = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId || window.isRestrictedCoach;
+    const isRestrictedRole = (isReferee || isCoach) && window.currentUserMainRole !== 'gestionnaire' && window.currentUserMainRole !== 'super-admin';
+
+    if (isRestrictedRole) {
+        const dayOfWeek = date.getDay(); // 0 is Sunday, 6 is Saturday
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+            renderStartHour = 9;
+            renderEndHour = 23;
+        } else {
+            renderStartHour = 16;
+            renderEndHour = 23;
+        }
+    }
+
+    for (let h = renderStartHour; h < renderEndHour; h++) {
         for (let m = 0; m < 60; m += settings.slotDuration) {
             const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
             tableHtml += `
@@ -5626,7 +6417,11 @@ function renderDaySection(container, date, fields) {
                     // Color based on type
                     const mType = isGhostConflict ? 'unavailable' : (match.type || 'match');
 
-                    if (mType === 'practice') {
+                    if (match.played && !isGhostConflict) {
+                        evt.style.background = '#283593'; // Indigo for completed
+                        evt.style.borderLeft = '4px solid #1a237e';
+                        evt.style.color = 'white';
+                    } else if (mType === 'practice') {
                         evt.style.background = '#e67e22'; // Orange
                         evt.style.borderLeft = '4px solid #d35400';
                         evt.style.color = 'white';
@@ -5647,7 +6442,10 @@ function renderDaySection(container, date, fields) {
                     }
 
                     let eventTitle = isGhostConflict ? 'Indisponible' : `${teamDisplayName} vs ${match.opponent}`;
-                    let eventMeta = isGhostConflict ? '<i class="fas fa-link"></i> Terrain occupé' : `<i class="fas fa-user"></i> ${match.refCenter ? 'Arbitres OK' : 'Pas d\'arbitre'}`;
+                    if (match.played && !isGhostConflict) {
+                        eventTitle = `<i class="fas fa-check-circle" style="margin-right:4px"></i>` + eventTitle;
+                    }
+                    let eventMeta = isGhostConflict ? '<i class="fas fa-link"></i> Terrain occupé' : `<i class="fas fa-user"></i> ${match.refCenter ? 'Arbitres OK' : `<span class="available-refs-trigger" style="cursor:pointer; text-decoration:underline;" data-match-id="${match.id}" onclick="event.stopPropagation(); window.openRefereeAvailabilityModalById('${match.id}')">Pas d'arbitre (${(match.availableRefs || []).length} dispo)</span>`}`;
 
                     if (!isGhostConflict) {
                         if (mType === 'practice') {
@@ -5664,14 +6462,30 @@ function renderDaySection(container, date, fields) {
                     }
 
                     evt.innerHTML = `
-                        <div class="grid-event-title" style="${isGhostConflict ? 'font-size:0.7rem; font-style:italic;' : ''}">${eventTitle}</div>
+                        <div class="grid-event-title" style="${isGhostConflict ? 'font-size:0.7rem; font-style:italic;' : ''}; padding-right: 20px;">${eventTitle}</div>
                         <div class="grid-event-meta">${eventMeta}</div>
                         ${!isGhostConflict ? '<div class="resize-handle"></div>' : ''}
                     `;
 
                     if (!isGhostConflict) {
+                        const isRefereeOnly = (window.currentUserRefereeId || window.currentUserMainRole === 'arbitre-general') && window.currentUserMainRole !== 'gestionnaire';
+
+                        if (!isRefereeOnly) {
+                            const btnDup = document.createElement('button');
+                            btnDup.innerHTML = '<i class="fas fa-copy"></i>';
+                            btnDup.title = "Dupliquer";
+                            btnDup.style.cssText = "position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,0.2); border: none; color: white; cursor: pointer; padding: 2px 5px; border-radius: 3px; font-size: 0.8rem; z-index: 10;";
+                            btnDup.onmouseover = () => btnDup.style.background = 'rgba(255,255,255,0.4)';
+                            btnDup.onmouseout = () => btnDup.style.background = 'rgba(255,255,255,0.2)';
+                            btnDup.onclick = (e) => {
+                                e.stopPropagation();
+                                openMatchModal(match, null, null, null, true);
+                            };
+                            evt.appendChild(btnDup);
+                        }
+
                         // If simple referee or arbitre role, show availability toggle
-                        if ((window.currentUserRefereeId || window.currentUserMainRole === 'arbitre-general') && window.currentUserMainRole !== 'gestionnaire') {
+                        if (isRefereeOnly) {
                             const availableRefs = match.availableRefs || [];
                             const unavailableRefs = match.unavailableRefs || [];
                             const isAvailable = availableRefs.includes(window.currentUserRefereeId);
@@ -5874,7 +6688,10 @@ function setupMatchInteractions(el, match, date) {
                         loadMatches(true);
 
                         try {
+                            const oldEndTime = match.endTime;
                             await updateDoc(doc(db, "matches", match.id), { endTime: newEndTime });
+
+                            window.logAction('UPDATE', 'matches', match.id, `Redimensionnement match: Nouvelle fin ${newEndTime}`, { endTime: oldEndTime }, { endTime: newEndTime });
                         } catch (e) {
                             console.error("Resize update failed", e);
                             showAlert("Erreur lors de la mise à jour de la durée", "error");
@@ -5908,12 +6725,16 @@ function setupMatchInteractions(el, match, date) {
                             loadMatches(true);
 
                             try {
-                                await updateDoc(doc(db, "matches", match.id), {
+                                const oldData = { time: match.time, endTime: match.endTime, date: match.date, fieldIds: match.fieldIds };
+                                const updateData = {
                                     time: newTime,
                                     endTime: newEndTimeStr,
                                     date: newDate || match.date,
                                     fieldIds: [newFieldId]
-                                });
+                                };
+                                await updateDoc(doc(db, "matches", match.id), updateData);
+
+                                window.logAction('UPDATE', 'matches', match.id, `Déplacement match: ${updateData.date} à ${updateData.time}`, oldData, updateData);
                             } catch (e) {
                                 console.error("Move update failed", e);
                                 showAlert("Erreur lors du déplacement du match", "error");
@@ -5929,16 +6750,17 @@ function setupMatchInteractions(el, match, date) {
     };
 }
 
-function openMatchModal(data = null, date = null, time = null, fieldId = null) {
+function openMatchModal(data = null, date = null, time = null, fieldId = null, isDuplicate = false) {
     const form = document.getElementById('match-form');
     if (form) form.reset();
-    document.getElementById('match-id').value = data ? data.id : '';
+    document.getElementById('match-id').value = (data && !isDuplicate) ? data.id : '';
 
     // Show/Hide delete button
     const btnDelete = document.getElementById('btn-delete-match');
-    if (btnDelete) {
-        btnDelete.style.display = data ? 'block' : 'none';
-    }
+    const matchModalTitle = document.querySelector('#match-modal h2');
+
+    if (btnDelete) btnDelete.style.display = (data && !isDuplicate) ? 'block' : 'none';
+    if (matchModalTitle) matchModalTitle.textContent = (data && !isDuplicate) ? 'Détails du Match' : 'Nouveau Match';
 
     const isCoach = window.currentUserMainRole === 'coach-general' || window.currentUserCoachId;
 
@@ -5950,10 +6772,11 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
         document.getElementById('match-category').value = data.category;
         document.getElementById('match-opponent').value = data.opponent;
         selectedMatchFields = data.fieldIds || (data.fieldId ? [data.fieldId] : []);
-        document.getElementById('match-ref-center').value = data.refCenter || '';
-        document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
-        document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
-        document.getElementById('match-played').checked = data.played || false;
+        const played = data.played || false;
+        document.getElementById('match-played').checked = played;
+        document.getElementById('score-inputs').style.display = played ? 'block' : 'none';
+        document.getElementById('match-score-home').value = data.scoreHome !== undefined ? data.scoreHome : '';
+        document.getElementById('match-score-away').value = data.scoreAway !== undefined ? data.scoreAway : '';
 
         // Populate Team Select
         const teamSelect = document.getElementById('match-team');
@@ -6000,46 +6823,45 @@ function openMatchModal(data = null, date = null, time = null, fieldId = null) {
         }
     }
 
-    // Coach Restrictions for Match Modal
-    if (isCoach) {
-        document.getElementById('match-type').disabled = true;
-        document.getElementById('match-date').disabled = true;
-        document.getElementById('match-time').disabled = true;
-        document.getElementById('match-end-time').disabled = true;
-        document.getElementById('match-category').disabled = true;
-        document.getElementById('match-team').disabled = true;
-        document.getElementById('match-opponent').disabled = true;
-        document.getElementById('match-played').disabled = true;
+    // Role-based Permissions for Match Modal
+    const isArbitre = (window.currentUserMainRole === 'arbitre-general' || window.currentUserRefereeId) && window.currentUserMainRole !== 'gestionnaire';
+    const isFullEditor = window.currentUserMainRole === 'super-admin' || (window.currentPermissions && window.currentPermissions['Matchs'] === 'edit');
 
-        const fieldSel = document.getElementById('match-field-add-select');
-        if (fieldSel) fieldSel.disabled = true;
-        const addFieldBtn = document.getElementById('btn-add-match-field');
-        if (addFieldBtn) addFieldBtn.style.display = 'none';
+    // Reset all status
+    document.querySelectorAll('#match-form input, #match-form select, #match-form textarea').forEach(el => el.disabled = false);
+    if (document.getElementById('btn-add-match-field')) document.getElementById('btn-add-match-field').style.display = 'block';
+    if (document.querySelector('#match-modal .btn-save')) document.querySelector('#match-modal .btn-save').style.display = 'block';
+    if (data && document.getElementById('btn-delete-match')) document.getElementById('btn-delete-match').style.display = 'block';
 
-        // Hide Save/Delete
+    if (isFullEditor) {
+        // Stay enabled
+    } else if (isArbitre) {
+        // Score Only Access for Referees
+        document.querySelectorAll('#match-form input, #match-form select, #match-form textarea').forEach(el => el.disabled = true);
+        document.getElementById('match-played').disabled = false;
+        document.getElementById('match-score-home').disabled = false;
+        document.getElementById('match-score-away').disabled = false;
+        if (document.getElementById('btn-add-match-field')) document.getElementById('btn-add-match-field').style.display = 'none';
+        if (document.querySelector('#match-modal .btn-save')) document.querySelector('#match-modal .btn-save').style.display = 'block';
+        if (document.getElementById('btn-delete-match')) document.getElementById('btn-delete-match').style.display = 'none';
+
+        // Custom: change title to emphasize action
+        if (matchModalTitle) matchModalTitle.textContent = "Rapport de Match (Score)";
+    } else {
+        // Read Only (Coach or others)
+        document.querySelectorAll('#match-form input, #match-form select, #match-form textarea').forEach(el => el.disabled = true);
+        if (document.getElementById('btn-add-match-field')) document.getElementById('btn-add-match-field').style.display = 'none';
         if (document.querySelector('#match-modal .btn-save')) document.querySelector('#match-modal .btn-save').style.display = 'none';
         if (document.getElementById('btn-delete-match')) document.getElementById('btn-delete-match').style.display = 'none';
-    } else {
-        document.getElementById('match-type').disabled = false;
-        document.getElementById('match-date').disabled = false;
-        document.getElementById('match-time').disabled = false;
-        document.getElementById('match-end-time').disabled = false;
-        document.getElementById('match-category').disabled = false;
-        document.getElementById('match-team').disabled = false;
-        document.getElementById('match-opponent').disabled = false;
-        document.getElementById('match-played').disabled = false;
-
-        const fieldSel = document.getElementById('match-field-add-select');
-        if (fieldSel) fieldSel.disabled = false;
-        const addFieldBtn = document.getElementById('btn-add-match-field');
-        if (addFieldBtn) addFieldBtn.style.display = 'block';
-
-        if (document.querySelector('#match-modal .btn-save')) document.querySelector('#match-modal .btn-save').style.display = 'block';
-        // Delete button handle already by if(data) logic above but let's be safe
-        if (data && document.getElementById('btn-delete-match')) document.getElementById('btn-delete-match').style.display = 'block';
     }
 
     loadRefereesIntoSelects(data).then(() => {
+        if (data) {
+            document.getElementById('match-ref-center').value = data.refCenter || '';
+            document.getElementById('match-ref-asst1').value = data.refAsst1 || '';
+            document.getElementById('match-ref-asst2').value = data.refAsst2 || '';
+        }
+
         // Render Availability
         renderRefereeAvailability(data ? data.date : (date || document.getElementById('match-date').value));
 
@@ -6094,6 +6916,7 @@ async function toggleMatchAvailability(matchId, status = 'available') {
         }
 
         await updateDoc(matchRef, { availableRefs, unavailableRefs });
+        window.logAction('UPDATE', 'matches', matchId, `Mise à jour disponibilité arbitre: ${status === 'available' ? 'Disponible' : 'Indisponible'}`, null, { availableRefs, unavailableRefs });
         loadMatches(); // Refresh UI
     } catch (e) {
         console.error("Error toggling availability:", e);
@@ -6135,9 +6958,9 @@ calendarSettingsForm?.addEventListener('submit', async (e) => {
     // 2. Persist to Firestore (in general settings)
     try {
         const docRef = doc(db, "settings", "current_season");
-        await updateDoc(docRef, {
-            calendarConfig: { startHour, endHour, slotDuration, defaultDuration }
-        });
+        const updateData = { calendarConfig: { startHour, endHour, slotDuration, defaultDuration } };
+        await updateDoc(docRef, updateData);
+        window.logAction('UPDATE', 'settings', 'current_season', 'Mise à jour: Configuration du calendrier', null, updateData);
         console.log("Calendar settings saved to Firestore");
     } catch (err) {
         console.error("Error saving calendar settings:", err);
@@ -6403,8 +7226,10 @@ document.getElementById('season-form')?.addEventListener('submit', async (e) => 
 
         if (id) {
             await updateDoc(doc(db, "seasons", id), data);
+            window.logAction('UPDATE', 'seasons', id, `Mise à jour saison: ${data.name}`, null, data);
         } else {
-            await addDoc(collection(db, "seasons"), data);
+            const docRef = await addDoc(collection(db, "seasons"), data);
+            window.logAction('CREATE', 'seasons', docRef.id, `Création saison: ${data.name}`, null, data);
         }
 
         seasonModal.classList.remove('active');
@@ -6920,6 +7745,16 @@ if (configTabContainer) {
             const targetEl = document.getElementById(target);
             if (targetEl) targetEl.classList.add('active');
 
+            // Hide global save button if on notifications tab
+            const globalSaveBtn = document.getElementById('save-settings-btn');
+            if (globalSaveBtn) {
+                if (target === 'config-notifications') {
+                    globalSaveBtn.parentElement.style.display = 'none';
+                } else {
+                    globalSaveBtn.parentElement.style.display = 'block';
+                }
+            }
+
             // Fix Quill editor if switching to Inscriptions tab
             if (target === 'config-inscriptions' && typeof quillWelcome !== 'undefined' && quillWelcome) {
                 // Quill might need a focus/update if it was hidden
@@ -6989,3 +7824,366 @@ if (auth.currentUser) {
         window.initCampaignModule();
     }
 }
+
+// --- AVAILABLE REFEREES POPUP LOGIC ---
+window.openRefereeAvailabilityModalById = function (matchId) {
+    const match = dataCache.matches[matchId];
+    if (match) openRefereeAvailabilityModal(match);
+};
+
+function openRefereeAvailabilityModal(match) {
+    const modal = document.getElementById('referee-availability-modal');
+    const listContainer = document.getElementById('referee-availability-list');
+    if (!modal || !listContainer) return;
+
+    listContainer.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Calcul des statistiques...</td></tr>';
+
+    const availableRefIds = match.availableRefs || [];
+
+    if (availableRefIds.length === 0) {
+        listContainer.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px;">Aucun arbitre disponible</td></tr>';
+    } else {
+        const allMatches = Object.values(dataCache.matches || {});
+        const currentWeek = getWeekRange(new Date());
+
+        const rows = availableRefIds.map(refId => {
+            const referee = dataCache.referees[refId];
+            if (!referee) return '';
+
+            // Calculate stats
+            let weeklyCount = 0;
+            let seasonalCount = 0;
+
+            allMatches.forEach(m => {
+                const isAssigned = (m.refCenter === refId || m.refAsst1 === refId || m.refAsst2 === refId);
+                if (isAssigned) {
+                    // Seasonal (any match in dataCache)
+                    seasonalCount++;
+
+                    // Weekly (current week Mon-Sun)
+                    if (m.date) {
+                        const matchDate = new Date(m.date + 'T00:00:00');
+                        if (matchDate >= currentWeek.start && matchDate <= currentWeek.end) {
+                            weeklyCount++;
+                        }
+                    }
+                }
+            });
+
+            return `
+                <tr>
+                    <td>${referee.name || 'Inconnu'}</td>
+                    <td style="text-align: center;">${weeklyCount}</td>
+                    <td style="text-align: center;">${seasonalCount}</td>
+                </tr>
+            `;
+        }).join('');
+
+        listContainer.innerHTML = rows || '<tr><td colspan="3" style="text-align:center;">Aucun arbitre actif trouvé</td></tr>';
+    }
+
+    modal.classList.add('active');
+}
+
+/* --- Treasurer Module --- */
+async function loadTreasurer() {
+    const categories = ['Senior', 'U18', 'U17', 'U16', 'U15', 'U14', 'U13', 'U12', 'U11', 'U10', 'U9', 'U8', 'U7'];
+    const treasurerView = document.getElementById('view-treasurer');
+    if (!treasurerView) return;
+
+    // Tabs logic
+    const tabs = treasurerView.querySelectorAll('.tab-link');
+    if (tabs.length > 0 && !treasurerView.dataset.tabsInitialized) {
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const target = tab.getAttribute('data-tab');
+                if (!target) return;
+
+                // Update tab links
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Update tab content
+                treasurerView.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                const content = document.getElementById(target);
+                if (content) content.classList.add('active');
+            });
+        });
+        treasurerView.dataset.tabsInitialized = 'true';
+    }
+
+    const tbody = document.getElementById('treasurer-prices-body');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px;">Chargement des tarifs...</td></tr>';
+
+        // Load from Firestore (settings collection, treasurer_prices doc)
+        let prices = {};
+        try {
+            const docRef = doc(db, "settings", "treasurer_prices");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                prices = docSnap.data().prices || {};
+            }
+        } catch (error) {
+            console.error("Error loading treasurer prices:", error);
+        }
+
+        tbody.innerHTML = categories.map(cat => {
+            const catPrices = prices[cat] || { central: 0, assistant: 0 };
+            return `
+                <tr>
+                    <td style="padding: 12px 20px; border-bottom: 1px solid #eee; font-weight: 500;">${cat}</td>
+                    <td style="padding: 12px 20px; border-bottom: 1px solid #eee;">
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <span style="color: #666;">$</span>
+                            <input type="number" class="price-input central-price" data-category="${cat}" value="${catPrices.central || 0}" step="1" style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                    </td>
+                    <td style="padding: 12px 20px; border-bottom: 1px solid #eee;">
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <span style="color: #666;">$</span>
+                            <input type="number" class="price-input assistant-price" data-category="${cat}" value="${catPrices.assistant || 0}" step="1" style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Set default month
+    const monthInput = document.getElementById('treasurer-payment-month');
+    if (monthInput && !monthInput.value) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        monthInput.value = `${year}-${month}`;
+    }
+
+    // Setup listeners
+    const saveBtn = document.getElementById('save-treasurer-prices');
+    if (saveBtn && !saveBtn.dataset.listenerAdded) {
+        saveBtn.addEventListener('click', saveTreasurerPrices);
+        saveBtn.dataset.listenerAdded = 'true';
+    }
+
+    const calcBtn = document.getElementById('btn-calculate-payments');
+    if (calcBtn && !calcBtn.dataset.listenerAdded) {
+        calcBtn.addEventListener('click', calculateTreasurerPayments);
+        calcBtn.dataset.listenerAdded = 'true';
+    }
+
+    // --- TAX RECEIPTS LOGIC ---
+    const selectEl = document.getElementById('treasurer-receipt-select');
+    const genBtn = document.getElementById('btn-generate-receipt');
+    const printBtn = document.getElementById('btn-print-receipt');
+    const previewContainer = document.getElementById('tax-receipt-preview-container');
+
+    if (selectEl && !selectEl.dataset.populated) {
+        selectEl.innerHTML = '<option value="">Chargement des inscriptions...</option>';
+        try {
+            const regsSnap = await getDocs(collection(db, "registrations"));
+            const regs = [];
+
+            window.dataCache = window.dataCache || {};
+            window.dataCache.registrations = window.dataCache.registrations || {};
+
+            regsSnap.forEach(docSnap => {
+                const data = docSnap.data();
+                const obj = { id: docSnap.id, ...data };
+                regs.push(obj);
+                window.dataCache.registrations[docSnap.id] = obj;
+            });
+
+            regs.sort((a, b) => {
+                const na = (a.childFirstName || '') + ' ' + (a.childLastName || '');
+                const nb = (b.childFirstName || '') + ' ' + (b.childLastName || '');
+                return na.localeCompare(nb);
+            });
+
+            selectEl.innerHTML = '<option value="">Sélectionnez une inscription...</option>';
+            regs.forEach(reg => {
+                const fullName = `${reg.childFirstName || ''} ${reg.childLastName || ''}`.trim();
+                const parentName = `${reg.parent1Name || reg.parentName || ''}`.trim();
+                const opt = document.createElement('option');
+                opt.value = reg.id;
+                opt.textContent = `${fullName} (Payeur: ${parentName}) - Saison: ${reg.season || 'N/A'}`;
+                selectEl.appendChild(opt);
+            });
+            selectEl.dataset.populated = 'true';
+        } catch (error) {
+            console.error("Erreur lors du chargement des inscriptions :", error);
+            selectEl.innerHTML = '<option value="">Erreur de chargement</option>';
+        }
+    }
+
+    if (genBtn && !genBtn.dataset.listenerAdded) {
+        genBtn.addEventListener('click', () => {
+            const regId = selectEl.value;
+            if (!regId) return alert("Veuillez sélectionner une inscription.");
+
+            const reg = dataCache.registrations[regId];
+            if (!reg) return;
+
+            const participantName = `${reg.childFirstName || ''} ${reg.childLastName || ''}`.trim();
+            const birthYear = reg.dob ? reg.dob.split('-')[0] : (reg.childBirthDate ? reg.childBirthDate.split('-')[0] : 'N/A');
+            const payerName = `${reg.parent1Name || reg.parentName || ''}`.trim() || 'Non spécifié';
+
+            const addrParts = [];
+            if (reg.address) addrParts.push(reg.address);
+            if (reg.city) addrParts.push(reg.city);
+            if (reg.postalCode) addrParts.push(reg.postalCode);
+            const address = addrParts.join(', ') || 'Non spécifiée';
+
+            const amount = reg.finalPrice ? parseFloat(reg.finalPrice).toFixed(2) + ' $' : '0.00 $';
+            const yearStr = reg.season ? reg.season : new Date().getFullYear().toString();
+
+            document.getElementById('receipt-year').textContent = `Soccer ${yearStr}`;
+            document.getElementById('receipt-participant').textContent = participantName;
+            document.getElementById('receipt-birthyear').textContent = birthYear;
+            document.getElementById('receipt-payer').textContent = payerName;
+            document.getElementById('receipt-address').textContent = address;
+            document.getElementById('receipt-amount').textContent = amount;
+
+            document.getElementById('receipt-date').textContent = new Date().toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+
+            // Simple receipt number based on ID slice or timestamp
+            document.getElementById('receipt-number').textContent = regId.substring(0, 6).toUpperCase();
+
+            previewContainer.style.display = 'block';
+            printBtn.style.display = 'inline-block';
+        });
+        genBtn.dataset.listenerAdded = 'true';
+    }
+
+    if (printBtn && !printBtn.dataset.listenerAdded) {
+        printBtn.addEventListener('click', () => {
+            const content = document.getElementById('tax-receipt-content').outerHTML;
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <html>
+                <head>
+                    <title>Reçu d'impôt - Celtics de l'Ouest</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; display: flex; justify-content: center; }
+                        @media print {
+                            @page { size: landscape; margin: 1cm; }
+                            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; display: block; }
+                            #tax-receipt-content { width: 100% !important; border: 2px solid #000 !important; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${content.replace('width: 750px', 'width: 100%')}
+                    <script>
+                        window.onload = function() { 
+                            setTimeout(() => {
+                                window.print(); 
+                                window.close(); 
+                            }, 500);
+                        }
+                    </script>
+                </body>
+                </html>
+            `);
+            win.document.close();
+        });
+        printBtn.dataset.listenerAdded = 'true';
+    }
+}
+
+async function calculateTreasurerPayments() {
+    const monthVal = document.getElementById('treasurer-payment-month').value;
+    if (!monthVal) return alert("Veuillez sélectionner un mois.");
+
+    const [year, month] = monthVal.split('-');
+    const tbody = document.getElementById('treasurer-payments-body');
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 30px;">Calcul en cours...</td></tr>';
+
+    try {
+        // 1. Get prices
+        let prices = {};
+        const pricesDoc = await getDoc(doc(db, "settings", "treasurer_prices"));
+        if (pricesDoc.exists()) prices = pricesDoc.data().prices || {};
+
+        // 2. Identify matches in that month
+        const matches = Object.values(dataCache.matches || {}).filter(m => {
+            if (!m.date || !m.played) return false;
+            const matchParts = m.date.split('-');
+            return matchParts[0] === year && matchParts[1] === month;
+        });
+
+        const payouts = {}; // refereeId -> { name, matchCount, total }
+
+        matches.forEach(m => {
+            const catPrices = prices[m.category] || { central: 0, assistant: 0 };
+
+            const processRef = (refId, amount) => {
+                if (!refId || !amount || amount <= 0) return;
+                const ref = dataCache.referees?.[refId];
+                const name = ref ? (ref.name || 'Arbitre inconnu') : 'Arbitre inconnu';
+                if (!payouts[refId]) payouts[refId] = { name, matchCount: 0, total: 0 };
+                payouts[refId].matchCount++;
+                payouts[refId].total += parseFloat(amount);
+            };
+
+            processRef(m.refCenter, catPrices.central);
+            processRef(m.refAsst1, catPrices.assistant);
+            processRef(m.refAsst2, catPrices.assistant);
+        });
+
+        const sortedPayouts = Object.values(payouts).sort((a, b) => b.total - a.total);
+
+        if (sortedPayouts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 30px;">Aucun match arbitré trouvé pour cette période.</td></tr>';
+        } else {
+            tbody.innerHTML = sortedPayouts.map(p => `
+                <tr>
+                    <td style="padding: 15px 20px; border-bottom: 1px solid #eee; font-weight: 500;">${p.name}</td>
+                    <td style="padding: 15px 20px; border-bottom: 1px solid #eee; text-align: center;">${p.matchCount}</td>
+                    <td style="padding: 15px 20px; border-bottom: 1px solid #eee; text-align: right; font-weight: 700; color: #2e7d32;">${p.total.toFixed(2)} $</td>
+                </tr>
+            `).join('');
+        }
+    } catch (err) {
+        console.error("Calculation error:", err);
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:red; padding:20px;">Erreur de calcul.</td></tr>';
+    }
+}
+
+async function saveTreasurerPrices() {
+    const saveBtn = document.getElementById('save-treasurer-prices');
+    const statusLabel = document.getElementById('save-treasurer-status');
+    const prices = {};
+
+    document.querySelectorAll('.price-input').forEach(input => {
+        const cat = input.dataset.category;
+        const type = input.classList.contains('central-price') ? 'central' : 'assistant';
+        if (!prices[cat]) prices[cat] = {};
+        prices[cat][type] = parseFloat(input.value) || 0;
+    });
+
+    setLoading(saveBtn, true);
+
+    try {
+        await setDoc(doc(db, "settings", "treasurer_prices"), {
+            prices: prices,
+            updatedAt: serverTimestamp()
+        });
+        window.logAction('UPDATE', 'settings', 'treasurer_prices', 'Mise à jour: Grille tarifaire trésorier', null, prices);
+
+        if (statusLabel) {
+            statusLabel.style.display = 'inline';
+            setTimeout(() => {
+                statusLabel.style.display = 'none';
+            }, 3000);
+        }
+    } catch (error) {
+        console.error("Error saving treasurer prices:", error);
+        alert("Erreur lors de l'enregistrement : " + error.message);
+    } finally {
+        setLoading(saveBtn, false);
+    }
+}
+
+window.loadTreasurer = loadTreasurer;
+

@@ -41,6 +41,9 @@
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 
+    <!-- SheetJS for Excel/CSV Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
     <script>
         // French translation for FullCalendar
         document.addEventListener('DOMContentLoaded', function () {
@@ -144,18 +147,24 @@
                         <span>Automatisations</span></button>
                     <button class="nav-btn" data-target="view-registrations"><i class="fas fa-file-signature"></i>
                         <span>Liste des inscrits</span></button>
-                    <button class="nav-btn" data-target="view-fields"><i class="fas fa-map-marker-alt"></i>
+                    <button class="nav-btn admin-only" data-target="view-fields"><i class="fas fa-map-marker-alt"></i>
                         <span>Terrains</span></button>
-                    <button class="nav-btn" data-target="view-seasons"><i class="fas fa-calendar-week"></i>
+                    <button class="nav-btn admin-only" data-target="view-seasons"><i class="fas fa-calendar-week"></i>
                         <span>Saisons</span></button>
                     <button class="nav-btn" data-target="view-boutique"><i class="fas fa-store"></i>
                         <span>Boutique</span></button>
-                    <button class="nav-btn" data-target="view-settings"><i class="fas fa-cogs"></i>
+                    <button class="nav-btn admin-only" data-target="view-settings"><i class="fas fa-cogs"></i>
                         <span>Configuration</span></button>
-                    <button class="nav-btn" data-target="view-billing"><i class="fas fa-file-invoice-dollar"></i>
+                    <button class="nav-btn admin-only" data-target="view-billing"><i
+                            class="fas fa-file-invoice-dollar"></i>
                         <span>Facturation</span></button>
                     <button class="nav-btn" data-target="view-summer-camp"><i class="fas fa-campground"></i>
                         <span>Camp de soccer</span></button>
+                    <button class="nav-btn admin-only" data-target="view-treasurer"><i class="fas fa-cash-register"></i>
+                        <span>Trésorier</span></button>
+                    <button class="nav-btn admin-only" data-target="view-history" id="nav-history-btn"
+                        style="display:none;"><i class="fas fa-history"></i>
+                        <span>Historique</span></button>
                     <button class="nav-btn" data-target="view-admins" id="nav-admins-btn" style="display:none;"><i
                             class="fas fa-users-cog"></i> <span>Utilisateurs</span></button>
                 </nav>
@@ -189,13 +198,304 @@
                 <div id="content-area">
                     <!-- Views will be injected here -->
 
+                    <div id="view-history" class="view">
+                        <div class="history-title-area">
+                            <h1>Historique des actions</h1>
+                            <p>Suivi en temps réel des modifications apportées au système.</p>
+                        </div>
+
+                        <div class="filter-bar">
+                            <div class="filter-search-wrapper">
+                                <span class="filter-label">Recherche</span>
+                                <input type="text" id="history-search" class="form-control"
+                                    placeholder="Administrateur, action, document...">
+                                <i class="fas fa-search"></i>
+                            </div>
+
+                            <div style="min-width: 200px;">
+                                <span class="filter-label">Administrateur</span>
+                                <select id="history-filter-user" class="form-control">
+                                    <option value="all">Tous les admins</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <span class="filter-label">Période</span>
+                                <div class="date-filter-group">
+                                    <input type="date" id="history-date-start" title="Date de début">
+                                    <span>au</span>
+                                    <input type="date" id="history-date-end" title="Date de fin">
+                                </div>
+                            </div>
+
+                            <div style="flex: 0 0 auto; align-self: flex-end;">
+                                <button class="btn-outline-success" id="refresh-history-btn"
+                                    style="height: 44px; padding: 0 20px !important;">
+                                    <i class="fas fa-sync-alt"></i> Actualiser
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card"
+                            style="padding: 0; overflow: hidden; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">
+                            <div class="card-body" style="padding:0;">
+                                <div class="table-responsive">
+                                    <table class="table-premium">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Administrateur</th>
+                                                <th>Action</th>
+                                                <th>Cible</th>
+                                                <th>Détails</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="history-table-body">
+                                            <tr>
+                                                <td colspan="6" style="text-align:center; padding:30px;">Chargement de
+                                                    l'historique...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Dashboard Home -->
                     <div id="view-billing" class="view">
                         <!-- Content Injected by billing.js -->
                     </div>
 
                     <div id="view-summer-camp" class="view">
-                        <!-- Content Injected by summer-camp.js -->
+                        <!-- Content Injected -->
+                    </div>
+
+                    <div id="view-treasurer" class="view">
+                        <!-- Removed title -->
+
+                        <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 25px;">
+                            <div class="tab-link active" data-tab="treasurer-tarifs">Tarifs d'arbitrage</div>
+                            <div class="tab-link" data-tab="treasurer-payments">Paiement des arbitres</div>
+                            <div class="tab-link" data-tab="treasurer-tax-receipts">Reçus d'impôt</div>
+                        </div>
+
+                        <!-- Tab 1: Tarifs -->
+                        <div id="treasurer-tarifs" class="tab-content active">
+                            <div class="card" style="margin-bottom: 100px;">
+                                <div class="card-body" style="padding: 0;">
+                                    <div class="table-responsive">
+                                        <table class="table" style="width: 100%; border-collapse: collapse;">
+                                            <thead>
+                                                <tr style="background: #f8f9fa;">
+                                                    <th
+                                                        style="padding: 15px 20px; text-align: left; border-bottom: 2px solid #eee; color: #333; font-weight: 600;">
+                                                        Niveau</th>
+                                                    <th
+                                                        style="padding: 15px 20px; text-align: left; border-bottom: 2px solid #eee; color: #333; font-weight: 600;">
+                                                        Arbitre Central ($)</th>
+                                                    <th
+                                                        style="padding: 15px 20px; text-align: left; border-bottom: 2px solid #eee; color: #333; font-weight: 600;">
+                                                        Assistant ($)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="treasurer-prices-body">
+                                                <!-- Dynamic Rows -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Floating Footer -->
+                            <div
+                                style="position: sticky; bottom: -30px; left: 0; right: 0; background: white; padding: 20px 30px; border-top: 1px solid #eee; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 100; margin: 0 -30px -30px -30px; box-shadow: 0 -10px 25px rgba(0,0,0,0.05);">
+                                <button class="btn-save" id="save-treasurer-prices"
+                                    style="width: auto; min-width: 300px; padding: 12px 45px; font-weight: 700; font-size: 1rem; box-shadow: 0 4px 15px rgba(46, 125, 50, 0.25);">Enregistrer
+                                    les tarifs</button>
+                                <span id="save-treasurer-status"
+                                    style="font-size: 0.95rem; color: #2e7d32; display: none; font-weight: 600;">✅
+                                    Tarifs
+                                    enregistrés !</span>
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: Payments -->
+                        <div id="treasurer-payments" class="tab-content">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div
+                                        style="display: flex; align-items: center; gap: 20px; margin-bottom: 25px; flex-wrap: wrap;">
+                                        <div style="flex: 1; min-width: 200px;">
+                                            <label
+                                                style="display: block; margin-bottom: 5px; font-weight: 600;">Période</label>
+                                            <input type="month" id="treasurer-payment-month" class="form-control"
+                                                style="padding: 10px; width: 100%;">
+                                        </div>
+                                        <div style="display: flex; align-items: flex-end;">
+                                            <button class="btn-action" id="btn-calculate-payments"
+                                                style="padding: 10px 25px;"><i class="fas fa-calculator"></i> Calculer
+                                                les paiements</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="table" style="width: 100%; border-collapse: collapse;">
+                                            <thead>
+                                                <tr style="background: #f8f9fa;">
+                                                    <th
+                                                        style="padding: 15px 20px; text-align: left; border-bottom: 2px solid #eee; color: #333; font-weight: 600;">
+                                                        Arbitre</th>
+                                                    <th
+                                                        style="padding: 15px 20px; text-align: center; border-bottom: 2px solid #eee; color: #333; font-weight: 600;">
+                                                        Matchs</th>
+                                                    <th
+                                                        style="padding: 15px 20px; text-align: right; border-bottom: 2px solid #eee; color: #333; font-weight: 600;">
+                                                        Total à payer ($)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="treasurer-payments-body">
+                                                <tr>
+                                                    <td colspan="3"
+                                                        style="text-align: center; padding: 30px; color: #666;">
+                                                        Sélectionnez une période et cliquez sur "Calculer".
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab 3: Tax Receipts -->
+                        <div id="treasurer-tax-receipts" class="tab-content">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div
+                                        style="display: flex; align-items: flex-end; gap: 20px; margin-bottom: 25px; flex-wrap: wrap;">
+                                        <div style="flex: 1; min-width: 300px;">
+                                            <label
+                                                style="display: block; margin-bottom: 5px; font-weight: 600;">Sélectionner
+                                                une inscription</label>
+                                            <select id="treasurer-receipt-select" class="form-control"
+                                                style="padding: 10px; width: 100%;">
+                                                <option value="">Chargement des inscriptions...</option>
+                                            </select>
+                                        </div>
+                                        <div style="display: flex; align-items: flex-end; gap: 10px;">
+                                            <button class="btn-action" id="btn-generate-receipt"
+                                                style="padding: 10px 25px;">
+                                                <i class="fas fa-file-invoice-dollar"></i> Générer le reçu
+                                            </button>
+                                            <button class="btn-action" id="btn-print-receipt"
+                                                style="padding: 10px 25px; background-color: #2c3e50; display: none;">
+                                                <i class="fas fa-print"></i> Imprimer
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Receipt Preview Container -->
+                                    <div id="tax-receipt-preview-container"
+                                        style="display: none; border: 1px solid #ccc; padding: 20px; border-radius: 8px; background: #fff; max-width: 800px; margin: 0 auto; overflow-x: auto;">
+                                        <!-- Printable Area -->
+                                        <div id="tax-receipt-content"
+                                            style="font-family: Arial, sans-serif; color: #000; border: 1px solid #000; padding: 0; width: 750px; background: #fff; position: relative;">
+                                            <!-- Top Header -->
+                                            <div
+                                                style="display: flex; justify-content: space-between; align-items: center; padding: 20px; padding-bottom: 15px;">
+                                                <div style="color: #00994d;">
+                                                    <h2 style="margin: 0; font-size: 24px; font-style: italic;">Club de
+                                                        soccer</h2>
+                                                    <h1
+                                                        style="margin: 0; font-size: 32px; font-style: italic; font-weight: bold;">
+                                                        Celtics de l'Ouest de Portneuf</h1>
+                                                </div>
+                                                <img src="/admin-erp/images/logo.png" alt="Logo Celtics"
+                                                    style="height: 100px;">
+                                            </div>
+
+                                            <!-- Green Band -->
+                                            <div
+                                                style="background-color: #00994d; color: white; text-align: center; padding: 15px 0;">
+                                                <h3 style="margin: 0; font-size: 22px; font-weight: bold;">Reçu d'impôt
+                                                    pour activités des enfants</h3>
+                                                <h3 style="margin: 0; font-size: 22px; font-weight: bold;"
+                                                    id="receipt-year">Soccer 2024</h3>
+                                            </div>
+
+                                            <!-- Data Grid -->
+                                            <div style="display: flex; flex-direction: column;">
+                                                <!-- Row 1 -->
+                                                <div style="display: flex; border-bottom: 1px solid #000;">
+                                                    <div
+                                                        style="width: 20%; padding: 10px 15px; font-size: 18px; border-right: 0;">
+                                                        Participant :</div>
+                                                    <div style="width: 50%; padding: 10px 15px; font-size: 18px; font-weight: normal;"
+                                                        id="receipt-participant"></div>
+                                                    <div
+                                                        style="width: 30%; padding: 10px 15px; font-size: 16px; text-align: center; display: flex; flex-direction: column; justify-content: center;">
+                                                        <span style="font-weight: normal;">Année de naissance</span>
+                                                        <strong style="font-size: 18px;"
+                                                            id="receipt-birthyear"></strong>
+                                                    </div>
+                                                </div>
+                                                <!-- Row 2 -->
+                                                <div style="display: flex; border-bottom: 1px solid #000;">
+                                                    <div
+                                                        style="width: 20%; padding: 10px 15px; font-size: 18px; border-right: 0;">
+                                                        Payeur :</div>
+                                                    <div style="width: 80%; padding: 10px 15px; font-size: 18px; font-weight: normal;"
+                                                        id="receipt-payer"></div>
+                                                </div>
+                                                <!-- Row 3 -->
+                                                <div style="display: flex; border-bottom: 1px solid #000;">
+                                                    <div
+                                                        style="width: 20%; padding: 10px 15px; font-size: 18px; border-right: 0;">
+                                                        Adresse :</div>
+                                                    <div style="width: 80%; padding: 10px 15px; font-size: 18px; font-weight: normal;"
+                                                        id="receipt-address"></div>
+                                                </div>
+                                                <!-- Row 4 -->
+                                                <div style="display: flex; border-bottom: 1px solid #000;">
+                                                    <div
+                                                        style="width: 20%; padding: 10px 15px; font-size: 18px; border-right: 0;">
+                                                        La somme de :</div>
+                                                    <div style="width: 80%; padding: 10px 15px; font-size: 20px; font-weight: bold;"
+                                                        id="receipt-amount"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Footer / Signature -->
+                                            <div style="display: flex; padding: 20px;">
+                                                <div
+                                                    style="flex: 1; text-align: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;">
+                                                    <!-- Signature Placeholder -->
+                                                    <div
+                                                        style="font-family: 'Segoe Script', 'Bradley Hand', 'Brush Script MT', cursive; font-size: 38px; color: #1e3a8a; margin-bottom: 10px; min-height: 80px; display: flex; align-items: center; justify-content: center; line-height: 1; transform: rotate(-3deg);">
+                                                        Marie-Pier Bouchard</div>
+                                                    <div style="font-size: 18px; font-style: italic;">Marie-Pier
+                                                        Bouchard, trésorière</div>
+                                                </div>
+                                                <div
+                                                    style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 20px; font-size: 20px; padding-left: 20px;">
+                                                    <div style="display: flex; justify-content: space-between;">
+                                                        <span>Date :</span>
+                                                        <strong id="receipt-date" style="text-align: right;"></strong>
+                                                    </div>
+                                                    <div style="display: flex; justify-content: space-between;">
+                                                        <span>Reçu no :</span>
+                                                        <strong id="receipt-number" style="text-align: right;"></strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="view-dashboard" class="view">
@@ -211,8 +511,16 @@
                                         style="width: 60px; height: 60px; background: #e8f5e9; color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 1.5rem;">
                                         <i class="fas fa-user-friends"></i>
                                     </div>
-                                    <h3 style="margin-bottom: 5px;">Joueurs de la saison</h3>
-                                    <p id="dash-players-count" style="color: #666; font-size: 0.9rem;">Chargement...</p>
+                                    <h3 style="margin-bottom: 5px;">Statistiques de la saison</h3>
+                                    <p id="dash-players-count"
+                                        style="color: #666; font-size: 0.95rem; font-weight: 500; margin-bottom: 3px;">
+                                        Chargement...</p>
+                                    <p id="dash-active-teams-count"
+                                        style="color: #666; font-size: 0.9rem; margin-bottom: 3px;"></p>
+                                    <p id="dash-coaches-count"
+                                        style="color: #666; font-size: 0.9rem; margin-bottom: 3px;"></p>
+                                    <p id="dash-referees-count"
+                                        style="color: #666; font-size: 0.9rem; margin-bottom: 3px;"></p>
                                 </div>
                             </div>
 
@@ -231,7 +539,7 @@
                             </div>
 
                             <!-- Referee Stats -->
-                            <div class="card">
+                            <div class="card admin-only">
                                 <div class="card-header">
                                     <h3><i class="fas fa-whistle"></i> Activité des Arbitres</h3>
                                 </div>
@@ -255,7 +563,7 @@
                             </div>
 
                             <!-- Equipment Summary Stats -->
-                            <div class="card" id="dashboard-equipment-card">
+                            <div class="card admin-only" id="dashboard-equipment-card">
                                 <div class="card-header">
                                     <h3><i class="fas fa-tshirt"></i> Résumé des Équipements (Payés)</h3>
                                 </div>
@@ -289,6 +597,20 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Photo Restriction List -->
+                            <div class="card" id="dashboard-photo-restriction-card">
+                                <div class="card-header">
+                                    <h3 style="color: #e74c3c;"><i class="fas fa-camera-slash"></i> Interdiction de
+                                        diffuser les photos</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div id="dash-photo-opt-out-list"
+                                        style="display: flex; flex-direction: column; gap: 8px;">
+                                        <span style="color:#999; text-align:center;">Chargement...</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -307,7 +629,8 @@
                                     <button class="btn-action" id="btn-generate-teams"
                                         style="background-color: var(--secondary);"><i class="fas fa-magic"></i>
                                         Générer</button>
-                                    <button class="btn-action" id="open-team-modal"><i class="fas fa-plus"></i>
+                                    <button class="btn-action admin-only" id="open-team-modal"><i
+                                            class="fas fa-plus"></i>
                                         Ajouter</button>
                                 </div>
                             </div>
@@ -333,7 +656,8 @@
                                 joueurs inscrits sans équipe pour cette saison.
                             </p>
                             <p style="font-size: 0.9rem; margin-bottom: 30px;">
-                                Cette action va créer automatiquement une équipe par catégorie et y assigner tous les
+                                Cette action va créer automatiquement une équipe par catégorie et y assigner tous
+                                les
                                 joueurs correspondants.
                             </p>
                             <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -437,8 +761,10 @@
                                         data-target="players-directory-list"><i class="fas fa-th-large"></i></button>
                                     <button class="view-toggle-btn" data-view="list"
                                         data-target="players-directory-list"><i class="fas fa-list"></i></button>
-                                    <button class="btn-action" id="open-player-modal-directory"><i
-                                            class="fas fa-plus"></i></button>
+                                    <button class="btn-action" id="btn-export-players"
+                                        style="margin-right: 5px; background: var(--secondary);">
+                                        <i class="fas fa-file-export"></i> Exporter
+                                    </button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -454,6 +780,7 @@
                                             <tr>
                                                 <th>Nom</th>
                                                 <th>Prénom</th>
+                                                <th style="width: 50px;">#</th>
                                                 <th>Équipe</th>
                                                 <th>Date Naissance</th>
                                                 <th>Parent</th>
@@ -582,9 +909,20 @@
                                                 style="padding:6px; border:1px solid #ddd; border-radius:4px;">
                                         </div>
                                     </div>
+                                    <button class="btn-action" id="btn-copy-special-requests"
+                                        style="margin-right:5px; background:#e67e22;">
+
+                                        <i class="fas fa-comment-dots"></i> Copier Demandes
+
+                                    </button>
+
                                     <button class="btn-action" id="btn-migrate-registrations"
                                         style="margin-right:5px; background:var(--secondary);">
                                         <i class="fas fa-exchange-alt"></i> Migrer Joueurs
+                                    </button>
+                                    <button class="btn-action" id="btn-sync-registrations-players"
+                                        style="margin-right:5px; background:#2980b9;">
+                                        <i class="fas fa-sync-alt"></i> Synchroniser Joueurs
                                     </button>
                                     <button class="btn-action" id="open-registration-modal"><i class="fas fa-plus"></i>
                                         Nouvelle</button>
@@ -631,7 +969,8 @@
                                         <option value="police">Filiation Policière</option>
                                         <option value="active">Actif</option>
                                     </select>
-                                    <button class="btn-action" id="open-coach-modal"><i class="fas fa-plus"></i> Ajouter
+                                    <button class="btn-action" id="open-coach-modal"><i class="fas fa-plus"></i>
+                                        Ajouter
                                         Coach</button>
                                 </div>
                             </div>
@@ -654,7 +993,8 @@
                                             class="fas fa-calendar-alt"></i></button>
                                     <button class="view-toggle-btn" data-view="list"
                                         data-target="matches-view-container"><i class="fas fa-list"></i></button>
-                                    <button class="btn-action" id="open-match-modal"><i class="fas fa-plus"></i>
+                                    <button class="btn-action admin-only" id="open-match-modal"><i
+                                            class="fas fa-plus"></i>
                                         Ajouter</button>
                                 </div>
                             </div>
@@ -684,7 +1024,8 @@
                                             class="fas fa-th-large"></i></button>
                                     <button class="view-toggle-btn" data-view="list" data-target="fields-list"><i
                                             class="fas fa-list"></i></button>
-                                    <button class="btn-action" id="open-field-modal"><i class="fas fa-plus"></i>
+                                    <button class="btn-action admin-only" id="open-field-modal"><i
+                                            class="fas fa-plus"></i>
                                         Ajouter</button>
                                 </div>
                             </div>
@@ -812,20 +1153,21 @@
                     <!-- EMAIL CAMPAIGNS VIEW -->
                     <div id="view-email-campaigns" class="view">
                         <div class="card">
-                            <div class="card-header">
-                                <h3>Gestion des Campagnes</h3>
-                                <div class="header-actions-group">
-                                    <button class="btn-action" id="btn-new-campaign"><i class="fas fa-plus"></i>
-                                        Nouvelle</button>
-                                </div>
-                            </div>
                             <div class="card-body">
-                                <!-- Top Tabs -->
-                                <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 20px;">
-                                    <div class="tab-link active" data-tab="tab-campaign-list"
-                                        onclick="loadCampaigns('all')"><i class="fas fa-list"></i> Liste</div>
-                                    <div class="tab-link" data-tab="tab-campaign-editor" style="display:none;"
-                                        id="tab-link-editor"><i class="fas fa-edit"></i> Éditeur</div>
+                                <!-- Top Tabs and Actions -->
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                    <div class="modal-tabs" style="justify-content: flex-start; margin-bottom: 0;">
+                                        <div class="tab-link active" data-tab="tab-campaign-list"
+                                            onclick="loadCampaigns('all')"><i class="fas fa-list"></i> Liste</div>
+                                        <div class="tab-link" data-tab="tab-campaign-editor" style="display:none;"
+                                            id="tab-link-editor"><i class="fas fa-edit"></i> Éditeur</div>
+                                    </div>
+                                    <div class="header-actions-group">
+                                        <button class="btn-action" id="btn-new-campaign"
+                                            style="background: var(--success);"><i class="fas fa-plus"></i>
+                                            Nouvelle</button>
+                                    </div>
                                 </div>
 
                                 <!-- TAB 1: LIST / DASHBOARD -->
@@ -872,9 +1214,13 @@
                                         <div style="display:flex; gap:15px; align-items:center;">
                                             <select id="camp-audience-type" class="form-control"
                                                 style="max-width:250px;">
-                                                <option value="all_active">Tous les actifs (Saison courante)</option>
+                                                <option value="all_active">Tous les joueurs actifs (Saison courante)
+                                                </option>
                                                 <option value="team">Par Équipe</option>
                                                 <option value="coaches">Tous les Coachs</option>
+                                                <option value="referees">Tous les Arbitres</option>
+                                                <option value="board">Membres du CA</option>
+                                                <option value="parents">Tous les Parents</option>
                                                 <option value="specific">Emails spécifiques (Test/Manuel)</option>
                                             </select>
 
@@ -882,15 +1228,44 @@
                                                 <select id="camp-audience-team" class="form-control"></select>
                                             </div>
 
-                                            <div id="camp-audience-estimate"
-                                                style="font-weight:bold; color:var(--primary); margin-left:auto;">
-                                                Estimation: -
+                                            <div style="margin-left:auto; display:flex; align-items:center; gap: 10px;">
+                                                <div id="camp-audience-estimate"
+                                                    style="font-weight:bold; color:var(--primary);">
+                                                    0 destinataire(s)
+                                                </div>
+                                                <button type="button" class="btn-secondary" id="btn-view-audience"
+                                                    style="padding: 4px 8px; font-size: 0.8rem; display: none;"
+                                                    title="Voir la liste exacte">
+                                                    <i class="fas fa-eye"></i> Voir
+                                                </button>
                                             </div>
                                         </div>
                                         <!-- Specific emails area -->
                                         <div id="camp-audience-specific-wrapper" style="display:none; margin-top:10px;">
                                             <textarea id="camp-specific-emails" class="form-control" rows="2"
                                                 placeholder="email1@test.com, email2@test.com..."></textarea>
+                                        </div>
+                                    </div>
+
+                                    <!-- ATTACHMENTS SECTION -->
+                                    <div class="form-group"
+                                        style="margin-top:15px; background:#fff; padding:15px; border-radius:6px; border:1px solid #eee;">
+                                        <label><i class="fas fa-paperclip"></i> Pièces jointes</label>
+                                        <div style="display:flex; gap:10px; align-items:center;">
+                                            <input type="file" id="camp-attachments" class="form-control" multiple
+                                                style="flex:1;">
+                                            <div id="attachments-loading"
+                                                style="display:none; font-size:0.9rem; color:var(--primary);">
+                                                <i class="fas fa-spinner fa-spin"></i> Upload...
+                                            </div>
+                                        </div>
+                                        <p style="margin: 5px 0 0 0; color: #777; font-size: 0.75rem;">
+                                            <i class="fas fa-info-circle"></i> Max 10 Mo au total. Formats acceptés:
+                                            PDF, Images, Office.
+                                        </p>
+                                        <div id="attachments-list"
+                                            style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px;">
+                                            <!-- Uploaded files tags will appear here -->
                                         </div>
                                     </div>
 
@@ -997,6 +1372,8 @@
                                         Tarification</div>
                                     <div class="tab-link" data-tab="config-equipment"><i class="fas fa-socks"></i>
                                         Matériel & Guide</div>
+                                    <div class="tab-link" data-tab="config-notifications"><i class="fas fa-bell"></i>
+                                        Notifications</div>
                                 </div>
 
                                 <!-- TAB 1: INSCRIPTIONS -->
@@ -1027,7 +1404,8 @@
                                                 <option value="2028">2028</option>
                                             </select>
                                         </div>
-                                        <p class="text-sm" style="margin-top:10px; color:#666; margin-left:30px;">Cocher
+                                        <p class="text-sm" style="margin-top:10px; color:#666; margin-left:30px;">
+                                            Cocher
                                             pour
                                             rendre le
                                             formulaire visible sur le site public.</p>
@@ -1072,7 +1450,8 @@
 
                                 <!-- TAB 2: PRICING -->
                                 <div id="config-pricing" class="tab-content">
-                                    <h4 style="margin-bottom: 15px;"><i class="fas fa-users"></i> Rabais Familiaux</h4>
+                                    <h4 style="margin-bottom: 15px;"><i class="fas fa-users"></i> Rabais Familiaux
+                                    </h4>
                                     <!-- Global Discounts -->
                                     <div class="row">
                                         <div class="col-6">
@@ -1116,7 +1495,8 @@
 
                                 <!-- TAB 3: EQUIPMENT -->
                                 <div id="config-equipment" class="tab-content">
-                                    <h4 style="margin-bottom: 15px;"><i class="fas fa-socks"></i> Coûts du matériel</h4>
+                                    <h4 style="margin-bottom: 15px;"><i class="fas fa-socks"></i> Coûts du matériel
+                                    </h4>
                                     <div class="row">
                                         <div class="col-4">
                                             <div class="form-group">
@@ -1143,8 +1523,10 @@
                                         <label style="font-weight:700; color:var(--primary-dark); font-size: 1.1rem;"><i
                                                 class="fas fa-ruler-combined"></i> Guide des tailles (PDF ou
                                             Image)</label>
-                                        <p style="font-size:0.9rem; color:#666; margin-bottom:20px;">Ce fichier permet
-                                            aux parents de choisir la bonne taille d'équipement lors de l'inscription.
+                                        <p style="font-size:0.9rem; color:#666; margin-bottom:20px;">Ce fichier
+                                            permet
+                                            aux parents de choisir la bonne taille d'équipement lors de
+                                            l'inscription.
                                         </p>
 
                                         <div
@@ -1157,6 +1539,58 @@
                                                 </div>
                                             </div>
                                             <div id="size-guide-preview-admin" style="margin-top:20px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- TAB 4: NOTIFICATIONS -->
+                                <div id="config-notifications" class="tab-content">
+                                    <h4 style="margin-bottom: 15px;"><i class="fas fa-bell"></i> Alertes
+                                        Administrateurs
+                                    </h4>
+                                    <div class="form-group"
+                                        style="background:#f1f3f4; padding:25px; border-radius:12px; border:1px solid #ddd;">
+                                        <label style="font-weight:700; color:var(--primary-dark); font-size: 1.1rem;"><i
+                                                class="fas fa-envelope-open-text"></i> Alertes d'échec de paiement
+                                            (Stripe)</label>
+                                        <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">Entrez les
+                                            adresses
+                                            courriel qui doivent recevoir une alerte lorsqu'un paiement en ligne
+                                            échoue
+                                            (séparées par des virgules).</p>
+                                        <div style="display:flex; gap:10px; margin-bottom: 20px;">
+                                            <input type="email" id="setting-new-email" class="form-control"
+                                                placeholder="admin@celticsdelouest.com"
+                                                style="flex:1; border:1px solid #ccc; padding:10px; border-radius:4px;">
+                                            <button id="add-email-btn" class="btn-secondary"
+                                                style="padding: 10px 20px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; font-weight: 500;">
+                                                <i class="fas fa-plus"></i> Ajouter
+                                            </button>
+                                        </div>
+
+                                        <div style="margin-bottom: 20px;">
+                                            <h5 style="font-size: 0.95rem; color: #444; margin-bottom: 10px;">
+                                                Adresses
+                                                courriel actives :</h5>
+                                            <div id="email-notifications-list"
+                                                style="display:flex; flex-wrap:wrap; gap:10px;">
+                                                <!-- Dynamic emails go here -->
+                                            </div>
+                                            <p id="empty-emails-msg"
+                                                style="font-size:0.85rem; color:#888; display:none;">Aucune adresse
+                                                configurée.</p>
+                                        </div>
+
+                                        <div
+                                            style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                                            <div id="notifications-feedback"
+                                                style="color: green; font-weight: bold; font-size: 0.9rem; opacity: 0; transition: opacity 0.3s;">
+                                                <i class="fas fa-check-circle"></i> Paramètres sauvegardés !
+                                            </div>
+                                            <button id="save-notifications-btn" class="btn-action"
+                                                style="padding: 10px 20px; background-color: var(--primary); color: white; border-radius: 4px; border: none; cursor: pointer; font-weight: 500;">
+                                                <i class="fas fa-save"></i> Sauvegarder Notifications
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -2518,19 +2952,27 @@
     </div>
 
     <!-- Match Modal -->
-    <div class="modal modal-full" id="match-modal" style="padding: 0;">
-        <div class="modal-content"
-            style="width: 100%; height: 100%; max-width: none; margin: 0; padding: 0; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: #f8f9fa;">
+    <div class="modal" id="match-modal" style="padding: 0;">
+        <div class="modal-content">
 
             <div
                 style="background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10;">
-                <h2 style="margin: 0; font-size: 1.2rem; color: var(--primary);">Détails du Match</h2>
-                <span class="close-modal" style="position: static; font-size: 2rem; line-height: 1; color: #666;"
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h2 style="margin: 0; font-size: 1.2rem; color: var(--primary);">Détails du Match</h2>
+                    <button type="button" id="btn-delete-match"
+                        style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 1.1rem; display: none; padding: 5px; transition: transform 0.2s;"
+                        title="Supprimer" onmouseover="this.style.transform='scale(1.1)'"
+                        onmouseout="this.style.transform='scale(1)'">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <span class="close-modal"
+                    style="position: static; font-size: 2rem; line-height: 1; color: #666; cursor: pointer;"
                     onclick="document.getElementById('match-modal').classList.remove('active')">&times;</span>
             </div>
 
             <form id="match-form"
-                style="flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 220px; scroll-behavior: smooth;">
+                style="flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 150px; scroll-behavior: smooth;">
                 <input type="hidden" id="match-id">
 
                 <!-- Tabs Header -->
@@ -2628,10 +3070,30 @@
                     <div class="form-group"
                         style="background:#f9f9f9; padding:10px; border-radius:6px; margin-top:20px;">
                         <label style="display:flex; align-items:center; cursor:pointer; margin-bottom:0;">
-                            <input type="checkbox" id="match-played"
-                                style="width:20px; height:20px; margin-right:10px;">
+                            <input type="checkbox" id="match-played" style="width:20px; height:20px; margin-right:10px;"
+                                onchange="document.getElementById('score-inputs').style.display = this.checked ? 'block' : 'none'; if(this.checked) { setTimeout(() => document.getElementById('score-inputs').scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); }">
                             <span>Match Joué (Terminé)</span>
                         </label>
+
+                        <div id="score-inputs"
+                            style="margin-top: 15px; display: none; padding: 15px; background: #e8f5e9; border-radius: 8px; border: 1px solid #c8e6c9;">
+                            <p style="margin-top: 0; font-weight: 600; font-size: 0.9rem; color: #2e7d32;">Résultat du
+                                Match
+                            </p>
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="flex: 1;">
+                                    <label style="font-size: 0.8rem; display: block; margin-bottom: 5px;">Score
+                                        Celtics</label>
+                                    <input type="number" id="match-score-home" min="0" style="padding: 8px;">
+                                </div>
+                                <div style="font-weight: bold; font-size: 1.2rem; margin-top: 20px;">-</div>
+                                <div style="flex: 1;">
+                                    <label style="font-size: 0.8rem; display: block; margin-bottom: 5px;">Score
+                                        Adversaire</label>
+                                    <input type="number" id="match-score-away" min="0" style="padding: 8px;">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2666,12 +3128,10 @@
                 </div>
 
 
-                <div
-                    style="position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #ddd; box-shadow: 0 -4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; z-index: 100;">
+                <div class="match-modal-footer"
+                    style="position: absolute; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #ddd; box-shadow: 0 -4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; z-index: 100;">
                     <button type="submit" class="btn-save"
                         style="width: 100%; margin: 0; padding: 12px; font-weight: 600; font-size: 1rem;">Enregistrer</button>
-                    <button type="button" id="btn-delete-match"
-                        style="width: 100%; margin: 0; padding: 12px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 1rem; display: none;">Supprimer</button>
                     <button type="button" class="btn-close-custom"
                         onclick="document.getElementById('match-modal').classList.remove('active')" style="
                         width: 100%;
@@ -2723,7 +3183,7 @@
     </div>
 
     <!-- Team Modal -->
-    <div class="modal" id="team-modal">
+    <div class="modal modal-lg" id="team-modal">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
             <h2>Détails Équipe</h2>
@@ -2792,7 +3252,7 @@
                     style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; margin-bottom: 15px;">
                     <label style="font-weight: 500; display: block; margin-bottom: 5px;">Joueurs</label>
                     <div id="team-players-list"
-                        style="max-height: 200px; overflow-y: auto; background: #f9f9f9; padding: 10px; border-radius: 6px; font-size: 0.9rem; margin-bottom: 10px;">
+                        style="max-height: 450px; overflow-y: auto; background: #f9f9f9; padding: 10px; border-radius: 6px; font-size: 0.9rem; margin-bottom: 10px;">
                         <p style="color: #888; font-style: italic;">Chargement...</p>
                     </div>
 
@@ -3029,6 +3489,10 @@
                                     <option value="Adulte X-Large">Adulte X-Large</option>
                                     <option value="Adulte XX-Large">Adulte XX-Large</option>
                                 </select>
+                            </div>
+                            <div class="form-group" style="width: 100px;">
+                                <label>Numéro</label>
+                                <input type="number" id="ep-jersey-number" class="form-control" placeholder="#">
                             </div>
                             <div class="form-group" style="flex: 1;">
                                 <label>Taille Short</label>
@@ -3295,12 +3759,195 @@
         </div>
     </div>
 
+    <!-- Player Export Modal -->
+    <div class="modal" id="player-export-modal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close-modal">&times;</span>
+            <h2><i class="fas fa-file-export" style="color: var(--primary);"></i> Exporter les Joueurs</h2>
+
+            <form id="player-export-form">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label>Format d'exportation</label>
+                    <select id="export-format" class="form-control">
+                        <option value="xlsx">Excel (.xlsx)</option>
+                        <option value="csv">CSV (.csv)</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label>Filtrer par équipe</label>
+                    <select id="export-team-filter" class="form-control">
+                        <option value="all">Toutes les équipes</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label>Informations obligatoires (Toujours incluses)</label>
+                    <div style="background: #f9f9f9; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <label
+                            style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin-bottom: 5px; font-weight: 500;">
+                            <input type="checkbox" checked disabled style="margin:0; width: auto; flex: none;"> Prénom
+                        </label>
+                        <label
+                            style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin-bottom: 5px; font-weight: 500;">
+                            <input type="checkbox" checked disabled style="margin:0; width: auto; flex: none;"> Nom
+                        </label>
+                        <label
+                            style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin-bottom: 0px; font-weight: 500;">
+                            <input type="checkbox" checked disabled style="margin:0; width: auto; flex: none;"> Date de
+                            naissance
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label>Informations optionnelles (Choisir les champs supplémentaires)</label>
+                    <div id="export-optional-fields-container"
+                        style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #fff; padding: 15px; border-radius: 6px; border: 1px solid #ddd; max-height: 350px; overflow-y: auto;">
+                        <!-- Checkboxes will be injected dynamically via JS -->
+                    </div>
+                    <div style="margin-top: 10px; text-align: right;">
+                        <button type="button" id="btn-export-select-all" class="btn-secondary"
+                            style="padding: 4px 8px; font-size: 0.8rem;">Tout sélectionner</button>
+                        <button type="button" id="btn-export-deselect-all" class="btn-secondary"
+                            style="padding: 4px 8px; font-size: 0.8rem;">Tout désélectionner</button>
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="margin-top: 20px;">
+                    <button type="button" class="btn-secondary"
+                        onclick="document.getElementById('player-export-modal').classList.remove('active');">Annuler</button>
+                    <button type="submit" class="btn-action" style="background: var(--secondary);">
+                        <i class="fas fa-download"></i> Télécharger
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Audience List Modal -->
+    <div class="modal" id="audience-list-modal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 690px;">
+            <span class="close-modal"
+                onclick="document.getElementById('audience-list-modal').classList.remove('active');">&times;</span>
+            <h2><i class="fas fa-users" style="color: var(--primary);"></i> Liste des destinataires</h2>
+
+            <div style="margin-top: 15px; margin-bottom: 5px; font-size: 0.9rem; color: #666;">
+                Total: <strong id="audience-list-count">0</strong>
+            </div>
+            <div id="audience-list-content"
+                style="background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; padding: 15px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.9rem;">
+                <!-- Emails will be injected here -->
+            </div>
+
+            <div class="modal-footer" style="margin-top: 20px;">
+                <button type="button" class="btn-secondary" style="min-width: 150px;"
+                    onclick="document.getElementById('audience-list-modal').classList.remove('active');">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Referee Availability Modal -->
+    <div class="modal" id="referee-availability-modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Arbitres Disponibles</h2>
+                <span class="close-modal"
+                    onclick="document.getElementById('referee-availability-modal').classList.remove('active')"
+                    style="cursor: pointer; font-size: 1.5rem;">&times;</span>
+            </div>
+            <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Arbitre</th>
+                            <th style="text-align: center;">Matchs (Semaine)</th>
+                            <th style="text-align: center;">Matchs (Saison)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="referee-availability-list">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="btn-secondary"
+                    onclick="document.getElementById('referee-availability-modal').classList.remove('active')">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Audit Detail Modal -->
+    <div class="modal" id="audit-detail-modal" style="z-index: 2100;">
+        <div class="modal-content"
+            style="max-width: 900px; width: 93%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0;">
+                <h2 style="margin: 0;"><i class="fas fa-history" style="color: var(--primary);"></i> Détails de l'action
+                </h2>
+                <span class="close-modal" id="close-audit-modal"
+                    style="cursor: pointer; font-size: 1.5rem;">&times;</span>
+            </div>
+
+            <div id="audit-modal-body" style="flex: 1; overflow-y: auto; padding-right: 5px;">
+                <div class="audit-summary-grid"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>Date:</strong> <span id="audit-detail-date"></span></div>
+                    <div><strong>Admin:</strong> <span id="audit-detail-admin"></span></div>
+                    <div><strong>Action:</strong> <span id="audit-detail-action" class="badge"></span></div>
+                    <div><strong>Collection:</strong> <span id="audit-detail-collection"></span></div>
+                    <div style="grid-column: span 2;"><strong>Document ID:</strong> <code id="audit-detail-id"></code>
+                    </div>
+                    <div style="grid-column: span 2;"><strong>Détails:</strong> <span id="audit-detail-text"></span>
+                    </div>
+                </div>
+
+                <div id="audit-diff-container">
+                    <h3
+                        style="font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 20px;">
+                        Comparaison des données</h3>
+                    <div class="diff-view" style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 300px;">
+                            <h4
+                                style="font-size: 0.9rem; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                AVANT (Snapshot)</h4>
+                            <pre id="audit-old-data"
+                                style="background: #fff5f5; border: 1px solid #fed7d7; padding: 12px; border-radius: 6px; font-size: 0.85rem; height: 350px; overflow: auto; color: #c53030; line-height: 1.4;"></pre>
+                        </div>
+                        <div style="flex: 1; min-width: 300px;">
+                            <h4
+                                style="font-size: 0.9rem; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                APRÈS (Nouveau)</h4>
+                            <pre id="audit-new-data"
+                                style="background: #f0fff4; border: 1px solid #c6f6d5; padding: 12px; border-radius: 6px; font-size: 0.85rem; height: 350px; overflow: auto; color: #22543d; line-height: 1.4;"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="audit-single-data-container" style="display: none;">
+                    <h3
+                        style="font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 15px;">
+                        Données enregistrées</h3>
+                    <pre id="audit-single-data"
+                        style="background: #f8f9fa; border: 1px solid #eee; padding: 15px; border-radius: 6px; font-size: 0.85rem; height: 350px; overflow: auto; line-height: 1.4;"></pre>
+                </div>
+            </div>
+
+            <div
+                style="text-align: right; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; flex-shrink: 0;">
+                <button class="btn-secondary" id="btn-close-audit-details"
+                    style="padding: 10px 25px; font-weight: 600;">Fermer</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/admin-erp/js/ui-utils.js"></script>
     <script src="/admin-erp/js/players.js"></script>
     <script src="/admin-erp/js/search.js"></script>
     <script src="/admin-erp/js/automations.js"></script>
     <script src="/admin-erp/js/email-campaigns.js"></script>
-    <script type="module" src="/admin-erp/js/app.js"></script>
+    <script type="module" src="/admin-erp/js/app.js?v=2"></script>
 </body>
 
 </html>

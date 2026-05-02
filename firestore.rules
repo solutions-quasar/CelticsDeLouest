@@ -136,13 +136,27 @@ service cloud.firestore {
 
     // AUTOMATION DOCUMENTATION
     match /automation_notes/{noteId} {
-        // Technically Automations module permission not defined yet, using generic admin check or Config
-        // Let's assume Automations falls under Config or a new "Automations" key.
-        // For now, allow all authenticated admins (or reuse Config permission)
         allow read: if request.auth != null; // Visible to all admins
         allow write: if canEdit("Config") || canEdit("Automations");
     }
     
+    // CAMP PERIODS
+    match /camp_periods/{periodId} {
+      allow read: if true;
+      // Allow public to increment only the currentRegistrations field
+      allow update: if (canEdit("Inscriptions") || canEdit("Config"))
+                    || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentRegistrations'])
+                        && request.resource.data.currentRegistrations == (resource.data.get('currentRegistrations', 0) + 1));
+      allow create, delete: if canEdit("Inscriptions") || canEdit("Config");
+    }
+
+    // CAMP REGISTRATIONS
+    match /camp_registrations/{regId} {
+      allow create: if true;
+      allow read: if canView("Inscriptions") || canView("Config");
+      allow update, delete: if canEdit("Inscriptions") || canEdit("Config");
+    }
+
     // Default fallback: Deny everything else
     match /{document=**} {
       allow read, write: if false;

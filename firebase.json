@@ -1,10 +1,16 @@
 {
-  "firestore": {
-    "database": "(default)",
-    "location": "northamerica-northeast1",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
+  "firestore": [
+    {
+      "database": "(default)",
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    },
+    {
+      "database": "prod",
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    }
+  ],
   "functions": {
     "source": "functions"
   },
@@ -14,6 +20,17 @@
   "hosting": [
     {
       "target": "staging",
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "cleanUrls": true,
+      "trailingSlash": false
+    },
+    {
+      "target": "production",
       "public": ".",
       "ignore": [
         "firebase.json",
@@ -42,6 +59,14 @@
     },
     "ui": {
       "enabled": true
+    }
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Locsy Marketplace",
+        "supportEmail": "bensult78@gmail.com"
+      }
     }
   }
 }

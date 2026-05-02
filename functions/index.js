@@ -1,6 +1,8 @@
 const { onRequest } = require("firebase-functions/v2/https");
+const { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
+const { getFirestore } = require("firebase-admin/firestore");
 const { Resend } = require("resend");
 const cors = require("cors")({ origin: true });
 
@@ -10,32 +12,42 @@ admin.initializeApp();
 const ENV_CONFIG = {
     staging: {
         firestoreDb: "(default)",
-        stripeSecretKey: process.env.STRIPE_SECRET_KEY || 'YOUR_STRIPE_TEST_KEY',
-        resendApiKey: process.env.RESEND_API_KEY || 'YOUR_RESEND_KEY'
+        stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+        stripeCampSecretKey: process.env.STRIPE_CAMP_SECRET_KEY || process.env.STRIPE_SECRET_KEY,
+        stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+        stripeCampWebhookSecret: process.env.STRIPE_CAMP_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET,
+        resendApiKey: process.env.RESEND_API_KEY
     },
     production: {
         firestoreDb: "prod",
         stripeSecretKey: process.env.STRIPE_SECRET_KEY_PROD || process.env.STRIPE_SECRET_KEY,
+        stripeCampSecretKey: process.env.STRIPE_CAMP_SECRET_KEY_PROD || process.env.STRIPE_SECRET_KEY,
+        stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET_PROD || process.env.STRIPE_WEBHOOK_SECRET,
+        stripeCampWebhookSecret: process.env.STRIPE_CAMP_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET_PROD || process.env.STRIPE_WEBHOOK_SECRET,
         resendApiKey: process.env.RESEND_API_KEY_PROD || process.env.RESEND_API_KEY
     }
 };
 
-function getContext(req) {
+function getContext(req, forCamp = false) {
     const env = req && req.headers['x-environment'] === 'production' ? 'production' : 'staging';
     const config = ENV_CONFIG[env];
 
+    const secretKeyToUse = forCamp ? config.stripeCampSecretKey : config.stripeSecretKey;
+    const webhookSecretToUse = forCamp ? config.stripeCampWebhookSecret : config.stripeWebhookSecret;
+
     return {
         env,
-        db: admin.firestore(config.firestoreDb),
-        stripe: require('stripe')(config.stripeSecretKey),
+        db: getFirestore(config.firestoreDb),
+        stripe: require('stripe')(secretKeyToUse),
+        endpointSecret: webhookSecretToUse,
         resend: new Resend(config.resendApiKey)
     };
 }
 
-// Default instances for legacy/internal use (defaults to staging)
-const db = admin.firestore();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'YOUR_STRIPE_KEY');
-const resend = new Resend(process.env.RESEND_API_KEY || 'YOUR_RESEND_KEY');
+// Default instances for legacy/internal use (deprecated - use getContext instead)
+// const db = getFirestore();
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// const resend = new Resend(process.env.RESEND_API_KEY);
 
 // --- AUTH HELPER: VERIFY ADMIN ---
 async function authenticateAdmin(req, db) {
@@ -396,18 +408,79 @@ exports.createManualInvoice = onRequest({ cors: true }, async (req, res) => {
 });
 
 
+// --- STRIPE LOGIC: FETCH INVOICES ---
+exports.listStripeInvoices = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { db, stripe } = getContext(req);
+        await authenticateAdmin(req, db);
+        const { limit = 50, starting_after, status } = req.body;
+
+        const params = { limit };
+        if (starting_after) params.starting_after = starting_after;
+        if (status) params.status = status;
+
+        const invoices = await stripe.invoices.list(params);
+
+        res.json({
+            success: true,
+            data: invoices.data,
+            has_more: invoices.has_more
+        });
+    } catch (e) {
+        console.error("Error fetching stripe invoices:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+exports.getStripeStats = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { db, stripe } = getContext(req);
+        await authenticateAdmin(req, db);
+
+        // Fetch all paid invoices for the total (Stripe auto-pagination helper)
+        let totalPaid = 0;
+        let countPaid = 0;
+        for await (const invoice of stripe.invoices.list({ status: 'paid', limit: 100 })) {
+            totalPaid += invoice.amount_paid;
+            countPaid++;
+        }
+
+        // Fetch all open/pending invoices
+        let totalPending = 0;
+        let countPending = 0;
+        for await (const invoice of stripe.invoices.list({ status: 'open', limit: 100 })) {
+            totalPending += invoice.amount_due;
+            countPending++;
+        }
+
+        res.json({
+            success: true,
+            totalPaidRecent: totalPaid,
+            totalPendingRecent: totalPending,
+            countPaid: countPaid,
+            countPending: countPending
+        });
+    } catch (e) {
+        console.error("Error fetching stripe stats:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
 // --- STRIPE WEBHOOK (Sync to Firestore) ---
 exports.stripeWebhook = onRequest(async (req, res) => {
     const env = req.query.env === 'production' ? 'production' : 'staging';
-    const { db, stripe } = getContext({ headers: { 'x-environment': env } });
+    const isCampWebhook = req.query.camp === 'true';
+
+    // Pass `isCampWebhook` to get the correct Stripe instance and endpointSecret
+    const { db, stripe, endpointSecret } = getContext({ headers: { 'x-environment': env } }, isCampWebhook);
 
     const sig = req.headers['stripe-signature'];
-    const endpointSecret = env === 'production' ? process.env.STRIPE_WEBHOOK_SECRET_PROD : process.env.STRIPE_WEBHOOK_SECRET;
 
     let event;
 
     try {
-        if (!sig || !endpointSecret || endpointSecret === "whsec_YOUR_STRIPE_WEBHOOK_SECRET") {
+        if (!sig || !endpointSecret || endpointSecret.startsWith("whsec_YOUR_STRIPE_WEBHOOK_SECRET")) {
             // If secret not configured, we allow body directly ONLY in development/testing
             event = req.body;
         } else {
@@ -422,22 +495,14 @@ exports.stripeWebhook = onRequest(async (req, res) => {
         const invoice = event.data.object;
         const sessionId = invoice.metadata ? invoice.metadata.sessionId : null;
 
-        // Sync to Firestore 'invoices' collection
-        await db.collection('invoices').doc(invoice.id).set({
-            stripeId: invoice.id,
-            customerId: invoice.customer,
-            customerEmail: invoice.customer_email,
-            amount: invoice.amount_due,
-            amountPaid: invoice.amount_paid,
-            status: invoice.status,
-            currency: invoice.currency,
-            hostedInvoiceUrl: invoice.hosted_invoice_url,
-            pdfUrl: invoice.invoice_pdf,
-            created: invoice.created,
-            lines: invoice.lines.data.map(l => ({ desc: l.description, amount: l.amount }))
-        }, { merge: true });
+        // Sync to Firestore 'invoices' collection removed in favor of direct Stripe fetch
 
-        // UPDATE REGISTRATIONS
+        // Skip if this is a camp registration (already handled atomically in processCampRegistration)
+        if (invoice.metadata && invoice.metadata.type === 'camp_registration') {
+            return res.json({ received: true, note: "Camp registration handled atomically" });
+        }
+
+        // UPDATE REGISTRATIONS (Standard)
         if (sessionId) {
             const regsSnap = await db.collection('registrations').where('registrationSessionId', '==', sessionId).get();
             if (!regsSnap.empty) {
@@ -456,18 +521,9 @@ exports.stripeWebhook = onRequest(async (req, res) => {
                 console.log(`Updated ${regsSnap.size} registrations for session ${sessionId} to ${newStatus}`);
             }
         }
-    } else if (event.type === 'invoice.payment_failed' || event.type === 'invoice.created') {
+    } else if (event.type === 'invoice.payment_failed' || event.type === 'invoice.created' || event.type === 'invoice.updated') {
         const invoice = event.data.object;
-        // Basic sync for visibility
-        await db.collection('invoices').doc(invoice.id).set({
-            stripeId: invoice.id,
-            customerId: invoice.customer,
-            customerEmail: invoice.customer_email,
-            status: invoice.status,
-            amount: invoice.amount_due,
-            metadata: invoice.metadata || {},
-            created: invoice.created
-        }, { merge: true });
+        // Basic sync for visibility removed in favor of direct Stripe fetch
     }
 
     res.json({ received: true });
@@ -561,26 +617,44 @@ exports.sendCampaign = onRequest({ cors: true }, async (req, res) => {
             // Specific emails already in audience.emails array
             recipients = audience.emails || [];
         } else if (audience.type === 'all_active') {
-            // Query players with active flag (logic to be refined)
             snapshot = await db.collection("players").get(); // Filter by season if needed
             snapshot.forEach(doc => {
                 const d = doc.data();
-                if (d.parentEmail) recipients.push(d.parentEmail);
+                if (d.email) recipients.push(d.email);
             });
         } else if (audience.type === 'team') {
             snapshot = await db.collection("players").where("teamId", "==", audience.teamId).get();
             snapshot.forEach(doc => {
                 const d = doc.data();
-                if (d.parentEmail) recipients.push(d.parentEmail);
+                if (d.email) recipients.push(d.email);
             });
-        } else if (audience.type === 'coaches') {
-            snapshot = await db.collection("coaches").get();
+        } else if (audience.type === 'parents') {
+            snapshot = await db.collection("players").get();
             snapshot.forEach(doc => {
                 const d = doc.data();
-                if (d.email) recipients.push(d.email); // Assuming coaches have 'email'
+                if (d.parentEmail) recipients.push(d.parentEmail);
+                if (d.parent1Email) recipients.push(d.parent1Email);
+                if (d.parent2Email) recipients.push(d.parent2Email);
+            });
+        } else if (audience.type === 'coaches') {
+            snapshot = await db.collection("coaches").where("visible", "!=", false).get();
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.email) recipients.push(d.email);
+            });
+        } else if (audience.type === 'referees') {
+            snapshot = await db.collection("referees").where("visible", "!=", false).get();
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.email) recipients.push(d.email);
+            });
+        } else if (audience.type === 'board') {
+            snapshot = await db.collection("board_members").where("visible", "!=", false).get();
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.email) recipients.push(d.email);
             });
         }
-        // Add more cases as needed
 
         // Deduplicate
         recipients = [...new Set(recipients)];
@@ -590,33 +664,29 @@ exports.sendCampaign = onRequest({ cors: true }, async (req, res) => {
             return res.json({ success: false, message: "No recipients found" });
         }
 
-        // 2. Send (Batching handled by Resend logic or loop)
-        // Resend allows up to 50 "to" in one call, or use BCC. 
-        // For mass marketing, individual emails are better for delivery/tracking.
-        // Loop for now (simple), optimized later for bulk.
-
-        // Using BCC for efficiency if generic content
-        // Using BCC for efficiency if generic content
-        // We must provide a 'to' field for Resend/SMTP standards.
-        // Usually, we send TO the sender or a generic address.
-        const { data, error } = await resend.emails.send({
+        // 2. Send using Batch (up to 100 per request) for individual tracking
+        const batchPayload = recipients.map(email => ({
             from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
             reply_to: "celtics.portneuf@gmail.com",
-            to: ["celtics.portneuf@gmail.com"], // Required field
-            bcc: recipients,
+            to: [email],
             subject: campaign.subject,
             html: getEmailTemplate(campaign.content, campaign.subject),
             tags: [{ name: 'campaignId', value: campaignId }]
-        });
+        }));
 
-        if (error) throw error;
+        const chunkSize = 100;
+        for (let i = 0; i < batchPayload.length; i += chunkSize) {
+            const chunk = batchPayload.slice(i, i + chunkSize);
+            const { error } = await resend.batch.send(chunk);
+            if (error) throw error;
+        }
 
         // 3. Update Doc
         await docRef.update({
             status: 'sent',
             sentAt: admin.firestore.FieldValue.serverTimestamp(),
             'stats.sentCount': recipients.length,
-            'stats.resendId': data.id
+            openedBy: [] // Initialize array for tracking
         });
 
         res.json({ success: true, recipientsCount: recipients.length });
@@ -671,29 +741,53 @@ async function runScheduledCampaignsForEnv(db, resend) {
             if (audience.type === 'specific') recipients = audience.emails || [];
             else if (audience.type === 'all_active') {
                 subSnap = await db.collection("players").get();
-                subSnap.forEach(d => { if (d.data().parentEmail) recipients.push(d.data().parentEmail); });
+                subSnap.forEach(d => { if (d.data().email) recipients.push(d.data().email); });
             } else if (audience.type === 'team') {
                 subSnap = await db.collection("players").where("teamId", "==", audience.teamId).get();
-                subSnap.forEach(d => { if (d.data().parentEmail) recipients.push(d.data().parentEmail); });
+                subSnap.forEach(d => { if (d.data().email) recipients.push(d.data().email); });
+            } else if (audience.type === 'parents') {
+                subSnap = await db.collection("players").get();
+                subSnap.forEach(d => {
+                    const data = d.data();
+                    if (data.parentEmail) recipients.push(data.parentEmail);
+                    if (data.parent1Email) recipients.push(data.parent1Email);
+                    if (data.parent2Email) recipients.push(data.parent2Email);
+                });
+            } else if (audience.type === 'coaches') {
+                subSnap = await db.collection("coaches").where("visible", "!=", false).get();
+                subSnap.forEach(d => { if (d.data().email) recipients.push(d.data().email); });
+            } else if (audience.type === 'referees') {
+                subSnap = await db.collection("referees").where("visible", "!=", false).get();
+                subSnap.forEach(d => { if (d.data().email) recipients.push(d.data().email); });
+            } else if (audience.type === 'board') {
+                subSnap = await db.collection("board_members").where("visible", "!=", false).get();
+                subSnap.forEach(d => { if (d.data().email) recipients.push(d.data().email); });
             }
             recipients = [...new Set(recipients)];
 
             if (recipients.length > 0) {
-                await resend.emails.send({
+                const batchPayload = recipients.map(email => ({
                     from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
                     reply_to: "celtics.portneuf@gmail.com",
-                    bcc: recipients,
+                    to: [email],
                     subject: campaign.subject,
                     html: getEmailTemplate(campaign.content, campaign.subject),
                     tags: [{ name: 'campaignId', value: campaignId }]
-                });
+                }));
+
+                const chunkSize = 100;
+                for (let i = 0; i < batchPayload.length; i += chunkSize) {
+                    const chunk = batchPayload.slice(i, i + chunkSize);
+                    await resend.batch.send(chunk);
+                }
             }
 
             // Update status
             await campaignsRef.doc(campaignId).update({
                 status: 'sent',
                 sentAt: admin.firestore.FieldValue.serverTimestamp(),
-                'stats.sentCount': recipients.length
+                'stats.sentCount': recipients.length,
+                openedBy: []
             });
 
             // HANDLE RECURRENCE
@@ -728,6 +822,38 @@ async function runScheduledCampaignsForEnv(db, resend) {
 const { Webhook } = require("svix");
 
 // ... (other imports)
+
+// --- CAMP CONFIGURATION: FETCH DATA SECURELY ---
+exports.getCampSettings = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { db } = getContext(req);
+
+        // 1. Fetch settings
+        const settingsSnap = await db.collection("settings").doc("camp_ete").get();
+        if (!settingsSnap.exists) {
+            return res.status(404).json({ error: "Configuration introuvable." });
+        }
+        const settings = settingsSnap.data();
+
+        // 2. Fetch periods
+        const periodsSnap = await db.collection("camp_periods").orderBy("startDate", "asc").get();
+        const periods = [];
+        periodsSnap.forEach(doc => {
+            const data = doc.data();
+            // Normalize field names: admin saves `maxCapacity`, frontend reads `maxRegistrations`
+            periods.push({
+                id: doc.id,
+                ...data,
+                maxRegistrations: data.maxRegistrations || data.maxCapacity || 0
+            });
+        });
+
+        res.json({ settings, periods });
+    } catch (e) {
+        console.error("getCampSettings Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // --- WEBHOOK: RESEND EVENTS ---
 exports.resendWebhook = onRequest(async (req, res) => {
@@ -765,9 +891,11 @@ exports.resendWebhook = onRequest(async (req, res) => {
 
         try {
             if (type === 'email.opened') {
-                await docRef.update({
-                    'stats.openCount': admin.firestore.FieldValue.increment(1)
-                });
+                const updateData = { 'stats.openCount': admin.firestore.FieldValue.increment(1) };
+                if (data.to && data.to.length > 0) {
+                    updateData.openedBy = admin.firestore.FieldValue.arrayUnion(data.to[0]);
+                }
+                await docRef.update(updateData);
             } else if (type === 'email.clicked') {
                 await docRef.update({
                     'stats.clickCount': admin.firestore.FieldValue.increment(1)
@@ -781,7 +909,184 @@ exports.resendWebhook = onRequest(async (req, res) => {
     res.status(200).send("Processed");
 });
 
-// Original function kept
+// --- CAMP REGISTRATION: ATOMIC PROCESS ---
+exports.processCampRegistration = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { paymentMethodId, amount, email, parentFirstName, parentLastName, parentPhone, registrations } = req.body;
+        const { db, stripe, resend } = getContext(req, true); // true for camp context
+
+        const missing = [];
+        if (!amount) missing.push("montant");
+        if (!email) missing.push("email");
+        if (!paymentMethodId) missing.push("méthode de paiement");
+        if (!registrations || registrations.length === 0) missing.push("inscriptions");
+        if (!parentFirstName) missing.push("prénom parent");
+        if (!parentLastName) missing.push("nom parent");
+        if (!parentPhone) missing.push("téléphone parent");
+
+        if (missing.length > 0) {
+            return res.status(400).json({ error: `Champs obligatoires manquants : ${missing.join(', ')}.` });
+        }
+
+        const parentName = `${parentFirstName} ${parentLastName}`;
+
+        // 1. Get/Create Customer
+        const customerId = await getOrCreateStripeCustomer(stripe, email, parentName);
+
+        // 2. Attach Payment Method
+        await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+        await stripe.customers.update(customerId, {
+            invoice_settings: { default_payment_method: paymentMethodId }
+        });
+
+        const { limit = 100 } = req.body;
+        const invoices = await stripe.invoices.list({
+            limit: limit,
+            expand: ['data.customer']
+        });
+
+        // 3. Create & Pay Invoice
+        const invoice = await stripe.invoices.create({
+            customer: customerId,
+            auto_advance: true,
+            collection_method: 'charge_automatically',
+            description: `Inscription Camp de Soccer - Multi-enfants (${registrations.length})`,
+            metadata: { type: 'camp_registration', registrationsCount: registrations.length.toString() }
+        });
+
+        await stripe.invoiceItems.create({
+            customer: customerId,
+            invoice: invoice.id,
+            amount: parseInt(amount),
+            currency: 'cad',
+            description: `Camp de Soccer - ${registrations.length} enfant(s) inscrit(s)`
+        });
+
+        const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+        const paidInvoice = await stripe.invoices.pay(finalized.id);
+
+        // 4. Save Registrations to Firestore (Batch)
+        const batch = db.batch();
+        const registrationIds = [];
+        const registrationSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        for (const reg of registrations) {
+            const regRef = db.collection("camp_registrations").doc();
+            registrationIds.push(regRef.id);
+
+            const campRegData = {
+                ...reg,
+                parentFirstName,
+                parentLastName,
+                parentEmail: email,
+                parentPhone,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                weeksSelected: reg.selectedPeriods,
+                totalPaid: (amount / 100).toFixed(2), // Note: This is the total for the WHOLE session
+                status: 'Paid',
+                stripePaymentIntentId: paidInvoice.payment_intent,
+                stripeInvoiceId: invoice.id,
+                registrationSessionId,
+                childFirstName: reg.firstName, // Mapping for consistency with existing data
+                childLastName: reg.lastName,
+                countHandled: true
+            };
+            batch.set(regRef, campRegData);
+
+            // 5. Update Period Capacities (Atomic increment)
+            for (const periodId of reg.selectedPeriods) {
+                const periodRef = db.collection("camp_periods").doc(periodId);
+                batch.set(periodRef, {
+                    currentRegistrations: admin.firestore.FieldValue.increment(1)
+                }, { merge: true });
+            }
+        }
+        await batch.commit();
+
+        // 6. Send Confirmation Email
+        try {
+            // Build children summaries
+            let childrenHtml = '';
+            for (const reg of registrations) {
+                const periodsSnap = await Promise.all(reg.selectedPeriods.map(id => db.collection("camp_periods").doc(id).get()));
+                const periodsText = periodsSnap.map(snap => {
+                    if (snap.exists) {
+                        const p = snap.data();
+                        const s = new Date(p.startDate + 'T12:00:00').toLocaleDateString('fr-CA');
+                        const e = new Date(p.endDate + 'T12:00:00').toLocaleDateString('fr-CA');
+                        return `<li>Du ${s} au ${e}</li>`;
+                    }
+                    return `<li>Période ID: ${snap.id}</li>`;
+                }).join('');
+
+                childrenHtml += `
+                    <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 8px;">
+                        <h4 style="margin-top: 0; color: #008744;">Enfant : ${reg.firstName} ${reg.lastName}</h4>
+                        <p style="margin-bottom: 5px;"><strong>Semaines :</strong></p>
+                        <ul style="padding-left: 20px; margin-top: 5px;">${periodsText}</ul>
+                    </div>
+                `;
+            }
+
+            const totalDisplay = (amount / 100).toFixed(2) + " $";
+
+            const emailHtml = `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden; background-color: #f9f9f9;">
+                    <div style="background-color: #008744; padding: 30px; text-align: center; color: white;">
+                        <h1 style="margin: 0;">Confirmation - Camp de Soccer</h1>
+                        <p style="margin: 5px 0 0 0; opacity: 0.9;">Celtics de l'Ouest</p>
+                    </div>
+                    <div style="padding: 24px; line-height: 1.6;">
+                        <p>Bonjour ${parentFirstName},</p>
+                        <p>Nous avons bien reçu votre inscription pour ${registrations.length > 1 ? 'vos enfants' : 'votre enfant'} au camp de soccer des Celtics de l'Ouest pour l'été 2026. Merci de votre confiance !</p>
+                        
+                        <h3 style="color: #008744; margin-top: 30px; margin-bottom: 15px;">Détails de l'inscription</h3>
+                        ${childrenHtml}
+
+                        <div style="background: white; padding: 20px; border-radius: 8px; margin-top: 25px; border: 1px solid #008744; text-align: right;">
+                            <span style="color: #666; font-size: 1.1rem;">Total payé :</span>
+                            <span style="font-size: 1.8rem; font-weight: 800; color: #008744; margin-left: 10px;">${totalDisplay}</span>
+                            <div style="font-size: 0.85rem; color: #888;">Taxes incluses</div>
+                        </div>
+
+                        <p style="margin-top: 40px; text-align: center; color: #666; font-size: 0.9em; background: #fff; padding: 15px; border-radius: 8px;">
+                            Si vous avez des questions, contactez-nous au <a href="mailto:celtics.portneuf@gmail.com" style="color: #008744; font-weight: 600; text-decoration: none;">celtics.portneuf@gmail.com</a>.
+                        </p>
+                    </div>
+                    <div style="background: #f4f4f4; padding: 15px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #eee;">
+                        &copy; ${new Date().getFullYear()} Celtics de l'Ouest. Tous droits réservés.
+                    </div>
+                </div>
+            `;
+
+            await resend.emails.send({
+                from: "Celtics de l'Ouest <info@solutionsquasar.ca>",
+                reply_to: "celtics.portneuf@gmail.com",
+                to: email,
+                subject: "Confirmation d'inscription - Camp de Soccer Celtics",
+                html: emailHtml
+            });
+        } catch (mailErr) {
+            console.error("Email error (non-blocking):", mailErr);
+        }
+
+        res.json({
+            success: true,
+            registrationIds,
+            paymentIntentId: paidInvoice.payment_intent
+        });
+
+    } catch (e) {
+        console.error("processCampRegistration Error:", e);
+        res.status(500).json({
+            error: e.message,
+            code: e.code || "unknown",
+            stack: e.stack // Useful for pinpointing the exact line in Cloud Functions logs
+        });
+    }
+});
+
+// --- EMAIL UTILITY: SEND CONFIRMATION EMAIL (Standard) ---
 exports.sendConfirmationEmail = onRequest({ cors: true }, async (req, res) => {
     try {
         const { resend } = getContext(req);
@@ -970,3 +1275,157 @@ function getPasswordResetEmailTemplate(resetLink, email) {
         </html>
     `;
 }
+
+// --- FIRESTORE TRIGGERS: CAMP REGISTRATION SYNC ---
+
+/**
+ * Shared logic to handle registration changes
+ * @param {string} dbId - The database ID
+ * @param {Array} addPeriods - Period IDs to increment
+ * @param {Array} removePeriods - Period IDs to decrement
+ */
+async function syncRegistrationChange(dbId, addPeriods, removePeriods) {
+    const db = getFirestore(dbId);
+    const batch = db.batch();
+
+    const addSet = new Set(addPeriods);
+    const removeSet = new Set(removePeriods);
+
+    // Truly added (not in remove)
+    const toAdd = addPeriods.filter(p => !removeSet.has(p));
+    // Truly removed (not in add)
+    const toRemove = removePeriods.filter(p => !addSet.has(p));
+
+    toAdd.forEach(pId => {
+        const ref = db.collection("camp_periods").doc(pId);
+        batch.set(ref, { currentRegistrations: admin.firestore.FieldValue.increment(1) }, { merge: true });
+    });
+
+    toRemove.forEach(pId => {
+        const ref = db.collection("camp_periods").doc(pId);
+        batch.set(ref, { currentRegistrations: admin.firestore.FieldValue.increment(-1) }, { merge: true });
+    });
+
+    if (toAdd.length > 0 || toRemove.length > 0) {
+        await batch.commit();
+        console.log(`Synced registration change in ${dbId}: +[${toAdd}] -[${toRemove}]`);
+    }
+}
+
+// 1. ON CREATED
+const handleCreated = async (event) => {
+    const data = event.data.data();
+    if (!data || data.countHandled) return; // Already handled by atomic function
+
+    const periods = data.weeksSelected || data.selectedPeriodsId || [];
+    if (periods.length === 0) return;
+
+    await syncRegistrationChange(event.database, periods, []);
+};
+
+exports.onCampRegistrationCreated = onDocumentCreated("camp_registrations/{regId}", handleCreated);
+exports.onCampRegistrationCreatedProd = onDocumentCreated({ document: "camp_registrations/{regId}", database: "prod" }, handleCreated);
+
+// 2. ON DELETED
+const handleDeleted = async (event) => {
+    const data = event.data.data();
+    if (!data) return;
+
+    const periods = data.weeksSelected || data.selectedPeriodsId || [];
+    if (periods.length === 0) return;
+
+    await syncRegistrationChange(event.database, [], periods);
+};
+
+exports.onCampRegistrationDeleted = onDocumentDeleted("camp_registrations/{regId}", handleDeleted);
+exports.onCampRegistrationDeletedProd = onDocumentDeleted({ document: "camp_registrations/{regId}", database: "prod" }, handleDeleted);
+
+// 3. ON UPDATED
+const handleUpdated = async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (!before || !after) return;
+
+    const beforePeriods = before.weeksSelected || before.selectedPeriodsId || [];
+    const afterPeriods = after.weeksSelected || after.selectedPeriodsId || [];
+
+    // Compare arrays
+    const isSame = JSON.stringify(beforePeriods.sort()) === JSON.stringify(afterPeriods.sort());
+    if (isSame) return;
+
+    await syncRegistrationChange(event.database, afterPeriods, beforePeriods);
+};
+
+exports.onCampRegistrationUpdated = onDocumentUpdated("camp_registrations/{regId}", handleUpdated);
+exports.onCampRegistrationUpdatedProd = onDocumentUpdated({ document: "camp_registrations/{regId}", database: "prod" }, handleUpdated);
+
+// --- STRIPE LOGIC: DIRECT FETCH FOR ERP ---
+
+/**
+ * Lists recent Stripe invoices directly
+ * Used by ERP to show history and scheduled payments without Firestore sync
+ */
+exports.listStripeInvoices = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { db, stripe } = getContext(req);
+        await authenticateAdmin(req, db);
+
+        const { limit = 100 } = req.body;
+
+        // Fetch all statuses (paid, open, draft, void, uncollectible)
+        const invoices = await stripe.invoices.list({
+            limit: limit,
+            expand: ['data.customer']
+        });
+
+        res.json({
+            success: true,
+            data: invoices.data,
+            has_more: invoices.has_more
+        });
+
+    } catch (error) {
+        console.error("Error listing invoices:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Aggregates statistics from Stripe invoices
+ * Calculates exact revenue from the source of truth
+ */
+exports.getStripeStats = onRequest({ cors: true }, async (req, res) => {
+    try {
+        const { db, stripe } = getContext(req);
+        await authenticateAdmin(req, db);
+
+        let totalPaidRecent = 0;
+        let totalPendingRecent = 0;
+        let countPaid = 0;
+        let countPending = 0;
+
+        // Use auto-pagination to fetch ALL invoices for the stats
+        // (Stripe Node SDK supports async iteration)
+        for await (const inv of stripe.invoices.list({ limit: 100 })) {
+            if (inv.status === 'paid') {
+                totalPaidRecent += inv.amount_paid;
+                countPaid++;
+            } else if (inv.status === 'open' || inv.status === 'draft') {
+                totalPendingRecent += inv.amount_due;
+                countPending++;
+            }
+        }
+
+        res.json({
+            success: true,
+            totalPaidRecent,
+            totalPendingRecent,
+            countPaid,
+            countPending
+        });
+
+    } catch (error) {
+        console.error("Error fetching stats:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
